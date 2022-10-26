@@ -87,32 +87,7 @@ async function getSingleConfirmation(_contract, _data, _t2TransactionId, _valida
   return await sign(confirmationHash, _validator);
 }
 
-async function initialise_V1(avt, avnValidatorsManager, validators, numValidators) {
-  const ONE_AVT_IN_ATTO = new BN(10).pow(new BN(18));
-  const DEPOSIT = new BN(250000).mul(ONE_AVT_IN_ATTO);
-  await avnValidatorsManager.setValidatorDeposit(DEPOSIT);
-
-  const initialValidators = validators.slice(1, numValidators + 1);
-  let t1AddressArray = [];
-  let t1PublicKeyLHSArray = [];
-  let t1PublicKeyRHSArray = [];
-  let t2PublicKeyArray = [];
-
-  for await (let v of initialValidators) {
-    await avt.transfer(v.t1Address, DEPOSIT);
-    await avt.approve(avnValidatorsManager.address, DEPOSIT, {from: v.t1Address});
-    t1AddressArray.push(v.t1Address);
-    t1PublicKeyLHSArray.push(v.t1PublicKeyLHS);
-    t1PublicKeyRHSArray.push(v.t1PublicKeyRHS);
-    t2PublicKeyArray.push(v.t2PublicKey);
-    v.registered = true;
-    v.active = true;
-  }
-
-  await avnValidatorsManager.initialiseAvn(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
-}
-
-async function initialise_AVN_test(avn_test, validators, numValidators) {
+async function loadValidators(avn, validators, numValidators) {
   const initialValidators = validators.slice(1, numValidators + 1);
   let t1AddressArray = [];
   let t1PublicKeyLHSArray = [];
@@ -128,7 +103,7 @@ async function initialise_AVN_test(avn_test, validators, numValidators) {
     v.active = true;
   }
 
-  await avn_test.initialiseAvn(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
+  await avn.loadValidators(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
 }
 
 async function createTreeAndPublishRoot(_contract, _tokenAddress, _amount, _isProxyLower, _id) {
@@ -283,8 +258,7 @@ module.exports = {
   getSingleConfirmation,
   hash,
   init,
-  initialise_AVN_test,
-  initialise_V1,
+  loadValidators,
   LOWER_ID,
   PROXY_LOWER_ID,
   PSEUDO_ETH_ADDRESS,
