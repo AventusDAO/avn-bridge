@@ -2,11 +2,11 @@
 pragma solidity 0.8.11;
 
 import "./interfaces/IAVN.sol";
-import "./interfaces/IERC20.sol";
-import "./interfaces/IERC777.sol";
-import "./interfaces/IERC777Recipient.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC777.sol";
+import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
 import "./interfaces/IAvnFTTreasury.sol";
-import "./thirdParty/interfaces/IERC1820Registry.sol";
+import "@openzeppelin/contracts/interfaces/IERC1820Registry.sol";
 import "./Owned.sol";
 
 contract LegacyValidatorsManager {
