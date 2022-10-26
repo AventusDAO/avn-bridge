@@ -80,30 +80,24 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     _;
   }
 
-  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
-      bytes32[] calldata t2PublicKey)
+  function transferValidators()
     onlyOwner
     external
   {
-    require(t1Address.length == t1PublicKeyLHS.length && t1PublicKeyLHS.length == t1PublicKeyRHS.length
-        && t1PublicKeyRHS.length == t2PublicKey.length, "Validator keys missing");
+    require(validatorsTransferred == false, "Validators already transferred");
+    numActiveValidators = priorInstance.numActiveValidators();
+    nextValidatorId = priorInstance.validatorIdNum();
 
-    bytes memory t1PublicKey;
-
-    for (uint256 i; i < t1Address.length; i++) {
-      require(t1AddressToId[t1Address[i]] == 0, "T1Address already in use");
-      require(t2PublicKeyToId[t2PublicKey[i]] == 0, "T2PublicKey already in use");
-      t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
-      require(address(uint160(uint256(keccak256(t1PublicKey)))) == t1Address[i], "T1 account mismatch");
-      idToT1Address[nextValidatorId] = t1Address[i];
-      idToT2PublicKey[nextValidatorId] = t2PublicKey[i];
-      t1AddressToId[t1Address[i]] = nextValidatorId;
-      t2PublicKeyToId[t2PublicKey[i]] = nextValidatorId;
-      isRegisteredValidator[nextValidatorId] = true;
-      isActiveValidator[nextValidatorId] = true;
-      numActiveValidators++;
-      nextValidatorId++;
+    for (uint256 id = 1; id < nextValidatorId; id++) {
+      idToT1Address[id] = priorInstance.t1Address(id);
+      idToT2PublicKey[id] = priorInstance.t2PublicKey(id);
+      t1AddressToId[idToT1Address[id]] = id;
+      t2PublicKeyToId[idToT2PublicKey[id]] = id;
+      isRegisteredValidator[id] = true;
+      isActiveValidator[id] = true;
     }
+
+    validatorsTransferred = true;
   }
 
   function setAuthorisationStatus(address contractAddress, bool status)

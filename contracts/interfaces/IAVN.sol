@@ -19,8 +19,7 @@ interface IAVN {
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
 
   // Owner only
-  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
-      bytes32[] calldata t2PublicKey) external;
+  function transferValidators() external;
   function setAuthorisationStatus(address contractAddress, bool status) external;
   function setQuorum(uint256[2] memory quorum) external;
   function disableValidatorFunctions() external;
