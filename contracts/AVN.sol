@@ -212,6 +212,18 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     priorInstance.unlockERC20Tokens(erc20Address, address(this), lockedBalance);
   }
 
+  function recoverETH()
+    onlyOwner
+    external
+  {
+    uint256 lockedBalance = address(priorInstance).balance;
+    priorInstance.unlockETH(payable(address(this)), lockedBalance);
+  }
+
+  receive() payable external {
+    require(msg.sender == address(priorInstance), "Cannot accept ETH unless lifting");
+  }
+
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
