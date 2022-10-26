@@ -1,10 +1,7 @@
 const testHelper = require('./helpers/testHelper');
 const AVN = artifacts.require('AVN');
-const AVN_test = artifacts.require('AVN_test');
-const AvnFTTreasury = artifacts.require('AvnFTTreasury');
-const AvnValidatorsManager = artifacts.require('AvnValidatorsManager');
-const MockERC777 = artifacts.require('MockERC777');
-const MockERC20 = artifacts.require('MockERC20');
+const Token777 = artifacts.require('Token777');
+const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -12,9 +9,8 @@ const AVT_ADDRESS = '0x0d88eD6E74bbFD96B831231638b66C05571e824F';
 const DIRECT_LOWER_NUM_BYTES = 2;
 const PROXY_LOWER_NUM_BYTES = 133;
 const ONE_AVT_IN_ATTO = new BN(10).pow(new BN(18));
-const LEGACY_STAKE = new BN(2500000).mul(ONE_AVT_IN_ATTO);
 
-let avn, avn_test, legacyValidatorsManager, legacyAvnTreasury, mockERC777, mockERC20;
+let avn, token777, token20;
 let accounts, validators;
 let owner, someOtherAccount, someT2PublicKey;
 
@@ -22,35 +18,26 @@ contract('AVN', async () => {
 
   before(async () => {
     await testHelper.init();
-    mockERC777 = await MockERC777.deployed();
-    mockERC20 = await MockERC20.deployed();
-    legacyAvnTreasury = await AvnFTTreasury.deployed();
-    legacyValidatorsManager = await AvnValidatorsManager.deployed();
+    token777 = await Token777.deployed();
+    token20 = await Token20.deployed();
     avn = await AVN.deployed();
-    avn_test = await AVN_test.deployed();
     accounts = testHelper.accounts();
     owner = accounts[0];
     someOtherAccount = accounts[1];
     someT2PublicKey = testHelper.someT2PublicKey();
     validators = testHelper.validators();
-    await testHelper.initialise_V1(mockERC20, legacyValidatorsManager, validators, 10);
-    await avn.transferValidators();
+    await testHelper.loadValidators(avn, validators, 10);
   });
 
   context('Authorisation', async () => {
     let avn1, avn2, avn3, avn4;
 
     before(async () => {
-      avn.setAuthorisationStatus(avn_test.address, false);
       // Create some contracts as only contracts can be authorised
-      avn1 = await AVN.new(AVT_ADDRESS, legacyValidatorsManager.address, legacyAvnTreasury.address);
-      avn2 = await AVN.new(AVT_ADDRESS, legacyValidatorsManager.address, legacyAvnTreasury.address);
-      avn3 = await AVN.new(AVT_ADDRESS, legacyValidatorsManager.address, legacyAvnTreasury.address);
-      avn4 = await AVN.new(AVT_ADDRESS, legacyValidatorsManager.address, legacyAvnTreasury.address);
-    });
-
-    after(async () => {
-      avn.setAuthorisationStatus(avn_test.address, true);
+      avn1 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
+      avn2 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
+      avn3 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
+      avn4 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
     });
 
     async function checkAuthorisationLog(_address, _status, _expectLog) {
@@ -81,8 +68,8 @@ contract('AVN', async () => {
       await testHelper.expectRevert(() => avn.storeLiftProofHash(testHelper.randomBytes32()), 'Access denied');
       await testHelper.expectRevert(() => avn.storeLoweredLeafHash(testHelper.randomBytes32()), 'Access denied');
       await testHelper.expectRevert(() => avn.unlockETH(owner, 1), 'Access denied');
-      await testHelper.expectRevert(() => avn.unlockERC20Tokens(mockERC20.address, owner, 1), 'Access denied');
-      await testHelper.expectRevert(() => avn.unlockERC777Tokens(mockERC777.address, owner, 1), 'Access denied');
+      await testHelper.expectRevert(() => avn.unlockERC20Tokens(token20.address, owner, 1), 'Access denied');
+      await testHelper.expectRevert(() => avn.unlockERC777Tokens(token777.address, owner, 1), 'Access denied');
     });
 
     it('State remains as expected', async () => {
@@ -147,39 +134,6 @@ contract('AVN', async () => {
 
     it('fails if the sender is not owner', async () => {
       await testHelper.expectRevert(() => avn.setOwner(owner, {from: someOtherAccount}), 'Only owner');
-    });
-  });
-
-  context('liftLegacyStakes', async () => {
-
-    it('fails if the sender is not owner', async () => {
-      await testHelper.expectRevert(() => avn.liftLegacyStakes(someT2PublicKey, 1, {from: someOtherAccount}), 'Only owner');
-    });
-
-    it('succeeds when called by owner', async () => {
-      assert.equal(await avn.unliftedLegacyStakes(), LEGACY_STAKE.toString());
-
-      const chunks = 5;
-      const amount = LEGACY_STAKE.div(new BN(chunks));
-      let lifted = new BN(0);
-
-      for (let i = 1; i <= chunks; i++) {
-        await avn.liftLegacyStakes(someT2PublicKey, amount);
-        let logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-        assert.equal(logArgs.token, await avn.avtAddress());
-        assert.equal(logArgs.t1Address, avn.address);
-        assert.equal(logArgs.t2PublicKey, someT2PublicKey);
-        assert.equal(logArgs.amount, amount.toString());
-        assert.equal((await avn.unliftedLegacyStakes()).toString(), LEGACY_STAKE.sub(amount.mul(new BN(i))).toString());
-        lifted = lifted.add(new BN(logArgs.amount));
-      }
-
-      assert.equal(LEGACY_STAKE.toString(), lifted.toString());
-      assert.equal((await avn.unliftedLegacyStakes()).toString(), '0');
-    });
-
-    it('fails if stake has been depleted', async () => {
-      await testHelper.expectRevert(() => avn.liftLegacyStakes(someT2PublicKey, 1), 'Not enough stake remaining');
     });
   });
 
@@ -257,10 +211,10 @@ contract('AVN', async () => {
 
     it('can lift ERC777 tokens', async () => {
       const liftAmount = new BN(100)
-      await mockERC777.send(avn.address, liftAmount, someT2PublicKey);
+      await token777.send(avn.address, liftAmount, someT2PublicKey);
 
       const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, mockERC777.address);
+      assert.equal(logArgs.token, token777.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount, liftAmount.toString());
@@ -269,24 +223,24 @@ contract('AVN', async () => {
     it('can lift ERC777 tokens via operatorSend', async () => {
       const liftAmount = new BN(100)
       const otherOperatorData = '0x1234';
-      await mockERC777.operatorSend(owner, avn.address, liftAmount, someT2PublicKey, otherOperatorData);
+      await token777.operatorSend(owner, avn.address, liftAmount, someT2PublicKey, otherOperatorData);
       const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, mockERC777.address);
+      assert.equal(logArgs.token, token777.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount, liftAmount.toString());
     });
 
     it('can lift ERC20 tokens', async () => {
-      const avnBalanceBefore = await mockERC20.balanceOf(avn.address);
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
       const liftAmount = new BN(200);
-      await mockERC20.approve(avn.address, liftAmount);
-      await avn.lift(mockERC20.address, someT2PublicKey, liftAmount);
+      await token20.approve(avn.address, liftAmount);
+      await avn.lift(token20.address, someT2PublicKey, liftAmount);
 
-      assert.equal(avnBalanceBefore.add(liftAmount).toString(), (await mockERC20.balanceOf(avn.address)).toString());
+      assert.equal(avnBalanceBefore.add(liftAmount).toString(), (await token20.balanceOf(avn.address)).toString());
 
       const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, mockERC20.address);
+      assert.equal(logArgs.token, token20.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount, liftAmount.toString());
@@ -295,18 +249,18 @@ contract('AVN', async () => {
     it('can lift ERC20 tokens via proxyLift on behalf of someone else', async () => {
       const liftAmount = new BN(200);
       const proofNonce = 1;
-      const liftProofHash = testHelper.hash(mockERC20.address, someT2PublicKey, liftAmount, proofNonce);
+      const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
       const proof = await testHelper.sign(liftProofHash, owner);
 
-      await mockERC20.approve(avn.address, liftAmount, {from: owner});
+      await token20.approve(avn.address, liftAmount, {from: owner});
 
       // the someOtherAccount never holds any funds
-      assert.equal(await mockERC20.balanceOf(someOtherAccount), 0);
-      await avn.proxyLift(mockERC20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
-      assert.equal(await mockERC20.balanceOf(someOtherAccount), 0);
+      assert.equal(await token20.balanceOf(someOtherAccount), 0);
+      await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
+      assert.equal(await token20.balanceOf(someOtherAccount), 0);
 
       const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, mockERC20.address);
+      assert.equal(logArgs.token, token20.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount, liftAmount.toString());
@@ -315,81 +269,17 @@ contract('AVN', async () => {
     it('can lift ERC20 tokens via proxyLift for oneself', async () => {
       const liftAmount = new BN(100);
       const proofNonce = 2;
-      const liftProofHash = testHelper.hash(mockERC20.address, someT2PublicKey, liftAmount, proofNonce);
+      const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
       const proof = await testHelper.sign(liftProofHash, owner);
 
-      await mockERC20.approve(avn.address, liftAmount, {from: owner});
-      await avn.proxyLift(mockERC20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: owner});
+      await token20.approve(avn.address, liftAmount, {from: owner});
+      await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: owner});
 
       const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, mockERC20.address);
+      assert.equal(logArgs.token, token20.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount, liftAmount.toString());
-    });
-
-    context('can accurately lift reflective tokens', async () => {
-      let avnBalanceBefore, ftsmBalBefore, senderBalBefore;
-      const amountSent = new BN(100);
-      const TokenMode = {
-        standard : 0,
-        non_standard_burner: 1,
-        non_standard_minter : 2
-      }
-
-      beforeEach(async () => {
-        avn20Before = await mockERC20.balanceOf(avn.address);
-        sender20Before = await mockERC20.balanceOf(owner);
-        avn777Before = await mockERC777.balanceOf(avn.address);
-        sender777Before = await mockERC777.balanceOf(owner);
-      });
-
-      after(async () => {
-        await mockERC777.setMode(TokenMode.standard);
-        await mockERC20.setMode(TokenMode.standard);
-      });
-
-      it('sending non-standard ERC20 which burns on transfer', async () => {
-        await mockERC20.setMode(TokenMode.non_standard_burner);
-        await mockERC20.approve(avn.address, amountSent);
-        await avn.lift(mockERC20.address, someT2PublicKey, amountSent);
-        const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-        const amountLifted = amountSent.sub(new BN(1))
-        assert.equal(logArgs.amount, amountLifted.toString());
-        assert.equal((await mockERC20.balanceOf(avn.address)).toString(), avn20Before.add(amountLifted).toString());
-        assert.equal((await mockERC20.balanceOf(owner)).toString(), sender20Before.sub(amountSent).toString());
-      });
-
-      it('sending non-standard ERC20 which mints on transfer', async () => {
-        await mockERC20.setMode(TokenMode.non_standard_minter);
-        await mockERC20.approve(avn.address, amountSent);
-        await avn.lift(mockERC20.address, someT2PublicKey, amountSent);
-        const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-        const amountLifted = amountSent.add(new BN(1))
-        assert.equal(logArgs.amount, amountLifted.toString());
-        assert.equal((await mockERC20.balanceOf(avn.address)).toString(), avn20Before.add(amountLifted).toString());
-        assert.equal((await mockERC20.balanceOf(owner)).toString(), sender20Before.sub(amountSent).toString());
-      });
-
-      it('sending non-standard ERC777 which burns on send', async () => {
-        await mockERC777.setMode(TokenMode.non_standard_burner);
-        await mockERC777.send(avn.address, amountSent, someT2PublicKey)
-        const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-        const amountLifted = amountSent.sub(new BN(1))
-        assert.equal(logArgs.amount, amountLifted.toString());
-        assert.equal((await mockERC777.balanceOf(avn.address)).toString(), avn777Before.add(amountLifted).toString());
-        assert.equal((await mockERC777.balanceOf(owner)).toString(), sender777Before.sub(amountSent).toString());
-      });
-
-      it('sending non-standard ERC777 which mints on send', async () => {
-        await mockERC777.setMode(TokenMode.non_standard_minter);
-        await mockERC777.send(avn.address, amountSent, someT2PublicKey)
-        const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-        const amountLifted = amountSent.add(new BN(1))
-        assert.equal(logArgs.amount, amountLifted.toString());
-        assert.equal((await mockERC777.balanceOf(avn.address)).toString(), avn777Before.add(amountLifted).toString());
-        assert.equal((await mockERC777.balanceOf(owner)).toString(), sender777Before.sub(amountSent).toString());
-      });
     });
 
     context('fails when', async () => {
@@ -399,10 +289,10 @@ contract('AVN', async () => {
         const massiveTotalSupply = new BN(2).pow(new BN(192));
         maxLiftAmount = new BN(2).pow(new BN(128)).sub(new BN(1));
 
-        massiveERC777 = await MockERC777.new('name', 'symbol', massiveTotalSupply);
+        massiveERC777 = await Token777.new(massiveTotalSupply);
         await massiveERC777.send(avn.address, maxLiftAmount, someT2PublicKey);
 
-        massiveERC20 = await MockERC20.new('name', 'symbol', massiveTotalSupply);
+        massiveERC20 = await Token20.new(massiveTotalSupply);
         await massiveERC20.approve(avn.address, maxLiftAmount);
         await avn.lift(massiveERC20.address, someT2PublicKey, maxLiftAmount);
       });
@@ -424,39 +314,39 @@ contract('AVN', async () => {
       });
 
       it('attempting to lift 0 ERC20 tokens', async () => {
-        await mockERC20.approve(avn.address, 0);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, someT2PublicKey, 0), 'Cannot lift zero ERC20 tokens');
+        await token20.approve(avn.address, 0);
+        await testHelper.expectRevert(() => avn.lift(token20.address, someT2PublicKey, 0), 'Cannot lift zero ERC20 tokens');
       });
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
-        await mockERC20.approve(avn.address, 1);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, '0x', 1), 'Bad T2 public key');
+        await token20.approve(avn.address, 1);
+        await testHelper.expectRevert(() => avn.lift(token20.address, '0x', 1), 'Bad T2 public key');
       });
 
       it('attempting to lift ERC-20 tokens with an incorrect T2 public key (too short)', async () => {
-        await mockERC20.approve(avn.address, 1);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, web3.utils.randomHex(16), 1), 'Bad T2 public key');
+        await token20.approve(avn.address, 1);
+        await testHelper.expectRevert(() => avn.lift(token20.address, web3.utils.randomHex(16), 1), 'Bad T2 public key');
       });
 
       it('attempting to lift ERC-20 tokens with an incorrect T2 public key(too long)', async () => {
-        await mockERC20.approve(avn.address, 1);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, web3.utils.randomHex(48), 1), 'Bad T2 public key');
+        await token20.approve(avn.address, 1);
+        await testHelper.expectRevert(() => avn.lift(token20.address, web3.utils.randomHex(48), 1), 'Bad T2 public key');
       });
 
       it('attempting to lift 0 ERC777 tokens', async () => {
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 0, someT2PublicKey), 'Cannot lift zero ERC777 tokens');
+        await testHelper.expectRevert(() => token777.send(avn.address, 0, someT2PublicKey), 'Cannot lift zero ERC777 tokens');
       });
 
       it('attempting to lift ERC777 tokens without supplying a T2 public key', async () => {
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, '0x'), 'Bad T2 public key');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, '0x'), 'Bad T2 public key');
       });
 
       it('attempting to lift ERC777 tokens with an incorrect T2 public key (too short)', async () => {
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, web3.utils.randomHex(16)), 'Bad T2 public key');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, web3.utils.randomHex(16)), 'Bad T2 public key');
       });
 
       it('attempting to lift ERC777 tokens with an incorrect T2 public key(too long)', async () => {
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, web3.utils.randomHex(48)), 'Bad T2 public key');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, web3.utils.randomHex(48)), 'Bad T2 public key');
       });
 
       it('attempting to lift more ERC777 tokens to T2 than its supported limit', async () => {
@@ -472,20 +362,20 @@ contract('AVN', async () => {
          const liftAmount = new BN(100);
          const proofNonce = 100;
          const proof = await testHelper.randomBytes32()
-         await mockERC20.approve(avn.address, liftAmount, {from: owner});
-         await testHelper.expectRevert(() => avn.proxyLift(mockERC20.address, someT2PublicKey, liftAmount, owner, proofNonce,
+         await token20.approve(avn.address, liftAmount, {from: owner});
+         await testHelper.expectRevert(() => avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce,
             proof, {from: someOtherAccount}), 'Lift proof invalid');
         });
 
         it('attempting a proxy ERC20 lift by re-using a used lift proof', async () => {
          const liftAmount = new BN(100);
          const proofNonce = 1;
-         const liftProofHash = testHelper.hash(mockERC20.address, someT2PublicKey, liftAmount, proofNonce);
+         const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
          const proof = await testHelper.sign(liftProofHash, owner);
-         await mockERC20.approve(avn.address, liftAmount, {from: owner});
-         await avn.proxyLift(mockERC20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
-         await mockERC20.approve(avn.address, liftAmount, {from: owner});
-         await testHelper.expectRevert(() => avn.proxyLift(mockERC20.address, someT2PublicKey, liftAmount, owner, proofNonce,
+         await token20.approve(avn.address, liftAmount, {from: owner});
+         await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
+         await token20.approve(avn.address, liftAmount, {from: owner});
+         await testHelper.expectRevert(() => avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce,
             proof, {from: someOtherAccount}), 'Lift proof already used');
         });
 
@@ -502,46 +392,46 @@ contract('AVN', async () => {
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
         await avn.disableLifting();
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
         await avn.enableLifting();
-        await mockERC777.send(avn.address, 1, someT2PublicKey);
+        await token777.send(avn.address, 1, someT2PublicKey);
       });
 
       it('attempting to lift ERC20 tokens when lift is disabled', async () => {
         await avn.disableLifting();
-        await mockERC20.approve(avn.address, 1);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, someT2PublicKey, 1), 'Lifting currently disabled');
+        await token20.approve(avn.address, 1);
+        await testHelper.expectRevert(() => avn.lift(token20.address, someT2PublicKey, 1), 'Lifting currently disabled');
         await avn.enableLifting();
-        await avn.lift(mockERC20.address, someT2PublicKey, 1);
+        await avn.lift(token20.address, someT2PublicKey, 1);
       });
 
       it('attempting to lift ERC777 tokens using ERC20 backwards compatability ', async () => {
         const amount = new BN(2);
-        await mockERC777.approve(avn.address, amount);
-        await testHelper.expectRevert(() => avn.lift(mockERC777.address, someT2PublicKey, amount), 'ERC20 lift only');
+        await token777.approve(avn.address, amount);
+        await testHelper.expectRevert(() => avn.lift(token777.address, someT2PublicKey, amount), 'ERC20 lift only');
       });
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
         await avn.disableLifting();
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
         await avn.enableLifting();
-        await mockERC777.send(avn.address, 1, someT2PublicKey);
+        await token777.send(avn.address, 1, someT2PublicKey);
       });
 
       it('attempting to lift more ERC20 tokens than are approved', async () => {
-        await mockERC20.approve(avn.address, 100);
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, someT2PublicKey, 200),
-            'ERC20: transfer amount exceeds allowance');
+        await token20.approve(avn.address, 100);
+        await testHelper.expectRevert(() => avn.lift(token20.address, someT2PublicKey, 200),
+            'ERC20: insufficient allowance');
       });
 
       it('attempting to lift more ERC20 tokens than are available in sender balance', async () => {
-        await testHelper.expectRevert(() => avn.lift(mockERC20.address, someT2PublicKey, 1, {from: someOtherAccount}),
-            'ERC20: transfer amount exceeds balance');
+        await testHelper.expectRevert(() => avn.lift(token20.address, someT2PublicKey, 1, {from: someOtherAccount}),
+            'ERC20: insufficient allowance');
       });
 
       it('attempting to lift more ERC777 tokens than are available in sender balance', async () => {
-        await testHelper.expectRevert(() => mockERC777.send(avn.address, 1, someT2PublicKey, {from: someOtherAccount}),
-            'Amount exceeds available funds');
+        await testHelper.expectRevert(() => token777.send(avn.address, 1, someT2PublicKey, {from: someOtherAccount}),
+            'ERC777: transfer amount exceeds balance');
       });
 
       it('calling FTSM tokensReceived hook directly with tokens not destined for the FTSM', async () => {
@@ -584,29 +474,6 @@ contract('AVN', async () => {
       assert.equal(logArgs.amount.toString(), lowerAmount.toString());
     });
 
-    it('lower ETH to a contract succeeds [ @skip-on-coverage ]', async () => {
-      await avn.liftETH(someT2PublicKey, {value: liftAmount});
-      const tree = await testHelper.createTreeAndPublishRootWithLoweree(avn, avn_test.address,
-          testHelper.PSEUDO_ETH_ADDRESS, lowerAmount);
-
-      const avnEthBalanceBefore = new BN(await web3.eth.getBalance(avn.address));
-      const lowererEthBalanceBefore = new BN(await web3.eth.getBalance(avn_test.address));
-
-      await avn.lower(tree.leafData, tree.merklePath);
-
-      const avnEthBalanceAfter = new BN(await web3.eth.getBalance(avn.address));
-      const lowererEthBalanceAfter = new BN(await web3.eth.getBalance(avn_test.address));
-
-      assert.equal(avnEthBalanceBefore.sub(lowerAmount).toString(), avnEthBalanceAfter.toString());
-      assert.equal(lowererEthBalanceBefore.add(lowerAmount).toString(), lowererEthBalanceAfter.toString());
-
-      const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-      assert.equal(logArgs.token, testHelper.PSEUDO_ETH_ADDRESS);
-      assert.equal(logArgs.t1Address, avn_test.address);
-      assert.equal(logArgs.t2PublicKey, someT2PublicKey);
-      assert.equal(logArgs.amount.toString(), lowerAmount.toString());
-    });
-
     it('proxy lower ETH succeeds [ @skip-on-coverage ]', async () => {
       await avn.liftETH(someT2PublicKey, {value: liftAmount});
       const tree = await testHelper.createTreeAndPublishRoot(avn, testHelper.PSEUDO_ETH_ADDRESS, lowerAmount, true);
@@ -645,91 +512,91 @@ contract('AVN', async () => {
 
     it('lower ERC20 succeeds', async () => {
       // lift
-      await mockERC20.approve(avn.address, liftAmount);
-      await avn.lift(mockERC20.address, someT2PublicKey, liftAmount);
+      await token20.approve(avn.address, liftAmount);
+      await avn.lift(token20.address, someT2PublicKey, liftAmount);
       // record pre-lower balances
-      const avnBalanceBefore = await mockERC20.balanceOf(avn.address);
-      const senderBalBefore = await mockERC20.balanceOf(owner);
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const senderBalBefore = await token20.balanceOf(owner);
 
-      let tree = await testHelper.createTreeAndPublishRoot(avn, mockERC20.address, lowerAmount);
+      let tree = await testHelper.createTreeAndPublishRoot(avn, token20.address, lowerAmount);
 
       // lower and confirm values
       await avn.lower(tree.leafData, tree.merklePath, {from: someOtherAccount});
       const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-      assert.equal(logArgs.token, mockERC20.address);
+      assert.equal(logArgs.token, token20.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount.toString(), lowerAmount.toString());
-      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await mockERC20.balanceOf(avn.address)).toString());
-      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await mockERC20.balanceOf(owner)).toString());
+      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await token20.balanceOf(avn.address)).toString());
+      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await token20.balanceOf(owner)).toString());
     });
 
     it('proxy lower ERC20 succeeds', async () => {
       // lift
-      await mockERC20.approve(avn.address, liftAmount);
-      await avn.lift(mockERC20.address, someT2PublicKey, liftAmount);
+      await token20.approve(avn.address, liftAmount);
+      await avn.lift(token20.address, someT2PublicKey, liftAmount);
       // record pre-lower balances
-      const avnBalanceBefore = await mockERC20.balanceOf(avn.address);
-      const senderBalBefore = await mockERC20.balanceOf(owner);
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const senderBalBefore = await token20.balanceOf(owner);
 
-      let tree = await testHelper.createTreeAndPublishRoot(avn, mockERC20.address, lowerAmount, true);
+      let tree = await testHelper.createTreeAndPublishRoot(avn, token20.address, lowerAmount, true);
 
       // lower and confirm values
       await avn.lower(tree.leafData, tree.merklePath, {from: someOtherAccount});
       const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-      assert.equal(logArgs.token, mockERC20.address);
+      assert.equal(logArgs.token, token20.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount.toString(), lowerAmount.toString());
-      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await mockERC20.balanceOf(avn.address)).toString());
-      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await mockERC20.balanceOf(owner)).toString());
+      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await token20.balanceOf(avn.address)).toString());
+      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await token20.balanceOf(owner)).toString());
     });
 
     it('lower ERC777 succeeds', async () => {
       // lift
-      await mockERC777.send(avn.address, liftAmount, someT2PublicKey);
+      await token777.send(avn.address, liftAmount, someT2PublicKey);
       // record pre-lower balances
-      const avnBalanceBefore = await mockERC777.balanceOf(avn.address);
-      const senderBalBefore = await mockERC777.balanceOf(owner);
+      const avnBalanceBefore = await token777.balanceOf(avn.address);
+      const senderBalBefore = await token777.balanceOf(owner);
 
-      let tree = await testHelper.createTreeAndPublishRoot(avn, mockERC777.address, lowerAmount);
+      let tree = await testHelper.createTreeAndPublishRoot(avn, token777.address, lowerAmount);
 
       // lower and confirm values
       await avn.lower(tree.leafData, tree.merklePath, {from: someOtherAccount});
       const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-      assert.equal(logArgs.token, mockERC777.address);
+      assert.equal(logArgs.token, token777.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount.toString(), lowerAmount.toString());
-      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await mockERC777.balanceOf(avn.address)).toString());
-      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await mockERC777.balanceOf(owner)).toString());
+      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await token777.balanceOf(avn.address)).toString());
+      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await token777.balanceOf(owner)).toString());
     });
 
     it('proxy lower ERC777 succeeds', async () => {
       // lift
-      await mockERC777.send(avn.address, liftAmount, someT2PublicKey);
+      await token777.send(avn.address, liftAmount, someT2PublicKey);
       // record pre-lower balances
-      const avnBalanceBefore = await mockERC777.balanceOf(avn.address);
-      const senderBalBefore = await mockERC777.balanceOf(owner);
+      const avnBalanceBefore = await token777.balanceOf(avn.address);
+      const senderBalBefore = await token777.balanceOf(owner);
 
-      let tree = await testHelper.createTreeAndPublishRoot(avn, mockERC777.address, lowerAmount, true);
+      let tree = await testHelper.createTreeAndPublishRoot(avn, token777.address, lowerAmount, true);
 
       // lower and confirm values
       await avn.lower(tree.leafData, tree.merklePath, {from: someOtherAccount});
       const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-      assert.equal(logArgs.token, mockERC777.address);
+      assert.equal(logArgs.token, token777.address);
       assert.equal(logArgs.t1Address, owner);
       assert.equal(logArgs.t2PublicKey, someT2PublicKey);
       assert.equal(logArgs.amount.toString(), lowerAmount.toString());
-      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await mockERC777.balanceOf(avn.address)).toString());
-      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await mockERC777.balanceOf(owner)).toString());
+      assert.equal(avnBalanceBefore.sub(lowerAmount).toString(), (await token777.balanceOf(avn.address)).toString());
+      assert.equal(senderBalBefore.add(lowerAmount).toString(), (await token777.balanceOf(owner)).toString());
     });
 
     context('lower fails when', async () => {
       let tree;
 
       beforeEach(async () => {
-        tree = await testHelper.createTreeAndPublishRoot(avn, mockERC777.address, lowerAmount);
+        tree = await testHelper.createTreeAndPublishRoot(avn, token777.address, lowerAmount);
       });
 
       it('lowering is disabled', async () => {
@@ -758,13 +625,13 @@ contract('AVN', async () => {
 
       it('leaf is not recognised as a lower leaf', async () => {
         const  badId = '0xaaaa';
-        tree = await testHelper.createTreeAndPublishRoot(avn, mockERC777.address, lowerAmount, true, badId);
+        tree = await testHelper.createTreeAndPublishRoot(avn, token777.address, lowerAmount, true, badId);
         await testHelper.expectRevert(() => avn.lower(tree.leafData, tree.merklePath), 'Not a lower leaf');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await avn.liftETH(someT2PublicKey, {value: 100});
-        const addressCannotReceiveETH = mockERC20.address;
+        const addressCannotReceiveETH = token20.address;
         tree = await testHelper.createTreeAndPublishRootWithLoweree(avn, addressCannotReceiveETH, testHelper.PSEUDO_ETH_ADDRESS,
             lowerAmount);
         await testHelper.expectRevert(() => avn.lower(tree.leafData, tree.merklePath), 'ETH transfer failed');
@@ -774,7 +641,7 @@ contract('AVN', async () => {
 
   context('confirmT2Transaction', async() =>{
     it('confirm a leaf exists in published tree', async () => {
-      let tree = await testHelper.createTreeAndPublishRoot(avn, mockERC777.address, 0);
+      let tree = await testHelper.createTreeAndPublishRoot(avn, token777.address, 0);
       assert.equal(await avn.confirmAvnTransaction(tree.leafHash, tree.merklePath), true);
       assert.equal(await avn.confirmAvnTransaction(testHelper.randomBytes32(), tree.merklePath), false);
     });
@@ -803,58 +670,71 @@ contract('AVN', async () => {
     });
 
     it('unlockERC20Tokens() fails', async () => {
-      await testHelper.expectRevert(() => avn.unlockERC20Tokens(mockERC20.address, owner, 10), 'Access denied');
+      await testHelper.expectRevert(() => avn.unlockERC20Tokens(token20.address, owner, 10), 'Access denied');
     });
 
     it('unlockERC777Tokens() fails', async () => {
-      await testHelper.expectRevert(() => avn.unlockERC777Tokens(mockERC777.address, owner, 10), 'Access denied');
+      await testHelper.expectRevert(() => avn.unlockERC777Tokens(token777.address, owner, 10), 'Access denied');
     });
   });
 
   context('avn token recovery', async () => {
+    let newAvn;
 
     before(async () => {
+      newAvn = await AVN.new(AVT_ADDRESS, avn.address);
       const amount = new BN(1000);
-      // Ensure some funds are in the old treasury
-      await legacyAvnTreasury.setTreasurerPermission(owner, true);
-      await mockERC777.send(legacyAvnTreasury.address, amount, '0x');
-      await mockERC20.transfer(legacyAvnTreasury.address, amount);
+      // Ensure some funds are in the old oldAvn
+      await token777.send(avn.address, amount, someT2PublicKey);
+      await token20.transfer(avn.address, amount);
+      // We lift ETH as it's the only way we can add ETH
+      await avn.liftETH(someT2PublicKey, {value: 123});
       // Enable the AVN as a treasurer
-      await legacyAvnTreasury.setTreasurerPermission(avn.address, true);
+      await avn.setAuthorisationStatus(newAvn.address, true);
     });
 
     it('erc777 recovery fails when not called by owner', async () => {
-      await testHelper.expectRevert(() => avn.recoverERC777TokensFromLegacyTreasury(mockERC777.address,
-          {from: someOtherAccount}), 'Only owner');
+      await testHelper.expectRevert(() => newAvn.recoverERC777Tokens(token777.address, {from: someOtherAccount}), 'Only owner');
     });
 
     it('erc20 recovery fails when not called by owner', async () => {
-      await testHelper.expectRevert(() => avn.recoverERC20TokensFromLegacyTreasury(mockERC20.address,
-          {from: someOtherAccount}), 'Only owner');
+      await testHelper.expectRevert(() => newAvn.recoverERC20Tokens(token20.address, {from: someOtherAccount}), 'Only owner');
     });
 
     it('can recover ERC777 tokens', async () => {
-      const avnBalanceBefore = new BN(await mockERC777.balanceOf(avn.address));
-      const treasuryBalanceBefore = new BN(await mockERC777.balanceOf(legacyAvnTreasury.address));
-      await avn.recoverERC777TokensFromLegacyTreasury(mockERC777.address);
+      const avnBalanceBefore = new BN(await token777.balanceOf(newAvn.address));
+      const oldAvnBalanceBefore = new BN(await token777.balanceOf(avn.address));
+      await newAvn.recoverERC777Tokens(token777.address);
 
-      const avnBalanceAfter = new BN(await mockERC777.balanceOf(avn.address));
-      const treasuryBalanceAfter = new BN(await mockERC777.balanceOf(legacyAvnTreasury.address));
+      const avnBalanceAfter = new BN(await token777.balanceOf(newAvn.address));
+      const oldAvnBalanceAfter = new BN(await token777.balanceOf(avn.address));
 
-      assert.equal(treasuryBalanceAfter.toString(), '0');
-      assert.equal(avnBalanceAfter.toString(), treasuryBalanceBefore.add(avnBalanceBefore).toString());
+      assert.equal(oldAvnBalanceAfter.toString(), '0');
+      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
     });
 
     it('can recover ERC20 tokens', async () => {
-      const avnBalanceBefore = new BN(await mockERC20.balanceOf(avn.address));
-      const treasuryBalanceBefore = new BN(await mockERC20.balanceOf(legacyAvnTreasury.address));
-      await avn.recoverERC20TokensFromLegacyTreasury(mockERC20.address);
+      const avnBalanceBefore = new BN(await token20.balanceOf(newAvn.address));
+      const oldAvnBalanceBefore = new BN(await token20.balanceOf(avn.address));
+      await newAvn.recoverERC20Tokens(token20.address);
 
-      const avnBalanceAfter = new BN(await mockERC20.balanceOf(avn.address));
-      const treasuryBalanceAfter = new BN(await mockERC20.balanceOf(legacyAvnTreasury.address));
+      const avnBalanceAfter = new BN(await token20.balanceOf(newAvn.address));
+      const oldAvnBalanceAfter = new BN(await token20.balanceOf(avn.address));
 
-      assert.equal(treasuryBalanceAfter.toString(), '0');
-      assert.equal(avnBalanceAfter.toString(), treasuryBalanceBefore.add(avnBalanceBefore).toString());
+      assert.equal(oldAvnBalanceAfter.toString(), '0');
+      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
+    });
+
+    it('can recover ETH', async () => {
+      const avnBalanceBefore = new BN(await web3.eth.getBalance(newAvn.address));
+      const oldAvnBalanceBefore = new BN(await web3.eth.getBalance(avn.address));
+      await newAvn.recoverETH();
+
+      const avnBalanceAfter = new BN(await web3.eth.getBalance(newAvn.address));
+      const oldAvnBalanceAfter = new BN(await web3.eth.getBalance(avn.address));
+
+      assert.equal(oldAvnBalanceAfter.toString(), '0');
+      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
     });
   });
 });
