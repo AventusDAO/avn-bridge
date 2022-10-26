@@ -11,7 +11,7 @@ const allowedGas = {
   ethProxyLower: 65700,
   publishRoot: 127400,
   updateLowerCall: 44500,
-  setOwner: 30300
+  setOwner: 31000
 }
 
 const testHelper = require('./helpers/testHelper');

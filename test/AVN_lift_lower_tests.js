@@ -737,4 +737,42 @@ contract('AVN', async () => {
       assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
     });
   });
+
+  context('triggerGrowth', async () => {
+    const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(10));
+
+    beforeEach(async () => {
+      await token20.approve(avn.address, growthAmount);
+    });
+
+    it('fails to trigger growth if not called by the owner', async () => {
+      await testHelper.expectRevert(() => avn.triggerGrowth(growthAmount, {from: someOtherAccount}), 'Only owner');
+    });
+
+    it('fails to trigger zero growth', async () => {
+      await testHelper.expectRevert(() => avn.triggerGrowth(0), 'Cannot trigger zero growth');
+    });
+
+    it('succeeds for the first era', async () => {
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const ownerBalanceBefore = await token20.balanceOf(owner);
+
+      await avn.triggerGrowth(growthAmount);
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.era, 1);
+
+      const avnBalanceAfter = await token20.balanceOf(avn.address);
+      const ownerBalanceAfter = await token20.balanceOf(owner);
+
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), avnBalanceAfter);
+      testHelper.bnEquals(ownerBalanceBefore.sub(growthAmount), ownerBalanceAfter);
+    });
+
+    it('succeeds for the second era', async () => {
+      await avn.triggerGrowth(growthAmount);
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
+      testHelper.bnEquals(logArgs.era, 2);
+    });
+  });
 });

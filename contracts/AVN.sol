@@ -38,6 +38,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   uint256[2] public quorum;
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
+  uint64 public growthEra;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
@@ -229,6 +230,17 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     require(msg.sender == address(priorInstance), "Cannot accept ETH unless lifting");
   }
 
+  function triggerGrowth(uint256 amount)
+    onlyOwner
+    external
+  {
+    require(amount > 0, "Cannot trigger zero growth");
+    assert(coreToken.transferFrom(owner, address(this), amount));
+    uint256 newBalance = coreToken.balanceOf(address(this));
+    require(newBalance <= LIFT_LIMIT, "Exceeds limit");
+    emit LogGrowth(amount, ++growthEra);
+  }
+
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -409,6 +421,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     if (from == address(priorInstance)) return; // recovering funds so we don't lift here
+    if (from == owner && msg.sender == address(coreToken) && data.length == 0) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
     bytes32 checkedT2PublicKey = checkT2PublicKey(data);
