@@ -29,9 +29,8 @@ interface IAVN {
   function disableLowering() external;
   function enableLowering() external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
-  function recoverERC777TokensFromLegacyTreasury(address erc777Address) external;
-  function recoverERC20TokensFromLegacyTreasury(address erc20Address) external;
-  function liftLegacyStakes(bytes calldata t2PublicKey, uint256 amount) external;
+  function recoverERC777Tokens(address erc777Address) external;
+  function recoverERC20Tokens(address erc20Address) external;
 
   // Validator only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
