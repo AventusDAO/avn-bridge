@@ -213,14 +213,6 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     priorInstance.unlockERC20Tokens(erc20Address, address(this), amount);
   }
 
-  function recoverETH()
-    onlyOwner
-    external
-  {
-    uint256 amount = address(priorInstance).balance;
-    priorInstance.unlockETH(payable(address(this)), amount);
-  }
-
   receive() payable external {
     require(msg.sender == address(priorInstance), "Cannot accept ETH without data");
   }
