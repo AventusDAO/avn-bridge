@@ -201,7 +201,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     uint256 lockedBalance = IERC777(erc777Address).balanceOf(address(priorInstance));
-    priorInstance.unlockERC777Tokens(erc777Address, lockedBalance, "");
+    priorInstance.unlockERC777Tokens(erc777Address, address(this), lockedBalance);
   }
 
   function recoverERC20Tokens(address erc20Address)
@@ -209,7 +209,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     uint256 lockedBalance = IERC20(erc20Address).balanceOf(address(priorInstance));
-    priorInstance.unlockERC20Tokens(erc20Address, lockedBalance);
+    priorInstance.unlockERC20Tokens(erc20Address, address(this), lockedBalance);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
