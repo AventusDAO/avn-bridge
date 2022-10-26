@@ -36,13 +36,11 @@ contract AVN is IAVN, IERC777Recipient, Owned {
 
   address[] public authorisedContracts;
   uint256[2] public quorum;
-
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
-  bool public validatorsTransferred;
 
   address immutable public coreTokenAddress;
 
@@ -53,6 +51,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     coreToken = IERC20(coreTokenAddress);
     priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
+    // TODO: Set the lower IDs correctly
     numBytesToLowerData[0x2d00] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x2700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x2702] = 2;   // callID (2 bytes)
@@ -79,24 +78,30 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     _;
   }
 
-  function transferValidators()
+  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
+      bytes32[] calldata t2PublicKey)
     onlyOwner
     external
   {
-    require(validatorsTransferred == false, "Validators already transferred");
-    numActiveValidators = priorInstance.numActiveValidators();
-    nextValidatorId = priorInstance.validatorIdNum();
+    require(t1Address.length == t1PublicKeyLHS.length && t1PublicKeyLHS.length == t1PublicKeyRHS.length
+        && t1PublicKeyRHS.length == t2PublicKey.length, "Validator keys missing");
 
-    for (uint256 id = 1; id < nextValidatorId; id++) {
-      idToT1Address[id] = priorInstance.t1Address(id);
-      idToT2PublicKey[id] = priorInstance.t2PublicKey(id);
-      t1AddressToId[idToT1Address[id]] = id;
-      t2PublicKeyToId[idToT2PublicKey[id]] = id;
-      isRegisteredValidator[id] = true;
-      isActiveValidator[id] = true;
+    bytes memory t1PublicKey;
+
+    for (uint256 i; i < t1Address.length; i++) {
+      require(t1AddressToId[t1Address[i]] == 0, "T1Address already in use");
+      require(t2PublicKeyToId[t2PublicKey[i]] == 0, "T2PublicKey already in use");
+      t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
+      require(address(uint160(uint256(keccak256(t1PublicKey)))) == t1Address[i], "T1 account mismatch");
+      idToT1Address[nextValidatorId] = t1Address[i];
+      idToT2PublicKey[nextValidatorId] = t2PublicKey[i];
+      t1AddressToId[t1Address[i]] = nextValidatorId;
+      t2PublicKeyToId[t2PublicKey[i]] = nextValidatorId;
+      isRegisteredValidator[nextValidatorId] = true;
+      isActiveValidator[nextValidatorId] = true;
+      numActiveValidators++;
+      nextValidatorId++;
     }
-
-    validatorsTransferred = true;
   }
 
   function setAuthorisationStatus(address contractAddress, bool status)
