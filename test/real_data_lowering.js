@@ -1,31 +1,28 @@
 const testHelper = require('./helpers/testHelper');
 const AVN = artifacts.require('AVN');
-const MockERC20 = artifacts.require('MockERC20');
-const AvnValidatorsManager = artifacts.require('AvnValidatorsManager');
+const Token20 = artifacts.require('Token20');
 
 const ORIGINAL_TOKEN = 'c20ac8c712e8f7daee54f56c3e7e8b9f37893c0f';
 const T1_ADDRESS = '0x4d22263DCEe1B1D87980AB014b7184726c044517';
 const T2_PUBLIC_KEY = '0x50368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a19a7f3122';
 
-let avn, mockERC20;
+let avn, token20;
 
 contract('AVN lowering', async () => {
 
   before(async () => {
     await testHelper.init();
     avn = await AVN.deployed();
-    mockERC20 = await MockERC20.deployed();
-    const avnValidatorsManager = await AvnValidatorsManager.deployed();
+    token20 = await Token20.deployed();
     const accounts = testHelper.accounts();
     const someT2PublicKey = testHelper.someT2PublicKey();
     const validators = testHelper.validators();
 
     // lift enough funds to cover all the lowers
     const liftAmount = 100000;
-    await mockERC20.approve(avn.address, liftAmount);
-    await avn.lift(mockERC20.address, someT2PublicKey, liftAmount);
-    await testHelper.initialise_V1(mockERC20, avnValidatorsManager, validators, 10);
-    await avn.transferValidators();
+    await token20.approve(avn.address, liftAmount);
+    await avn.lift(token20.address, someT2PublicKey, liftAmount);
+    await testHelper.loadValidators(avn, validators, 10);
   });
 
  // Using the sets from: https://docs.google.com/spreadsheets/d/10AwBVX60VwQyw0tK_A2ND4qOf-XILvQzVJ1hXwontWk/edit#gid=0
@@ -36,12 +33,12 @@ contract('AVN lowering', async () => {
 
       for (let i=0; i < leaves.length; i++) {
         // replace the token address from the real leaf data with the local mock token so lowering will pass
-        const leaf = leaves[i].replace(ORIGINAL_TOKEN, testHelper.strip_0x(mockERC20.address.toLowerCase()));
+        const leaf = leaves[i].replace(ORIGINAL_TOKEN, testHelper.strip_0x(token20.address.toLowerCase()));
         const tree = await testHelper.createTreeAndPublishRootFromTestLeaf(avn, leaf);
         await avn.lower(tree.leafData, tree.merklePath);
 
         const logArgs = await testHelper.getLogArgs(avn, 'LogLowered');
-        assert.equal(mockERC20.address, logArgs.token);
+        assert.equal(token20.address, logArgs.token);
         assert.equal(T1_ADDRESS, logArgs.t1Address);
         assert.equal(T2_PUBLIC_KEY, logArgs.t2PublicKey);
 

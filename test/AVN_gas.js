@@ -1,6 +1,6 @@
 const allowedGas = {
   ethLift: 25800,
-  erc777Lift: 74500,
+  erc777Lift: 73700,
   erc20Lift: 101700,
   erc20ProxyLift: 116100,
   erc777Lower: 85300,
@@ -11,7 +11,7 @@ const allowedGas = {
   ethProxyLower: 65700,
   publishRoot: 127400,
   updateLowerCall: 44500,
-  setOwner: 30300
+  setOwner: 31000
 }
 
 const testHelper = require('./helpers/testHelper');
