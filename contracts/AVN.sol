@@ -1,20 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.11;
+pragma solidity 0.8.17;
 
 import "./interfaces/IAVN.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
-import "./interfaces/IAvnFTTreasury.sol";
 import "@openzeppelin/contracts/interfaces/IERC1820Registry.sol";
 import "./Owned.sol";
-
-contract LegacyValidatorsManager {
-  uint256 public numActiveValidators;
-  uint256 public validatorIdNum;
-  mapping (uint256 => address) public t1Address;
-  mapping (uint256 => bytes32) public t2PublicKey;
-}
 
 contract AVN is IAVN, IERC777Recipient, Owned {
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
@@ -26,8 +18,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   uint256 constant internal SIGNATURE_LENGTH = 65;
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  IAvnFTTreasury immutable internal LEGACY_AVN_TREASURY;
-  LegacyValidatorsManager immutable internal LEGACY_AVN_VALIDATORS_MANAGER;
+  IAVN immutable internal priorInstance;
+  IERC20 immutable internal coreToken;
 
   mapping (uint256 => bool) public isRegisteredValidator;
   mapping (uint256 => bool) public isActiveValidator;
@@ -44,23 +36,23 @@ contract AVN is IAVN, IERC777Recipient, Owned {
 
   address[] public authorisedContracts;
   uint256[2] public quorum;
-
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
-  uint256 public unliftedLegacyStakes;
+  uint32 public growthPeriod;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
-  bool public validatorsTransferred;
 
-  address immutable public avtAddress;
+  address immutable public coreTokenAddress;
 
-  constructor(address avt, LegacyValidatorsManager avnValidatorsManager, IAvnFTTreasury avnFTTreasury)
+  constructor(address _coreToken, IAVN _priorInstance)
   {
+    require(_coreToken != address(0), "Core token not specified");
+    coreTokenAddress = _coreToken;
+    coreToken = IERC20(coreTokenAddress);
+    priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
-    avtAddress = avt;
-    LEGACY_AVN_VALIDATORS_MANAGER = avnValidatorsManager;
-    LEGACY_AVN_TREASURY = avnFTTreasury;
+    // TODO: Set the lower IDs correctly
     numBytesToLowerData[0x2d00] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x2700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x2702] = 2;   // callID (2 bytes)
@@ -70,7 +62,6 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     nextValidatorId = 1;
     quorum[0] = 2;
     quorum[1] = 3;
-    unliftedLegacyStakes = 2500000000000000000000000; // 2,500,000 AVT in full atto AVT
   }
 
   modifier onlyAuthorisedContract() {
@@ -88,24 +79,30 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     _;
   }
 
-  function transferValidators()
+  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
+      bytes32[] calldata t2PublicKey)
     onlyOwner
     external
   {
-    require(validatorsTransferred == false, "Validators already transferred");
-    numActiveValidators = LEGACY_AVN_VALIDATORS_MANAGER.numActiveValidators();
-    nextValidatorId = LEGACY_AVN_VALIDATORS_MANAGER.validatorIdNum();
+    require(t1Address.length == t1PublicKeyLHS.length && t1PublicKeyLHS.length == t1PublicKeyRHS.length
+        && t1PublicKeyRHS.length == t2PublicKey.length, "Validator keys missing");
 
-    for (uint256 id = 1; id < nextValidatorId; id++) {
-      idToT1Address[id] = LEGACY_AVN_VALIDATORS_MANAGER.t1Address(id);
-      idToT2PublicKey[id] = LEGACY_AVN_VALIDATORS_MANAGER.t2PublicKey(id);
-      t1AddressToId[idToT1Address[id]] = id;
-      t2PublicKeyToId[idToT2PublicKey[id]] = id;
-      isRegisteredValidator[id] = true;
-      isActiveValidator[id] = true;
+    bytes memory t1PublicKey;
+
+    for (uint256 i; i < t1Address.length; i++) {
+      require(t1AddressToId[t1Address[i]] == 0, "T1Address already in use");
+      require(t2PublicKeyToId[t2PublicKey[i]] == 0, "T2PublicKey already in use");
+      t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
+      require(address(uint160(uint256(keccak256(t1PublicKey)))) == t1Address[i], "T1 account mismatch");
+      idToT1Address[nextValidatorId] = t1Address[i];
+      idToT2PublicKey[nextValidatorId] = t2PublicKey[i];
+      t1AddressToId[t1Address[i]] = nextValidatorId;
+      t2PublicKeyToId[t2PublicKey[i]] = nextValidatorId;
+      isRegisteredValidator[nextValidatorId] = true;
+      isActiveValidator[nextValidatorId] = true;
+      numActiveValidators++;
+      nextValidatorId++;
     }
-
-    validatorsTransferred = true;
   }
 
   function setAuthorisationStatus(address contractAddress, bool status)
@@ -205,30 +202,43 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     emit LogLowerCallUpdated(callId, numBytes);
   }
 
-  function recoverERC777TokensFromLegacyTreasury(address erc777Address)
+  function recoverERC777Tokens(address erc777Address)
     onlyOwner
     external
   {
-    uint256 lockedBalance = IERC777(erc777Address).balanceOf(address(LEGACY_AVN_TREASURY));
-    LEGACY_AVN_TREASURY.unlockERC777Tokens(erc777Address, lockedBalance, "");
+    uint256 lockedBalance = IERC777(erc777Address).balanceOf(address(priorInstance));
+    priorInstance.unlockERC777Tokens(erc777Address, address(this), lockedBalance);
   }
 
-  function recoverERC20TokensFromLegacyTreasury(address erc20Address)
+  function recoverERC20Tokens(address erc20Address)
     onlyOwner
     external
   {
-    uint256 lockedBalance = IERC20(erc20Address).balanceOf(address(LEGACY_AVN_TREASURY));
-    LEGACY_AVN_TREASURY.unlockERC20Tokens(erc20Address, lockedBalance);
+    uint256 lockedBalance = IERC20(erc20Address).balanceOf(address(priorInstance));
+    priorInstance.unlockERC20Tokens(erc20Address, address(this), lockedBalance);
   }
 
-  function liftLegacyStakes(bytes calldata t2PublicKey, uint256 amount)
+  function recoverETH()
     onlyOwner
     external
   {
-    require(amount <= unliftedLegacyStakes, "Not enough stake remaining");
-    bytes32 checkedT2PublicKey = checkT2PublicKey(t2PublicKey);
-    unliftedLegacyStakes = unliftedLegacyStakes - amount;
-    emit LogLifted(avtAddress, address(this), checkedT2PublicKey, amount);
+    uint256 lockedBalance = address(priorInstance).balance;
+    priorInstance.unlockETH(payable(address(this)), lockedBalance);
+  }
+
+  receive() payable external {
+    require(msg.sender == address(priorInstance), "Cannot accept ETH unless lifting");
+  }
+
+  function triggerGrowth(uint256 amount)
+    onlyOwner
+    external
+  {
+    require(amount > 0, "Cannot trigger zero growth");
+    assert(coreToken.transferFrom(owner, address(this), amount));
+    uint256 newBalance = coreToken.balanceOf(address(this));
+    require(newBalance <= LIFT_LIMIT, "Exceeds limit");
+    emit LogGrowth(amount, ++growthPeriod);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
@@ -410,7 +420,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     onlyWhenLiftingIsEnabled
     external
   {
-    if (from == address(LEGACY_AVN_TREASURY)) return; // recovering funds from the legacy treasury so we don't lift here
+    if (from == address(priorInstance)) return; // recovering funds so we don't lift here
+    if (data.length == 0 && from == owner && msg.sender == address(coreToken)) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
     bytes32 checkedT2PublicKey = checkT2PublicKey(data);
