@@ -17,6 +17,7 @@ interface IAVN {
 
   event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
@@ -33,6 +34,7 @@ interface IAVN {
   function recoverERC777Tokens(address erc777Address) external;
   function recoverERC20Tokens(address erc20Address) external;
   function recoverETH() external;
+  function triggerGrowth(uint256 amount) external;
 
   // Validator only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
