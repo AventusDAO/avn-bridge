@@ -17,9 +17,11 @@ interface IAVN {
 
   event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
-  function transferValidators() external;
+  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
+      bytes32[] calldata t2PublicKey) external;
   function setAuthorisationStatus(address contractAddress, bool status) external;
   function setQuorum(uint256[2] memory quorum) external;
   function disableValidatorFunctions() external;
@@ -31,6 +33,8 @@ interface IAVN {
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
   function recoverERC777Tokens(address erc777Address) external;
   function recoverERC20Tokens(address erc20Address) external;
+  function recoverETH() external;
+  function triggerGrowth(uint256 amount) external;
 
   // Validator only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
