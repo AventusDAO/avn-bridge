@@ -1,0 +1,25 @@
+{
+  "name": "avn-t1-standalone",
+  "version": "1.0.0",
+  "description": "AVN T1 standalone contract for AVN parachain and consoritium networks",
+  "author": "Aventus Network Services Ltd",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArtosSystems/avn-t1-standalone"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.7.3",
+    "@openzeppelin/test-helpers": "^0.5.16",
+    "@truffle/hdwallet-provider": "^2.0.15",
+    "ethereum-private-key-to-public-key": "^0.0.5",
+    "ganache-cli": "^6.12.2",
+    "keccak256": "^1.0.0",
+    "merkletreejs": "^0.2.8",
+    "web3": "^1.2.4"
+  },
+  "devDependencies": {
+    "solidity-coverage": "^0.7.12",
+    "truffle-plugin-verify": "^0.4.6"
+  }
+}

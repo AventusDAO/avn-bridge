@@ -1,0 +1,5 @@
+{
+  "walletProviderURI" : "REPLACE_WITH_INFURA_URI",
+  "security" : "REPLACE_WITH_YOUR_PRIVATE_KEY_FROM_METAMASK",
+  "apikey" : "REPLACE_WITH_YOUR_API_KEY_FROM_https://etherscan.io/myapikey"
+}
