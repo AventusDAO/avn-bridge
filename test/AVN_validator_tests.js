@@ -1,13 +1,11 @@
 const testHelper = require('./helpers/testHelper');
 const AVN = artifacts.require('AVN');
-const AvnFTTreasury = artifacts.require('AvnFTTreasury');
-const AvnValidatorsManager = artifacts.require('AvnValidatorsManager');
-const MockERC20 = artifacts.require('MockERC20');
+const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-let avn, avnFTTreasury, avnValidatorsManager, mockERC20;
+let avn, token20;
 let accounts, validators;
 let owner, someOtherAccount, someT2PublicKey, FROM_ACTIVE_VALIDATOR;
 let numInitialValidators, numActiveValidators, nextValidatorId;
@@ -17,9 +15,7 @@ contract('AVN', async () => {
 
   before(async () => {
     await testHelper.init();
-    mockERC20 = await MockERC20.deployed();
-    avnFTTreasury = await AvnFTTreasury.deployed();
-    avnValidatorsManager = await AvnValidatorsManager.deployed();
+    token20 = await Token20.deployed();
     avn = await AVN.deployed();
     bnEquals = testHelper.bnEquals;
     accounts = testHelper.accounts();
@@ -30,38 +26,8 @@ contract('AVN', async () => {
     numInitialValidators = 6;
     numActiveValidators = numInitialValidators;
     nextValidatorId = numInitialValidators + 1;
-    await testHelper.initialise_V1(mockERC20, avnValidatorsManager, validators, numInitialValidators);
+    await testHelper.loadValidators(avn, validators, numInitialValidators);
     FROM_ACTIVE_VALIDATOR = {from: validators[1].t1Address};
-  });
-
-  context('transferValidators()', async () => {
-
-    it('fails when not called by the owner', async () => {
-      await testHelper.expectRevert(() => avn.transferValidators({from: someOtherAccount}), 'Only owner');
-    });
-
-    it('succeeds', async () => {
-      await avn.transferValidators();
-
-      bnEquals(await avn.numActiveValidators(), await avnValidatorsManager.numActiveValidators());
-      bnEquals(await avn.numActiveValidators(), numActiveValidators);
-      bnEquals(await avn.nextValidatorId(), await avnValidatorsManager.validatorIdNum());
-      bnEquals(await avn.nextValidatorId(), nextValidatorId);
-
-      for (i = 1; i <= numInitialValidators; i++) {
-        assert.equal(await avn.idToT1Address(i), await avnValidatorsManager.t1Address(i));
-        assert.equal(await avn.idToT2PublicKey(i), await avnValidatorsManager.t2PublicKey(i));
-        assert.equal(await avn.isActiveValidator(i), await avnValidatorsManager.isActive(i));
-        bnEquals(await avn.t1AddressToId(validators[i].t1Address),
-            await avnValidatorsManager.idByT1Address(validators[i].t1Address));
-        bnEquals(await avn.t2PublicKeyToId(validators[i].t2PublicKey),
-            await avnValidatorsManager.idByT2PublicKey(validators[i].t2PublicKey));
-      }
-    });
-
-    it('fails when already upgraded', async () => {
-      await testHelper.expectRevert(() => avn.transferValidators(), 'Validators already transferred');
-    });
   });
 
   context('setQuorum()', async () => {
