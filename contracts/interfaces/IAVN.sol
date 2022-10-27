@@ -17,7 +17,7 @@ interface IAVN {
 
   event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
-  event LogGrowth(uint256 amount, uint64 era);
+  event LogGrowth(uint256 amount, uint32 period);
 
   // Owner only
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,

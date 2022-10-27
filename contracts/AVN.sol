@@ -38,7 +38,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   uint256[2] public quorum;
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
-  uint64 public growthEra;
+  uint32 public growthPeriod;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
@@ -238,7 +238,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     assert(coreToken.transferFrom(owner, address(this), amount));
     uint256 newBalance = coreToken.balanceOf(address(this));
     require(newBalance <= LIFT_LIMIT, "Exceeds limit");
-    emit LogGrowth(amount, ++growthEra);
+    emit LogGrowth(amount, ++growthPeriod);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,

@@ -753,14 +753,14 @@ contract('AVN', async () => {
       await testHelper.expectRevert(() => avn.triggerGrowth(0), 'Cannot trigger zero growth');
     });
 
-    it('succeeds for the first era', async () => {
+    it('succeeds for the first growth period', async () => {
       const avnBalanceBefore = await token20.balanceOf(avn.address);
       const ownerBalanceBefore = await token20.balanceOf(owner);
 
       await avn.triggerGrowth(growthAmount);
       const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
       testHelper.bnEquals(logArgs.amount, growthAmount);
-      testHelper.bnEquals(logArgs.era, 1);
+      testHelper.bnEquals(logArgs.period, 1);
 
       const avnBalanceAfter = await token20.balanceOf(avn.address);
       const ownerBalanceAfter = await token20.balanceOf(owner);
@@ -769,10 +769,10 @@ contract('AVN', async () => {
       testHelper.bnEquals(ownerBalanceBefore.sub(growthAmount), ownerBalanceAfter);
     });
 
-    it('succeeds for the second era', async () => {
+    it('succeeds for the second growth period', async () => {
       await avn.triggerGrowth(growthAmount);
       const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
-      testHelper.bnEquals(logArgs.era, 2);
+      testHelper.bnEquals(logArgs.period, 2);
     });
   });
 });
