@@ -69,7 +69,7 @@ Transfer total ETH balance from a prior version of the contract when upgrading.
 
 - **triggerGrowth(uint256 amount)**\
 Inflate the supply by the amount specified (amount must be ERC20-approved first).
--- emits _**LogGrowth(uint256 amount, uint64 era)**_
+-- emits _**LogGrowth(uint256 amount, uint32 period)**_
 
 - **setOwner()**\
 Changes the owner.\
