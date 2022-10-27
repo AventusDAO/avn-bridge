@@ -421,7 +421,7 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     if (from == address(priorInstance)) return; // recovering funds so we don't lift here
-    if (from == owner && msg.sender == address(coreToken) && data.length == 0) return; // growth action so we don't lift here
+    if (data.length == 0 && from == owner && msg.sender == address(coreToken)) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
     bytes32 checkedT2PublicKey = checkT2PublicKey(data);
