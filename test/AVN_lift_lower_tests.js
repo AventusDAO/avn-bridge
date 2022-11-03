@@ -1,5 +1,4 @@
 const testHelper = require('./helpers/testHelper');
-const AVN = artifacts.require('AVN');
 const Token777 = artifacts.require('Token777');
 const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
@@ -20,7 +19,7 @@ contract('AVN', async () => {
     await testHelper.init();
     token777 = await Token777.deployed();
     token20 = await Token20.deployed();
-    avn = await AVN.deployed();
+    avn = await testHelper.deployAVN(token20.address);
     accounts = testHelper.accounts();
     owner = accounts[0];
     someOtherAccount = accounts[1];
@@ -29,111 +28,24 @@ contract('AVN', async () => {
     await testHelper.loadValidators(avn, validators, 10);
   });
 
-  context('Authorisation', async () => {
-    let avn1, avn2, avn3, avn4;
-
-    before(async () => {
-      // Create some contracts as only contracts can be authorised
-      avn1 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
-      avn2 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
-      avn3 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
-      avn4 = await AVN.new(AVT_ADDRESS, ZERO_ADDRESS);
-    });
-
-    async function checkAuthorisationLog(_address, _status, _expectLog) {
-      const logArgs = await testHelper.getLogArgs(avn, 'LogAuthorisationUpdated', _expectLog);
-      if (_expectLog) {
-        assert.equal(logArgs.contractAddress, _address);
-        assert.equal(logArgs.status, _status);
-      }
-    }
-
-    async function hasSameElements(_authorised) {
-      const contractArray = (await avn.getAuthorisedContracts()).slice().sort();
-      assert.deepEqual(contractArray, _authorised.slice().sort());
-    }
-
-    it('fails to set storage permission if not called by owner', async () => {
-      await testHelper.expectRevert(() => avn.setAuthorisationStatus(someOtherAccount, true, {from: someOtherAccount}),
-          'Only owner');
-    });
-
-    it('fails to set storage permission for an EOA address', async () => {
-      await testHelper.expectRevert(() => avn.setAuthorisationStatus(owner, true), 'Only contracts');
-    });
-
-    it('fails to access any authorised functions if not authorised sender', async () => {
-      await testHelper.expectRevert(() => avn.storeT2TransactionId(testHelper.randomUint256()), 'Access denied');
-      await testHelper.expectRevert(() => avn.storeRootHash(testHelper.randomBytes32()), 'Access denied');
-      await testHelper.expectRevert(() => avn.storeLiftProofHash(testHelper.randomBytes32()), 'Access denied');
-      await testHelper.expectRevert(() => avn.storeLoweredLeafHash(testHelper.randomBytes32()), 'Access denied');
-      await testHelper.expectRevert(() => avn.unlockETH(owner, 1), 'Access denied');
-      await testHelper.expectRevert(() => avn.unlockERC20Tokens(token20.address, owner, 1), 'Access denied');
-      await testHelper.expectRevert(() => avn.unlockERC777Tokens(token777.address, owner, 1), 'Access denied');
-    });
-
-    it('State remains as expected', async () => {
-      let authorised = [];
-      await hasSameElements(authorised);
-
-      // Add a new address
-      await avn.setAuthorisationStatus(avn1.address, true);
-      await checkAuthorisationLog(avn1.address, true, true);
-      authorised.push(avn1.address);
-      await hasSameElements(authorised);
-
-      // Set an address to the same status
-      await avn.setAuthorisationStatus(avn1.address, true);
-      await checkAuthorisationLog(avn1.address, true, false); // no log expected if setting to same status
-      await hasSameElements(authorised); // no update to authorised array expected either
-
-      // Add more authorised
-      await avn.setAuthorisationStatus(avn2.address, true);
-      authorised.push(avn2.address);
-      await avn.setAuthorisationStatus(avn3.address, true);
-      authorised.push(avn3.address);
-      await avn.setAuthorisationStatus(avn4.address, true);
-      authorised.push(avn4.address);
-      await hasSameElements(authorised);
-
-      // Remove from the start of the array
-      await avn.setAuthorisationStatus(avn1.address, false);
-      await checkAuthorisationLog(avn1.address, false, true);
-      authorised.splice(authorised.indexOf(avn1.address), 1);
-      await hasSameElements(authorised);
-
-      // Remove from the end
-      await avn.setAuthorisationStatus(avn3.address, false);
-      authorised.splice(authorised.indexOf(avn3.address), 1);
-      await hasSameElements(authorised);
-
-      // Remove all
-      await avn.setAuthorisationStatus(avn1.address, false);
-      await avn.setAuthorisationStatus(avn4.address, false);
-      await avn.setAuthorisationStatus(avn2.address, false);
-      await avn.setAuthorisationStatus(avn3.address, false);
-      await hasSameElements([]);
-    });
-  });
-
-  context('setOwner', async () => {
+  context('transferOwnership', async () => {
 
     it('succeeds', async () => {
-      await avn.setOwner(someOtherAccount);
+      await avn.transferOwnership(someOtherAccount);
       assert.equal(someOtherAccount, await avn.owner());
-      const logArgs = await testHelper.getLogArgs(avn, 'LogOwnershipTransferred');
-      assert.equal(logArgs.owner, owner);
+      const logArgs = await testHelper.getLogArgs(avn, 'OwnershipTransferred');
+      assert.equal(logArgs.previousOwner, owner);
       assert.equal(logArgs.newOwner, someOtherAccount);
-      await avn.setOwner(owner, {from: someOtherAccount});
+      await avn.transferOwnership(owner, {from: someOtherAccount});
       assert.equal(owner, await avn.owner());
     });
 
     it('fails if the new owner has a zero address', async () => {
-      await testHelper.expectRevert(() => avn.setOwner(ZERO_ADDRESS), 'Owner cannot be zero address');
+      await testHelper.expectRevert(() => avn.transferOwnership(ZERO_ADDRESS), 'Ownable: new owner is the zero address');
     });
 
     it('fails if the sender is not owner', async () => {
-      await testHelper.expectRevert(() => avn.setOwner(owner, {from: someOtherAccount}), 'Only owner');
+      await testHelper.expectRevert(() => avn.transferOwnership(owner, {from: someOtherAccount}), 'Ownable: caller is not the owner');
     });
   });
 
@@ -169,7 +81,7 @@ contract('AVN', async () => {
 
     it('fails to update a lower call when not the owner', async () => {
       await testHelper.expectRevert(() => avn.updateLowerCall(newID, DIRECT_LOWER_NUM_BYTES, {from: someOtherAccount}),
-          'Only owner');
+          'Ownable: caller is not the owner');
     });
 
     it('check an existing lower call', async () => {
@@ -647,97 +559,6 @@ contract('AVN', async () => {
     });
   });
 
-  context('calling avn functions directly without permission', async () => {
-
-    it('storeT2TransactionId() fails', async () => {
-      await testHelper.expectRevert(() => avn.storeT2TransactionId(testHelper.randomUint256()), 'Access denied');
-    });
-
-    it('storeRootHash() fails', async () => {
-      await testHelper.expectRevert(() => avn.storeRootHash(testHelper.randomBytes32()), 'Access denied');
-    });
-
-    it('storeLiftProofHash() fails', async () => {
-      await testHelper.expectRevert(() => avn.storeLiftProofHash(testHelper.randomBytes32()), 'Access denied');
-    });
-
-    it('storeLoweredLeafHash() fails', async () => {
-      await testHelper.expectRevert(() => avn.storeLoweredLeafHash(testHelper.randomBytes32()), 'Access denied');
-    });
-
-    it('unlockETH() fails', async () => {
-      await testHelper.expectRevert(() => avn.unlockETH(owner, 10), 'Access denied');
-    });
-
-    it('unlockERC20Tokens() fails', async () => {
-      await testHelper.expectRevert(() => avn.unlockERC20Tokens(token20.address, owner, 10), 'Access denied');
-    });
-
-    it('unlockERC777Tokens() fails', async () => {
-      await testHelper.expectRevert(() => avn.unlockERC777Tokens(token777.address, owner, 10), 'Access denied');
-    });
-  });
-
-  context('avn token recovery', async () => {
-    let newAvn;
-
-    before(async () => {
-      newAvn = await AVN.new(AVT_ADDRESS, avn.address);
-      const amount = new BN(1000);
-      // Ensure some funds are in the old oldAvn
-      await token777.send(avn.address, amount, someT2PublicKey);
-      await token20.transfer(avn.address, amount);
-      // We lift ETH as it's the only way we can add ETH
-      await avn.liftETH(someT2PublicKey, {value: 123});
-      // Enable the AVN as a treasurer
-      await avn.setAuthorisationStatus(newAvn.address, true);
-    });
-
-    it('erc777 recovery fails when not called by owner', async () => {
-      await testHelper.expectRevert(() => newAvn.recoverERC777Tokens(token777.address, {from: someOtherAccount}), 'Only owner');
-    });
-
-    it('erc20 recovery fails when not called by owner', async () => {
-      await testHelper.expectRevert(() => newAvn.recoverERC20Tokens(token20.address, {from: someOtherAccount}), 'Only owner');
-    });
-
-    it('can recover ERC777 tokens', async () => {
-      const avnBalanceBefore = new BN(await token777.balanceOf(newAvn.address));
-      const oldAvnBalanceBefore = new BN(await token777.balanceOf(avn.address));
-      await newAvn.recoverERC777Tokens(token777.address);
-
-      const avnBalanceAfter = new BN(await token777.balanceOf(newAvn.address));
-      const oldAvnBalanceAfter = new BN(await token777.balanceOf(avn.address));
-
-      assert.equal(oldAvnBalanceAfter.toString(), '0');
-      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
-    });
-
-    it('can recover ERC20 tokens', async () => {
-      const avnBalanceBefore = new BN(await token20.balanceOf(newAvn.address));
-      const oldAvnBalanceBefore = new BN(await token20.balanceOf(avn.address));
-      await newAvn.recoverERC20Tokens(token20.address);
-
-      const avnBalanceAfter = new BN(await token20.balanceOf(newAvn.address));
-      const oldAvnBalanceAfter = new BN(await token20.balanceOf(avn.address));
-
-      assert.equal(oldAvnBalanceAfter.toString(), '0');
-      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
-    });
-
-    it('can recover ETH', async () => {
-      const avnBalanceBefore = new BN(await web3.eth.getBalance(newAvn.address));
-      const oldAvnBalanceBefore = new BN(await web3.eth.getBalance(avn.address));
-      await newAvn.recoverETH();
-
-      const avnBalanceAfter = new BN(await web3.eth.getBalance(newAvn.address));
-      const oldAvnBalanceAfter = new BN(await web3.eth.getBalance(avn.address));
-
-      assert.equal(oldAvnBalanceAfter.toString(), '0');
-      assert.equal(avnBalanceAfter.toString(), oldAvnBalanceBefore.add(avnBalanceBefore).toString());
-    });
-  });
-
   context('triggerGrowth', async () => {
     const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(10));
 
@@ -746,7 +567,7 @@ contract('AVN', async () => {
     });
 
     it('fails to trigger growth if not called by the owner', async () => {
-      await testHelper.expectRevert(() => avn.triggerGrowth(growthAmount, {from: someOtherAccount}), 'Only owner');
+      await testHelper.expectRevert(() => avn.triggerGrowth(growthAmount, {from: someOtherAccount}), 'Ownable: caller is not the owner');
     });
 
     it('fails to trigger zero growth', async () => {
