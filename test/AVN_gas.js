@@ -1,21 +1,20 @@
 const allowedGas = {
-  ethLift: 25800,
-  erc777Lift: 73700,
-  erc20Lift: 101700,
-  erc20ProxyLift: 116100,
-  erc777Lower: 85300,
-  erc20Lower: 74300,
-  ethLower: 63600,
-  erc777ProxyLower: 87500,
-  erc20ProxyLower: 76400,
-  ethProxyLower: 65700,
-  publishRoot: 127400,
-  updateLowerCall: 44500,
-  setOwner: 31000
+  ethLift: 27500,
+  erc777Lift: 76200,
+  erc20Lift: 103500,
+  erc20ProxyLift: 117800,
+  erc777Lower: 87000,
+  erc20Lower: 76000,
+  ethLower: 65300,
+  erc777ProxyLower: 89100,
+  erc20ProxyLower: 78100,
+  ethProxyLower: 67500,
+  publishRoot: 129200,
+  updateLowerCall: 45800,
+  transferOwnership: 31900
 }
 
 const testHelper = require('./helpers/testHelper');
-const AVN = artifacts.require('AVN');
 const Token777 = artifacts.require('Token777');
 const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
@@ -30,7 +29,7 @@ contract('AVN Gas [ @skip-on-coverage ]', async () => {
     await testHelper.init(); // pass true to run with 8m tx tree size (slow)
     token777 = await Token777.deployed();
     token20 = await Token20.deployed();
-    avn = await AVN.deployed();
+    avn = await testHelper.deployAVN(token20.address);
     accounts = testHelper.accounts();
     owner = accounts[0];
     someOtherAccount = accounts[1];
@@ -146,8 +145,8 @@ contract('AVN Gas [ @skip-on-coverage ]', async () => {
     testHelper.checkGas(tx, allowedGas.updateLowerCall);
   });
 
-  it('setOwner()', async () => {
-    const tx = await avn.setOwner(someOtherAccount);
-    testHelper.checkGas(tx, allowedGas.setOwner);
+  it('transferOwnership()', async () => {
+    const tx = await avn.transferOwnership(someOtherAccount);
+    testHelper.checkGas(tx, allowedGas.transferOwnership);
   });
 });

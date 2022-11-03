@@ -6,9 +6,11 @@ import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
 import "@openzeppelin/contracts/interfaces/IERC1820Registry.sol";
-import "./Owned.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract AVN is IAVN, IERC777Recipient, Owned {
+contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
@@ -18,8 +20,6 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   uint256 constant internal SIGNATURE_LENGTH = 65;
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  IAVN immutable internal priorInstance;
-  IERC20 immutable internal coreToken;
 
   mapping (uint256 => bool) public isRegisteredValidator;
   mapping (uint256 => bool) public isActiveValidator;
@@ -28,28 +28,28 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   mapping (uint256 => address) public idToT1Address;
   mapping (uint256 => bytes32) public idToT2PublicKey;
   mapping (bytes2 => uint256) public numBytesToLowerData;
-  mapping (address => bool) public isAuthorisedContract;
   mapping (bytes32 => bool) public isPublishedRootHash;
   mapping (uint256 => bool) public isUsedT2TransactionId;
   mapping (bytes32 => bool) public hasLowered;
   mapping (bytes32 => bool) public hasLifted;
 
-  address[] public authorisedContracts;
   uint256[2] public quorum;
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
   uint32 public growthPeriod;
+  address public coreToken;
+  address internal priorInstance;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
-  address immutable public coreTokenAddress;
-
-  constructor(address _coreToken, IAVN _priorInstance)
+  function initialize(address _coreToken, address _priorInstance)
+    public
+    initializer
   {
     require(_coreToken != address(0), "Core token not specified");
-    coreTokenAddress = _coreToken;
-    coreToken = IERC20(coreTokenAddress);
+    __Ownable_init();
+    coreToken = _coreToken;
     priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
     // TODO: Set the lower IDs correctly
@@ -60,13 +60,9 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextValidatorId = 1;
+    growthPeriod = 1;
     quorum[0] = 2;
     quorum[1] = 3;
-  }
-
-  modifier onlyAuthorisedContract() {
-    require(isAuthorisedContract[msg.sender], "Access denied");
-    _;
   }
 
   modifier onlyWhenLiftingIsEnabled() {
@@ -78,6 +74,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     require(validatorFunctionsAreEnabled, "Function currently disabled");
     _;
   }
+
+  function _authorizeUpgrade(address) internal override onlyOwner {}
 
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
@@ -103,37 +101,6 @@ contract AVN is IAVN, IERC777Recipient, Owned {
       numActiveValidators++;
       nextValidatorId++;
     }
-  }
-
-  function setAuthorisationStatus(address contractAddress, bool status)
-    onlyOwner
-    external
-  {
-    uint256 size;
-
-    assembly {
-      size := extcodesize(contractAddress)
-    }
-
-    require(size > 0, "Only contracts");
-
-    if (status == isAuthorisedContract[contractAddress]) {
-      return;
-    } else if (status) {
-      isAuthorisedContract[contractAddress] = true;
-      authorisedContracts.push(contractAddress);
-    } else {
-      isAuthorisedContract[contractAddress] = false;
-      uint256 endContractAddress = authorisedContracts.length - 1;
-      for (uint256 i; i < endContractAddress; i++) {
-        if (authorisedContracts[i] == contractAddress) {
-          authorisedContracts[i] = authorisedContracts[endContractAddress];
-          break;
-        }
-      }
-      authorisedContracts.pop();
-    }
-    emit LogAuthorisationUpdated(contractAddress, status);
   }
 
   function setQuorum(uint256[2] memory _quorum)
@@ -202,32 +169,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     emit LogLowerCallUpdated(callId, numBytes);
   }
 
-  function recoverERC777Tokens(address erc777Address)
-    onlyOwner
-    external
-  {
-    uint256 lockedBalance = IERC777(erc777Address).balanceOf(address(priorInstance));
-    priorInstance.unlockERC777Tokens(erc777Address, address(this), lockedBalance);
-  }
-
-  function recoverERC20Tokens(address erc20Address)
-    onlyOwner
-    external
-  {
-    uint256 lockedBalance = IERC20(erc20Address).balanceOf(address(priorInstance));
-    priorInstance.unlockERC20Tokens(erc20Address, address(this), lockedBalance);
-  }
-
-  function recoverETH()
-    onlyOwner
-    external
-  {
-    uint256 lockedBalance = address(priorInstance).balance;
-    priorInstance.unlockETH(payable(address(this)), lockedBalance);
-  }
-
   receive() payable external {
-    require(msg.sender == address(priorInstance), "Cannot accept ETH unless lifting");
+    require(msg.sender == priorInstance, "Cannot accept ETH unless lifting");
   }
 
   function triggerGrowth(uint256 amount)
@@ -235,10 +178,10 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     require(amount > 0, "Cannot trigger zero growth");
-    assert(coreToken.transferFrom(owner, address(this), amount));
-    uint256 newBalance = coreToken.balanceOf(address(this));
+    assert(IERC20(coreToken).transferFrom(owner(), address(this), amount));
+    uint256 newBalance = IERC20(coreToken).balanceOf(address(this));
     require(newBalance <= LIFT_LIMIT, "Exceeds limit");
-    emit LogGrowth(amount, ++growthPeriod);
+    emit LogGrowth(amount, growthPeriod++);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
@@ -313,66 +256,9 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   {
     verifyConfirmations(toConfirmationHash(rootHash, t2TransactionId), confirmations);
     doStoreT2TransactionId(t2TransactionId);
-    doStoreRootHash(rootHash);
+    require(isPublishedRootHash[rootHash] == false, "Root already exists");
+    isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TransactionId);
-  }
-
-  function storeT2TransactionId(uint256 t2TransactionId)
-    onlyAuthorisedContract
-    external
-  {
-    doStoreT2TransactionId(t2TransactionId);
-  }
-
-  function storeRootHash(bytes32 rootHash)
-    onlyAuthorisedContract
-    external
-  {
-    doStoreRootHash(rootHash);
-  }
-
-  function storeLiftProofHash(bytes32 proofHash)
-    onlyAuthorisedContract
-    external
-  {
-    doStoreLiftProofHash(proofHash);
-  }
-
-  function storeLoweredLeafHash(bytes32 leafHash)
-    onlyAuthorisedContract
-    external
-  {
-    doStoreLoweredLeafHash(leafHash);
-  }
-
-  function unlockETH(address payable recipient, uint256 amount)
-    onlyAuthorisedContract
-    external
-  {
-    (bool success, ) = recipient.call{value: amount}("");
-    require(success, "ETH transfer failed");
-  }
-
-  function unlockERC777Tokens(address erc777Address, address recipient, uint256 amount)
-    onlyAuthorisedContract
-    external
-  {
-    IERC777(erc777Address).send(recipient, amount, "");
-  }
-
-  function unlockERC20Tokens(address erc20Address, address recipient, uint256 amount)
-    onlyAuthorisedContract
-    external
-  {
-    assert(IERC20(erc20Address).transfer(recipient, amount));
-  }
-
-  function getAuthorisedContracts()
-    external
-    view
-    returns (address[] memory)
-  {
-    return authorisedContracts;
   }
 
   function getIsPublishedRootHash(bytes32 rootHash)
@@ -396,7 +282,9 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     external
   {
     if (msg.sender != approver) {
-      doStoreLiftProofHash(keccak256(proof));
+      bytes32 proofHash = keccak256(proof);
+      require(hasLifted[proofHash] == false, "Lift proof already used");
+      hasLifted[proofHash] = true;
       bytes32 msgHash = keccak256(abi.encodePacked(erc20Address, t2PublicKey, amount, proofNonce));
       address signer = recoverSigner(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash)), proof);
       require(signer == approver, "Lift proof invalid");
@@ -420,8 +308,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     onlyWhenLiftingIsEnabled
     external
   {
-    if (from == address(priorInstance)) return; // recovering funds so we don't lift here
-    if (data.length == 0 && from == owner && msg.sender == address(coreToken)) return; // growth action so we don't lift here
+    if (from == priorInstance) return; // recovering funds so we don't lift here
+    if (data.length == 0 && from == owner() && msg.sender == address(coreToken)) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
     bytes32 checkedT2PublicKey = checkT2PublicKey(data);
@@ -437,7 +325,8 @@ contract AVN is IAVN, IERC777Recipient, Owned {
     require(loweringIsEnabled, "Lowering currently disabled");
     bytes32 leafHash = keccak256(leaf);
     require(confirmAvnTransaction(leafHash, merklePath), "Leaf or path invalid");
-    doStoreLoweredLeafHash(leafHash);
+    require(hasLowered[leafHash] == false, "Already lowered");
+    hasLowered[leafHash] = true;
 
     uint256 ptr;
     ptr += getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
@@ -581,27 +470,6 @@ contract AVN is IAVN, IERC777Recipient, Owned {
   {
     require(isUsedT2TransactionId[t2TransactionId] == false, "T2 transaction must be unique");
     isUsedT2TransactionId[t2TransactionId] = true;
-  }
-
-  function doStoreRootHash(bytes32 rootHash)
-    private
-  {
-    require(isPublishedRootHash[rootHash] == false, "Root already exists");
-    isPublishedRootHash[rootHash] = true;
-  }
-
-  function doStoreLiftProofHash(bytes32 proofHash)
-    private
-  {
-    require(hasLifted[proofHash] == false, "Lift proof already used");
-    hasLifted[proofHash] = true;
-  }
-
-  function doStoreLoweredLeafHash(bytes32 leafHash)
-    private
-  {
-    require(hasLowered[leafHash] == false, "Already lowered");
-    hasLowered[leafHash] = true;
   }
 
   function doLift(address erc20Address, address approver, bytes memory t2PublicKey, uint256 amount)

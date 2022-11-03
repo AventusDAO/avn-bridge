@@ -1,9 +1,12 @@
 const {MerkleTree} = require('merkletreejs');
+const { deployProxy } = require('@openzeppelin/truffle-upgrades');
+const AVN = artifacts.require('AVN');
 const keccak256 = require('keccak256');
 const privateKeyToPublicKey = require('ethereum-private-key-to-public-key');
 const keys = require('../../keys.json');
 const BN = web3.utils.BN;
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PSEUDO_ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PROXY_LOWER_PROOF_LENGTH = 131;
 const PROXY_LOWER_ID = '0x2d00';
@@ -40,6 +43,11 @@ async function init(_largeTree) {
   } else {
     additionalTx = [randomTxHash];
   }
+}
+
+async function deployAVN(coreToken, prior) {
+  priorInstance = prior || ZERO_ADDRESS;
+  return await deployProxy(AVN, [coreToken, priorInstance], {kind: 'uups'});
 }
 
 function bnEquals(a, b) {
@@ -250,6 +258,7 @@ module.exports = {
   createTreeAndPublishRoot,
   createTreeAndPublishRootFromTestLeaf,
   createTreeAndPublishRootWithLoweree,
+  deployAVN,
   expectRevert,
   getConfirmations,
   getLogArgs,
