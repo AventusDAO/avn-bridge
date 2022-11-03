@@ -292,28 +292,28 @@ contract('AVN', async () => {
         });
 
       it('attempting to lift ETH when lift is disabled', async () => {
-        await avn.disableLifting();
+        await avn.enableLifting(false);
         let logArgs = await testHelper.getLogArgs(avn, 'LogLiftingIsEnabled');
         assert.equal(logArgs.status, false);
         await testHelper.expectRevert(() => avn.liftETH(someT2PublicKey, {value:100}), 'Lifting currently disabled');
-        await avn.enableLifting();
+        await avn.enableLifting(true);
         logArgs = await testHelper.getLogArgs(avn, 'LogLiftingIsEnabled');
         assert.equal(logArgs.status, true);
         await avn.liftETH(someT2PublicKey, {value:100});
       });
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
-        await avn.disableLifting();
+        await avn.enableLifting(false);
         await testHelper.expectRevert(() => token777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
-        await avn.enableLifting();
+        await avn.enableLifting(true);
         await token777.send(avn.address, 1, someT2PublicKey);
       });
 
       it('attempting to lift ERC20 tokens when lift is disabled', async () => {
-        await avn.disableLifting();
+        await avn.enableLifting(false);
         await token20.approve(avn.address, 1);
         await testHelper.expectRevert(() => avn.lift(token20.address, someT2PublicKey, 1), 'Lifting currently disabled');
-        await avn.enableLifting();
+        await avn.enableLifting(true);
         await avn.lift(token20.address, someT2PublicKey, 1);
       });
 
@@ -324,9 +324,9 @@ contract('AVN', async () => {
       });
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
-        await avn.disableLifting();
+        await avn.enableLifting(false);
         await testHelper.expectRevert(() => token777.send(avn.address, 1, someT2PublicKey), 'Lifting currently disabled');
-        await avn.enableLifting();
+        await avn.enableLifting(true);
         await token777.send(avn.address, 1, someT2PublicKey);
       });
 
@@ -512,11 +512,11 @@ contract('AVN', async () => {
       });
 
       it('lowering is disabled', async () => {
-        await avn.disableLowering();
+        await avn.enableLowering(false);
         let logArgs = await testHelper.getLogArgs(avn, 'LogLoweringIsEnabled');
         assert.equal(logArgs.status, false);
         await testHelper.expectRevert(() => avn.lower(tree.leafData, tree.merklePath), 'Lowering currently disabled');
-        await avn.enableLowering();
+        await avn.enableLowering(true);
         logArgs = await testHelper.getLogArgs(avn, 'LogLoweringIsEnabled');
         assert.equal(logArgs.status, true);
         await avn.lower(tree.leafData, tree.merklePath);

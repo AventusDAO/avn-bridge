@@ -7,9 +7,9 @@ const allowedGas = {
   erc20Lower: 76000,
   ethLower: 65300,
   erc777ProxyLower: 89100,
-  erc20ProxyLower: 78100,
+  erc20ProxyLower: 78200,
   ethProxyLower: 67500,
-  publishRoot: 129200,
+  publishRoot: 129100,
   updateLowerCall: 45800,
   transferOwnership: 31900
 }

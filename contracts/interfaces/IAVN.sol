@@ -22,12 +22,9 @@ interface IAVN {
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey) external;
   function setQuorum(uint256[2] memory quorum) external;
-  function disableValidatorFunctions() external;
-  function enableValidatorFunctions() external;
-  function disableLifting() external;
-  function enableLifting() external;
-  function disableLowering() external;
-  function enableLowering() external;
+  function enableValidatorFunctions(bool status) external;
+  function enableLifting(bool status) external;
+  function enableLowering(bool status) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
   function triggerGrowth(uint256 amount) external;
 

@@ -113,52 +113,28 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     emit LogQuorumUpdated(quorum);
   }
 
-  function disableValidatorFunctions()
+  function enableValidatorFunctions(bool status)
     onlyOwner
     external
   {
-    validatorFunctionsAreEnabled = false;
-    emit LogValidatorFunctionsAreEnabled(false);
+    validatorFunctionsAreEnabled = status;
+    emit LogValidatorFunctionsAreEnabled(status);
   }
 
-  function enableValidatorFunctions()
+  function enableLifting(bool status)
     onlyOwner
     external
   {
-    validatorFunctionsAreEnabled = true;
-    emit LogValidatorFunctionsAreEnabled(true);
+    liftingIsEnabled = status;
+    emit LogLiftingIsEnabled(status);
   }
 
-  function disableLifting()
+  function enableLowering(bool status)
     onlyOwner
     external
   {
-    liftingIsEnabled = false;
-    emit LogLiftingIsEnabled(false);
-  }
-
-  function enableLifting()
-    onlyOwner
-    external
-  {
-    liftingIsEnabled = true;
-    emit LogLiftingIsEnabled(true);
-  }
-
-  function disableLowering()
-    onlyOwner
-    external
-  {
-    loweringIsEnabled = false;
-    emit LogLoweringIsEnabled(false);
-  }
-
-  function enableLowering()
-    onlyOwner
-    external
-  {
-    loweringIsEnabled = true;
-    emit LogLoweringIsEnabled(true);
+    loweringIsEnabled = status;
+    emit LogLoweringIsEnabled(status);
   }
 
   function updateLowerCall(bytes2 callId, uint256 numBytes)
