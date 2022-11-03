@@ -51,8 +51,8 @@ module.exports = {
       network_id: 5,
       deploymentPollingInterval: 120000,
       disableConfirmationListener: true,
-      maxFeePerGas: 100e9,
-      maxPriorityFeePerGas: 5e9,
+      maxFeePerGas: 150e9,
+      maxPriorityFeePerGas: 10e9,
       gas: 8000000,
       timeoutBlocks: 125
     },
@@ -84,5 +84,6 @@ module.exports = {
   ],
   api_keys: {
     etherscan: config.apikey
-  }
+  },
+  contracts_directory: './contracts/'
 };
