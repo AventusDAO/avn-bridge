@@ -2,6 +2,8 @@
 
 The purpose of the AVN (T1) contract is to provide a lightweight and gas-efficient means of facilitating a Substrate-based fungible-token-scaling sidechain (T2), be that a parachain or a sovereign chain.
 
+The contract utilises OpenZeppelin's implementation of the Universal Upgradeable Proxy Standard ([EIP-1822](https://eips.ethereum.org/EIPS/eip-1822)).
+
 The system is underwritten by its constructor-specified core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
 
 ##### The AVN T1 has 3 main responsibilities:
@@ -21,10 +23,6 @@ The system is underwritten by its constructor-specified core token (in the case 
 - **loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey))**\
 Function to initialise a set of validators.
-
-- **setAuthorisationStatus(address contractAddress, bool status)**\
-Enable / disable contracts permitted to access this contract's storage or funds. This is to enable future upgrades of the AVN contract.\
--- emits _**LogAuthorisationUpdated(address indexed contractAddress, bool status)**_
 
 - **setQuorum(uint256[2] memory quorum)**\
 Sets the ratio of validators required to prove consensus, in relation to the total number of registered validators (ie: the fraction of validators required to provide confirmation for a validator method to succeed).
@@ -58,15 +56,6 @@ Turn the lowering functionality back on.\
 Update or add the call index of any lower function, along with the distance (in bytes) required to reach the lower arguments.\
 -- emits _**LogLowerCallUpdated(bytes2 callId, uint256 numBytes)**_
 
-- **recoverERC777Tokens(address erc777Address)**\
-Transfer total balance of the specified token from a prior version of the contract when upgrading.
-
-- **recoverERC20Tokens(address erc20Address)**\
-Transfer total balance of the specified token from a prior version of the contract when upgrading.
-
-- **recoverETH()**\
-Transfer total ETH balance from a prior version of the contract when upgrading.
-
 - **triggerGrowth(uint256 amount)**\
 Inflate the supply by the amount specified (amount must be ERC20-approved first).
 -- emits _**LogGrowth(uint256 amount, uint32 period)**_
@@ -93,37 +82,10 @@ Deregisters and deactivates a validator, retaining their original registration d
 Add a merkle tree root representing the latest set of transactions to have occurred on the T2.\
 -- emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId)**_
 
-## Authorised Functions
-##### Only callable by an authorised partner contract (such as a future upgrade contract referencing this contract as storage)
-
-- **storeT2TransactionId(uint256 t2TransactionId)**\
-Add a new T2 transaction ID to storage. Fails if already exists.
-
-- **storeRootHash(bytes32 rootHash)**\
-Add a new merkle root to storage. Fails if already exists.
-
-- **storeLiftProofHash(bytes32 proofHash)**\
-Add a new proof of a proxy lift to storage. Fails if already used.
-
-- **storeLoweredLeafHash(bytes32 leafHash)**\
-Add a new merkle root to storage. Fails if already exists.
-
-- **unlockETH(address payable recipient, uint256 amount)**\
-Transfer the specified amount of ETH from this contract to the recipient.
-
-- **unlockERC777Tokens(address erc777Address, address recipient, uint256 amount)**\
-Send the specified amount of ERC-777 tokens from this contract to the recipient.
-
-- **unlockERC20Tokens(address erc20Address, address recipient, uint256 amount)**\
-Transfer the specified amount of ERC-20 tokens from this contract to the recipient.
-
 ## Publicly Accessible Functions
 
-- **getAuthorisedContracts()**\
-Free-to-call method returns the array of contracts currently authorised to access this contract's funds or set its storage.
-
 - **function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool)**\
-Easy means for any future upgrade contracts to view published roots.
+Easy means to view published roots.
 
 - **lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)**\
 Allows the caller to move an amount of their ERC-20 tokens to the specified T2 account, providing they have previously approved this contract for the amount.\
@@ -156,14 +118,24 @@ do `npm install`
 
 Edit 'config_.json' and save as 'config.json'
 
-To run local tests:
-do `run test` or `sh run.sh test`
+To run local tests:\
+do `run test` or `./run.sh test`
 
-To deploy to local network:
-do `run deploy-dev` or `sh run.sh deploy-dev`
+To deploy to local network:\
+do `run deploy-dev` or `./run.sh deploy-dev`
 
-To deploy to goerli test network:
-do `run deploy-goerli` or `sh run.sh deploy-goerli`
+To deploy to goerli test network:\
+do `run deploy-goerli` or `./run.sh deploy-goerli`
 
-To run coverage:
-do `run coverage` or `sh run.sh coverage`
+To run coverage:\
+do `run coverage` or `./run.sh coverage`
+
+# Interaction via Etherscan
+
+The deployment will automatically publish and verify the contracts.\
+The following manual steps are then required to interact with the AVN contract on etherscan:
+- Visit the Etherscan page for the ERC1967Proxy address from the deployment
+- Under More Options select "Is this a proxy?"
+- Click Verify and Save
+- Return to the ERC1967Proxy page's Contract tab
+- Now you will be able to "Read as Proxy" or "Write as Proxy" to interact with the AVN contract

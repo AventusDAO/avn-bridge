@@ -54,8 +54,10 @@ goto end
 echo *** Deploying to Goerli... ***
 call truffle.cmd migrate --skip-dry-run --network goerli --reset
 echo *** Publishing contract... ***
+set /p IMPLEMENTATION=<implementationAddress.txt
 timeout 10 > NUL
-call npx truffle run verify AVN --network goerli
+call npx truffle run verify %IMPLEMENTATION% --network goerli --license MIT
+call npx truffle run verify Unlocker --network goerli --license MIT
 goto end
 
 :deploy-dev
@@ -68,8 +70,10 @@ goto end
 REM echo *** Deploying to Mainnet... ***
 REM call truffle.cmd migrate --skip-dry-run --network mainnet --reset
 REM echo *** Publishing contract... ***
+set /p IMPLEMENTATION=<implementationAddress.txt
 REM timeout 10 > NUL
-REM call npx truffle run verify AVN --network mainnet
+REM call npx truffle run verify @%IMPLEMENTATION% --network mainnet --license MIT
+REM call npx truffle run verify Unlocker --network mainnet --license MIT
 goto end
 
 :end
