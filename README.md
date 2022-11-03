@@ -28,29 +28,17 @@ Function to initialise a set of validators.
 Sets the ratio of validators required to prove consensus, in relation to the total number of registered validators (ie: the fraction of validators required to provide confirmation for a validator method to succeed).
 -- emits _**LogQuorumUpdated(uint256[2] quorum)**_
 
-- **disableValidatorFunctions()**\
-Turn validator functionality off to prevent any further validator actions.\
--- emits _**LogValidatorFunctionsAreEnabled(false)**_
-
 - **enableValidatorFunctions()**\
-Turn the validator functionality back on.\
--- emits _**LogValidatorFunctionsAreEnabled(true)**_
-
-- **disableLifting()**\
-Turn the lifting functionality off to prevent any further lifts.\
--- emits _**LogLiftingIsEnabled(false)**_
+Turn the validator functionality on or off.\
+-- emits _**LogValidatorFunctionsAreEnabled(bool status)**_
 
 - **enableLifting()**\
-Turn the lifting functionality back on.\
--- emits _**LogLiftingIsEnabled(true)**_
-
-- **disableLowering()**\
-Turn the lowering functionality off to prevent any further lowering.\
--- emits _**LogLoweringIsEnabled(false)**_
+Turn the lifting functionality on or off.\
+-- emits _**LogLiftingIsEnabled(bool status)**_
 
 - **enableLowering()**\
-Turn the lowering functionality back on.\
--- emits _**LogLoweringIsEnabled(true)**_
+Turn the lowering functionality on or off.\
+-- emits _**LogLoweringIsEnabled(bool status)**_
 
 - **updateLowerCall(bytes2 callId, uint256 numBytes)**\
 Update or add the call index of any lower function, along with the distance (in bytes) required to reach the lower arguments.\

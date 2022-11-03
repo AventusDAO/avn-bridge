@@ -82,7 +82,7 @@ contract('AVN', async () => {
     context('fails when', async () => {
 
       it('validator functions are disabled', async () => {
-        await avn.disableValidatorFunctions();
+        await avn.enableValidatorFunctions(false);
         let logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
         assert.equal(logArgs.status, false);
         const newT2TransactionId = testHelper.randomUint256();
@@ -90,7 +90,7 @@ contract('AVN', async () => {
         const confirmations = await testHelper.getConfirmations(avn, newRootHash, newT2TransactionId);
         await testHelper.expectRevert(() => avn.publishRoot(newRootHash, newT2TransactionId, confirmations,
             FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-        await avn.enableValidatorFunctions();
+        await avn.enableValidatorFunctions(true);
         logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
         assert.equal(logArgs.status, true);
       });
@@ -308,7 +308,7 @@ contract('AVN', async () => {
     });
 
     it('validator functions are disabled', async () => {
-      await avn.disableValidatorFunctions();
+      await avn.enableValidatorFunctions(false);
       let logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
       assert.equal(logArgs.status, false);
       const activeValidator = validators[1];
@@ -317,7 +317,7 @@ contract('AVN', async () => {
       const confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
       await testHelper.expectRevert(() => avn.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-      await avn.enableValidatorFunctions();
+      await avn.enableValidatorFunctions(true);
       logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
       assert.equal(logArgs.status, true);
     });
