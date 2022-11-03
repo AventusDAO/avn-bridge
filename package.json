@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.7.3",
+    "@openzeppelin/contracts-upgradeable": "^4.7.3",
     "@openzeppelin/test-helpers": "^0.5.16",
     "@truffle/hdwallet-provider": "^2.0.15",
     "ethereum-private-key-to-public-key": "^0.0.5",
@@ -19,6 +20,7 @@
     "web3": "^1.2.4"
   },
   "devDependencies": {
+    "@openzeppelin/truffle-upgrades": "^1.17.0",
     "solidity-coverage": "^0.7.12",
     "truffle-plugin-verify": "^0.4.6"
   }

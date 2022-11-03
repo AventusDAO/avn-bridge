@@ -37,7 +37,9 @@ if [ "$1" == "deploy-goerli" ]; then
   truffle migrate --network $ETH_truffleNetwork --skip-dry-run --reset | tee -a $migrationLog
   echo "** Publishing contracts... ***"
   sleep 10
-  npx truffle run verify AVN --network goerli | tee -a $migrationLog
+  IMPLEMENTATION=$(cat "implementationAddress.txt")
+  npx truffle run verify $IMPLEMENTATION --network goerli --license MIT | tee -a $migrationLog
+  npx truffle run verify Unlocker --network goerli --license MIT | tee -a $migrationLog
   date >> $migrationLog
   exit $?
 fi
@@ -49,7 +51,9 @@ if [ "$1" == "deploy-mainnet" ]; then
   # truffle migrate --network $ETH_truffleNetwork --skip-dry-run --reset | tee -a $migrationLog
   # echo "** Publishing contracts... ***"
   # sleep 10
-  # npx truffle run verify AVN --network mainnet | tee -a $migrationLog
+  # IMPLEMENTATION=$(cat "implementationAddress.txt")
+  # npx truffle run verify $IMPLEMENTATION --network mainnet --license MIT | tee -a $migrationLog
+  # npx truffle run verify Unlocker --network mainnet --license MIT | tee -a $migrationLog
   # date >> $migrationLog
   exit $?
 fi

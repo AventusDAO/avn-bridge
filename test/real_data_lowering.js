@@ -1,5 +1,4 @@
 const testHelper = require('./helpers/testHelper');
-const AVN = artifacts.require('AVN');
 const Token20 = artifacts.require('Token20');
 
 const ORIGINAL_TOKEN = 'c20ac8c712e8f7daee54f56c3e7e8b9f37893c0f';
@@ -12,8 +11,8 @@ contract('AVN lowering', async () => {
 
   before(async () => {
     await testHelper.init();
-    avn = await AVN.deployed();
     token20 = await Token20.deployed();
+    avn = await testHelper.deployAVN(token20.address);
     const accounts = testHelper.accounts();
     const someT2PublicKey = testHelper.someT2PublicKey();
     const validators = testHelper.validators();

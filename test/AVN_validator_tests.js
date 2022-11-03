@@ -1,5 +1,4 @@
 const testHelper = require('./helpers/testHelper');
-const AVN = artifacts.require('AVN');
 const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
 
@@ -16,7 +15,7 @@ contract('AVN', async () => {
   before(async () => {
     await testHelper.init();
     token20 = await Token20.deployed();
-    avn = await AVN.deployed();
+    avn = await testHelper.deployAVN(token20.address);
     bnEquals = testHelper.bnEquals;
     accounts = testHelper.accounts();
     owner = accounts[0];
@@ -59,7 +58,7 @@ contract('AVN', async () => {
         await testHelper.expectRevert(() => avn.setQuorum([1,0]), 'Invalid: div by zero');
       });
       it('not called by the owner', async () => {
-        await testHelper.expectRevert(() => avn.setQuorum([2,3], {from: someOtherAccount}), 'Only owner');
+        await testHelper.expectRevert(() => avn.setQuorum([2,3], {from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
     });
   });
