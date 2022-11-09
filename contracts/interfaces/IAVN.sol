@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 interface IAVN {
+  event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
   event LogValidatorFunctionsAreEnabled(bool status);
   event LogLiftingIsEnabled(bool status);
@@ -16,19 +17,24 @@ interface IAVN {
 
   event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint256 indexed releaseTime);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey) external;
+  function setCoreOwner() external;
+  function setGrowthDelay(uint256 delaySeconds) external;
   function setQuorum(uint256[2] memory quorum) external;
   function enableValidatorFunctions(bool status) external;
   function enableLifting(bool status) external;
   function enableLowering(bool status) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
-  function triggerGrowth(uint256 amount) external;
 
-  // Validator only
+  // Owner or validators only
+  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations) external;
+
+  // Validators only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations) external;
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
@@ -36,6 +42,7 @@ interface IAVN {
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations) external;
 
   // Public
+  function releaseGrowth(uint32 period) external;
   function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool);
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount) external;
   function proxyLift(address erc20Address, bytes calldata t2PublicKey, uint256 amount, address approver, uint256 proofNonce,
