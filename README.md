@@ -20,9 +20,15 @@ The system is underwritten by its constructor-specified core token (in the case 
 ## Administration functions
 ##### Only callable by the contract owner
 
-- **loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
-      bytes32[] calldata t2PublicKey))**\
+- **loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS, bytes32[] calldata t2PublicKey))**\
 Function to initialise a set of validators.
+
+- **setCoreOwner()**\
+Reverts the core token owner to the AVN contract owner.
+
+- **setGrowthDelay(uint256 delaySeconds)**\
+Sets the amount of time (in seconds) that must pass between a period of growth being triggered and the funds being minted and released to T2.
+-- emits _**LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds)**_
 
 - **setQuorum(uint256[2] memory quorum)**\
 Sets the ratio of validators required to prove consensus, in relation to the total number of registered validators (ie: the fraction of validators required to provide confirmation for a validator method to succeed).
@@ -43,10 +49,6 @@ Turn the lowering functionality on or off.\
 - **updateLowerCall(bytes2 callId, uint256 numBytes)**\
 Update or add the call index of any lower function, along with the distance (in bytes) required to reach the lower arguments.\
 -- emits _**LogLowerCallUpdated(bytes2 callId, uint256 numBytes)**_
-
-- **triggerGrowth(uint256 amount)**\
-Inflate the supply by the amount specified (amount must be ERC20-approved first).
--- emits _**LogGrowth(uint256 amount, uint32 period)**_
 
 - **setOwner()**\
 Changes the owner.\
@@ -70,9 +72,26 @@ Deregisters and deactivates a validator, retaining their original registration d
 Add a merkle tree root representing the latest set of transactions to have occurred on the T2.\
 -- emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId)**_
 
+## Validator Or Owner Functions
+##### Only callable by validators with proof (as above) or the Owner
+
+
+- **triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)**\
+Initialise inflating the core token supply by the amount specified.\
+The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function; the amount is minted, locked in the AVN, and the following event is emitted:\
+-- emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
+
+When GrowthDelay is non-zero, however, the request is stored against a timestamp after which it can be enacted by a **releaseGrowth** request.\
+-- emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint256 indexed releaseTime)**_
+
+
 ## Publicly Accessible Functions
 
-- **function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool)**\
+- **function releaseGrowth(uint32 period)**\
+If the release time has passed, this will mint the previously requested core token amount for the specified period, locking it in the AVN.
+-- emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
+
+- **function getIsPublishedRootHash(bytes32 rootHash)**\
 Easy means to view published roots.
 
 - **lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)**\
