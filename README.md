@@ -78,7 +78,7 @@ Add a merkle tree root representing the latest set of transactions to have occur
 
 - **triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)**\
 Initialise inflating the core token supply by the amount specified.\
-The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function; the amount is minted, locked in the AVN, and the following event is emitted:\
+The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function (passing empty an t2TransactionId and confirmations); the amount is minted, locked in the AVN, and the following event is emitted:\
 -- emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
 
 When GrowthDelay is non-zero, however, the request is stored against a timestamp after which it can be enacted by a **releaseGrowth** request.\
