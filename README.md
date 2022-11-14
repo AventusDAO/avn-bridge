@@ -13,7 +13,7 @@ The system is underwritten by its constructor-specified core token (in the case 
 3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between Ethereum mainnet and an T2 by a process of:
 - *Lifting* (locking tokens received by T1 and recreating the equivalent amount in the specified T2 recipient account)
 - *Lowering* (destroying tokens on T2 and unlocking and transferring the equivalent amount in T1 to the specified recipient account)
-- *Triggering Growth* (a special form of owner-only lifting which inflates the supply via the T2 reward mechanism)
+- *Triggering Growth* (a special form of lifting which inflates the core token supply according to the reward mechanisms of T2)
 
 # Contract Functionality
 
@@ -25,6 +25,10 @@ Function to initialise a set of validators.
 
 - **setCoreOwner()**\
 Reverts the core token owner to the AVN contract owner.
+
+- **denyGrowth(uint32 period)**\
+Sets the release time for an unreleased growth period to zero, preventing that period's growth from being released.\
+emits _**LogGrowthDenied(uint32 period)**_
 
 - **setGrowthDelay(uint256 delaySeconds)**\
 Sets the amount of time (in seconds) that must pass between a period of growth being triggered and the funds being minted and released to T2.\
@@ -78,8 +82,9 @@ emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2Transactio
 
 - **triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)**\
 Initialise inflating the core token supply by the amount specified.\
-The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function (passing empty an t2TransactionId and confirmations); the amount is minted, locked in the AVN, and the following event is emitted:\
+The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function (passing an empty t2TransactionId and confirmations values). The amount is minted, locked in the AVN, and the following event is emitted:\
 _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_\
+
 When GrowthDelay is non-zero, however, the request is stored against a timestamp after which it can be enacted by a **releaseGrowth** request.\
 emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint256 indexed releaseTime)**_
 
