@@ -472,17 +472,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint8 v;
     bool[] memory confirmed = new bool[](nextValidatorId);
 
-    for (uint256 i; i < numConfirmations; i++) {
+    for (uint256 i; i < numConfirmations;) {
       assembly {
         let offset := mul(i, SIGNATURE_LENGTH)
         r := mload(add(confirmations, add(0x20, offset)))
         s := mload(add(confirmations, add(0x40, offset)))
         v := byte(0, mload(add(confirmations, add(0x60, offset))))
       }
+
       if (v < 27) {
         unchecked { v += 27; }
       }
+
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+        unchecked { i++; }
         continue;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
@@ -495,14 +498,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
               numActiveValidators++;
               validConfirmations++;
             }
+            if (validConfirmations == requiredConfirmations) break;
             confirmed[id] = true;
           }
         } else if (confirmed[id] == false) {
           unchecked { validConfirmations++; }
+          if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
         }
       }
-      if (validConfirmations == requiredConfirmations) break;
+
+      unchecked { i++; }
     }
 
     require(validConfirmations == requiredConfirmations, "Invalid confirmations");
