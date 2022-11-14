@@ -26,6 +26,7 @@ contract('AVN', async () => {
     someT2PublicKey = testHelper.someT2PublicKey();
     validators = testHelper.validators();
     await testHelper.loadValidators(avn, validators, 10);
+    await token20.transferOwnership(avn.address);
   });
 
   context('transferOwnership', async () => {
@@ -559,41 +560,34 @@ contract('AVN', async () => {
     });
   });
 
-  context('triggerGrowth', async () => {
-    const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(10));
-
-    beforeEach(async () => {
-      await token20.approve(avn.address, growthAmount);
-    });
-
-    it('fails to trigger growth if not called by the owner', async () => {
-      await testHelper.expectRevert(() => avn.triggerGrowth(growthAmount, {from: someOtherAccount}), 'Ownable: caller is not the owner');
-    });
+  context('triggerGrowth - via owner', async () => {
+    const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(5));
 
     it('fails to trigger zero growth', async () => {
-      await testHelper.expectRevert(() => avn.triggerGrowth(0), 'Cannot trigger zero growth');
+      await testHelper.expectRevert(() => avn.triggerGrowth(0, 1, 0, '0x'), 'Cannot trigger zero growth');
     });
 
-    it('succeeds for the first growth period', async () => {
+    it('succeeds for growth period "2"', async () => {
+      const period = 2;
       const avnBalanceBefore = await token20.balanceOf(avn.address);
-      const ownerBalanceBefore = await token20.balanceOf(owner);
+      const avtSupplyBefore = await token20.totalSupply();
 
-      await avn.triggerGrowth(growthAmount);
+      await avn.triggerGrowth(growthAmount, period, 0, '0x');
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
+
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.period, period);
+
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avn.address));
+      testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
+    });
+
+    it('succeeds for growth period "1"', async () => {
+      const period = 1;
+      await avn.triggerGrowth(growthAmount, period, 0, '0x');
       const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
       testHelper.bnEquals(logArgs.amount, growthAmount);
-      testHelper.bnEquals(logArgs.period, 1);
-
-      const avnBalanceAfter = await token20.balanceOf(avn.address);
-      const ownerBalanceAfter = await token20.balanceOf(owner);
-
-      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), avnBalanceAfter);
-      testHelper.bnEquals(ownerBalanceBefore.sub(growthAmount), ownerBalanceAfter);
-    });
-
-    it('succeeds for the second growth period', async () => {
-      await avn.triggerGrowth(growthAmount);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
-      testHelper.bnEquals(logArgs.period, 2);
+      testHelper.bnEquals(logArgs.period, period);
     });
   });
 });

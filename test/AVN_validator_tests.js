@@ -3,6 +3,8 @@ const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ONE_AVT_IN_ATTO = new BN(10).pow(new BN(18));
+const GROWTH_DELAY = 100;
 
 let avn, token20;
 let accounts, validators;
@@ -26,7 +28,47 @@ contract('AVN', async () => {
     numActiveValidators = numInitialValidators;
     nextValidatorId = numInitialValidators + 1;
     await testHelper.loadValidators(avn, validators, numInitialValidators);
+    await token20.setOwner(avn.address);
     FROM_ACTIVE_VALIDATOR = {from: validators[1].t1Address};
+  });
+
+  context('setCoreOwner()', async () => {
+
+    after(async () => {
+      await token20.setOwner(avn.address);
+    });
+
+    it('can set the core token owner via the avn', async () => {
+      assert.equal(await token20.owner(), avn.address);
+      await avn.setCoreOwner();
+      const logArgs = await testHelper.getLogArgs(token20, 'LogSetOwner');
+      assert.equal(logArgs.owner, owner);
+      assert.equal(await token20.owner(), owner);
+    });
+
+    context('fails when', async () => {
+      it('not called by the AVN owner', async () => {
+        await testHelper.expectRevert(() => avn.setCoreOwner({from: someOtherAccount}), 'Ownable: caller is not the owner');
+      });
+    });
+  });
+
+  context('setGrowthDelay()', async () => {
+    it('can set the core token owner via the avn', async () => {
+      const oldGrowthDelay = (await avn.growthDelay()).toNumber();
+      assert.equal(60 * 60 * 24 * 7, oldGrowthDelay);
+      const newGrowthDelay = GROWTH_DELAY;
+      await avn.setGrowthDelay(newGrowthDelay);
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthDelayUpdated');
+      assert.equal(logArgs.oldDelaySeconds.toNumber(), oldGrowthDelay);
+      assert.equal(logArgs.newDelaySeconds.toNumber(), newGrowthDelay);
+    });
+
+    context('fails when', async () => {
+      it('not called by the AVN owner', async () => {
+        await testHelper.expectRevert(() => avn.setGrowthDelay(5, {from: someOtherAccount}), 'Ownable: caller is not the owner');
+      });
+    });
   });
 
   context('setQuorum()', async () => {
@@ -60,6 +102,51 @@ contract('AVN', async () => {
       it('not called by the owner', async () => {
         await testHelper.expectRevert(() => avn.setQuorum([2,3], {from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
+    });
+  });
+
+  context('Growth', async () => {
+    const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(3));
+    const period = 1;
+
+    async function getGrowthConfirmations(growthAmount, period, t2TransactionId) {
+      const growthHash = web3.utils.sha3(web3.eth.abi.encodeParameters(['uint128', 'uint32'], [growthAmount, period]));
+      return await testHelper.getConfirmations(avn, growthHash, t2TransactionId);
+    }
+
+    it('fails to trigger zero growth', async () => {
+      const zeroAmount = 0;
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = await getGrowthConfirmations(zeroAmount, period, t2TransactionId);
+
+      await testHelper.expectRevert(() => avn.triggerGrowth(zeroAmount, period, t2TransactionId, confirmations,
+          FROM_ACTIVE_VALIDATOR), 'Cannot trigger zero growth');
+    });
+
+    it('succeeds in triggering growth via validators', async () => {
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+
+      await avn.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthTriggered');
+
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.period, period);
+      assert.equal(logArgs.releaseTime.toNumber(), await testHelper.getCurrentBlockTimestamp() + GROWTH_DELAY);
+    });
+
+    it('succeeds in releasing growth', async () => {
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const avtSupplyBefore = await token20.totalSupply();
+
+      await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+      await avn.releaseGrowth(period, { from: someOtherAccount });
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.period, period);
+
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avn.address));
+      testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
     });
   });
 
