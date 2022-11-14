@@ -45,7 +45,6 @@ interface IAVNBridge {
 
   // Public
   function releaseGrowth(uint32 period) external;
-  function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool);
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount) external;
   function liftETH(bytes calldata t2PublicKey) external payable;
   function lower(bytes memory leaf, bytes32[] calldata merklePath) external;
