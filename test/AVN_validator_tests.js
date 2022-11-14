@@ -53,6 +53,21 @@ contract('AVN', async () => {
     });
   });
 
+  context('denyGrowth()', async () => {
+
+    it('succeeds when called by the AVN owner', async () => {
+      await avn.denyGrowth(0);
+      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthDenied');
+      assert.equal(logArgs.period, 0);
+    });
+
+    context('fails when', async () => {
+      it('not called by the AVN owner', async () => {
+        await testHelper.expectRevert(() => avn.denyGrowth(0, {from: someOtherAccount}), 'Ownable: caller is not the owner');
+      });
+    });
+  });
+
   context('setGrowthDelay()', async () => {
     it('can set the core token owner via the avn', async () => {
       const oldGrowthDelay = (await avn.growthDelay()).toNumber();
@@ -107,7 +122,6 @@ contract('AVN', async () => {
 
   context('Growth', async () => {
     const growthAmount = ONE_AVT_IN_ATTO.mul(new BN(3));
-    const period = 1;
 
     async function getGrowthConfirmations(growthAmount, period, t2TransactionId) {
       const growthHash = web3.utils.sha3(web3.eth.abi.encodeParameters(['uint128', 'uint32'], [growthAmount, period]));
@@ -116,6 +130,7 @@ contract('AVN', async () => {
 
     it('fails to trigger zero growth', async () => {
       const zeroAmount = 0;
+      const period = 1;
       const t2TransactionId = testHelper.randomUint256();
       const confirmations = await getGrowthConfirmations(zeroAmount, period, t2TransactionId);
 
@@ -124,6 +139,7 @@ contract('AVN', async () => {
     });
 
     it('succeeds in triggering growth via validators', async () => {
+      const period = 1;
       const t2TransactionId = testHelper.randomUint256();
       const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
 
@@ -136,6 +152,7 @@ contract('AVN', async () => {
     });
 
     it('succeeds in releasing growth', async () => {
+      const period = 1;
       const avnBalanceBefore = await token20.balanceOf(avn.address);
       const avtSupplyBefore = await token20.totalSupply();
 
@@ -147,6 +164,29 @@ contract('AVN', async () => {
 
       testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avn.address));
       testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
+    });
+
+    it('fails to release growth that has since been denied by the owner', async () => {
+      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const avtSupplyBefore = await token20.totalSupply();
+
+      const period = 2;
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+
+      await avn.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      let logArgs = await testHelper.getLogArgs(avn, 'LogGrowthTriggered');
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.period, period);
+      assert.equal(logArgs.releaseTime.toNumber(), await testHelper.getCurrentBlockTimestamp() + GROWTH_DELAY);
+
+      await avn.denyGrowth(period);
+
+      await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+      await testHelper.expectRevert(() => avn.releaseGrowth(period), 'Growth unavailable for period');
+
+      testHelper.bnEquals(avnBalanceBefore, await token20.balanceOf(avn.address));
+      testHelper.bnEquals(avtSupplyBefore, await token20.totalSupply());
     });
   });
 

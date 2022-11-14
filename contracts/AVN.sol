@@ -114,6 +114,14 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     require(success, "Failed to set core owner");
   }
 
+  function denyGrowth(uint32 period)
+    onlyOwner
+    external
+  {
+    growthRelease[period] = 0;
+    emit LogGrowthDenied(period);
+  }
+
   function setGrowthDelay(uint256 delaySeconds)
     onlyOwner
     external

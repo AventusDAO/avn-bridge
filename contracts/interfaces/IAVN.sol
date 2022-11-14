@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 interface IAVN {
+  event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
   event LogValidatorFunctionsAreEnabled(bool status);
@@ -24,6 +25,7 @@ interface IAVN {
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey) external;
   function setCoreOwner() external;
+  function denyGrowth(uint32 period) external;
   function setGrowthDelay(uint256 delaySeconds) external;
   function setQuorum(uint256[2] memory quorum) external;
   function enableValidatorFunctions(bool status) external;
