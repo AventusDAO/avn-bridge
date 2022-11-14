@@ -1,7 +1,7 @@
 const allowedGas = {
   ethLift: 27450,
   erc777Lift: 76150,
-  erc20Lift: 103350,
+  erc20Lift: 59200,
   erc777Lower: 86400,
   erc20Lower: 75450,
   ethLower: 64800,
@@ -58,9 +58,8 @@ contract('AVNBridge Gas [ @skip-on-coverage ]', async () => {
 
   it('ERC20 lift()', async () => {
     const liftAmount = 200;
-    const approveTx = await token20.approve(avnBridge.address, liftAmount);
-    const liftTx = await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
-    const tx = testHelper.sumTxGas(approveTx, liftTx);
+    await token20.approve(avnBridge.address, liftAmount);
+    const tx = await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
     testHelper.checkGas(tx, allowedGas.erc20Lift);
   });
 

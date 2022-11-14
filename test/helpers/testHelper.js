@@ -214,10 +214,6 @@ function checkGas(_tx, _expectedValue) {
   console.log(gasUsed);
 }
 
-function sumTxGas(_tx1, _tx2) {
-  return {receipt:{gasUsed:_tx1.receipt.gasUsed + _tx2.receipt.gasUsed}};
-}
-
 function toConfirmationHash(_data, _t2TransactionId, _t2PublicKey) {
   return web3.utils.sha3(web3.eth.abi.encodeParameters(['bytes32', 'uint256', 'bytes32'], [_data, _t2TransactionId.toString(),
       _t2PublicKey]));
@@ -297,7 +293,6 @@ module.exports = {
   sign,
   someT2PublicKey: () => someT2PublicKey,
   strip_0x,
-  sumTxGas,
   toConfirmationHash,
   validators: () => validators,
 };
