@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <title>Code coverage report for contracts\interfaces\IAVN.sol</title>
+    <title>Code coverage report for contracts\interfaces\IAVNBridge.sol</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../prettify.css" />
     <link rel="stylesheet" href="../../base.css" />
@@ -16,7 +16,7 @@
 <div class='wrapper'>
   <div class='pad1'>
     <h1>
-      <a href="../../index.html">all files</a> / <a href="index.html">contracts/interfaces/</a> IAVN.sol
+      <a href="../../index.html">all files</a> / <a href="index.html">contracts/interfaces/</a> IAVNBridge.sol
     </h1>
     <div class='clearfix'>
       <div class='fl pad1y space-right2'>
@@ -96,29 +96,7 @@
 51
 52
 53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65</td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+54</td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -174,8 +152,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 &nbsp;
-interface IAVN {
-  event LogAuthorisationUpdated(address indexed contractAddress, bool status);
+interface IAVNBridge {
+  event LogGrowthDenied(uint32 period);
+  event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
   event LogValidatorFunctionsAreEnabled(bool status);
   event LogLiftingIsEnabled(bool status);
@@ -190,47 +169,35 @@ interface IAVN {
 &nbsp;
   event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
-  event LogGrowth(uint256 amount, uint64 era);
+  event LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint256 indexed releaseTime);
+  event LogGrowth(uint256 indexed amount, uint32 indexed period);
 &nbsp;
   // Owner only
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey) external;
-  function setAuthorisationStatus(address contractAddress, bool status) external;
+  function setCoreOwner() external;
+  function denyGrowth(uint32 period) external;
+  function setGrowthDelay(uint256 delaySeconds) external;
   function setQuorum(uint256[2] memory quorum) external;
-  function disableValidatorFunctions() external;
-  function enableValidatorFunctions() external;
-  function disableLifting() external;
-  function enableLifting() external;
-  function disableLowering() external;
-  function enableLowering() external;
+  function enableValidatorFunctions(bool status) external;
+  function enableLifting(bool status) external;
+  function enableLowering(bool status) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
-  function recoverERC777Tokens(address erc777Address) external;
-  function recoverERC20Tokens(address erc20Address) external;
-  function recoverETH() external;
-  function triggerGrowth(uint256 amount) external;
 &nbsp;
-  // Validator only
+  // Owner or validators only
+  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations) external;
+&nbsp;
+  // Validators only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations) external;
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations) external;
 &nbsp;
-  // Authorised contract only
-  function storeT2TransactionId(uint256 t2TransactionId) external;
-  function storeRootHash(bytes32 rootHash) external;
-  function storeLiftProofHash(bytes32 proofHash) external;
-  function storeLoweredLeafHash(bytes32 leafHash) external;
-  function unlockETH(address payable recipient, uint256 amount) external;
-  function unlockERC777Tokens(address erc777Address, address recipient, uint256 amount) external;
-  function unlockERC20Tokens(address erc20Address, address recipient, uint256 amount) external;
-&nbsp;
   // Public
-  function getAuthorisedContracts() external view returns (address[] memory);
+  function releaseGrowth(uint32 period) external;
   function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool);
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount) external;
-  function proxyLift(address erc20Address, bytes calldata t2PublicKey, uint256 amount, address approver, uint256 proofNonce,
-      bytes calldata proof) external;
   function liftETH(bytes calldata t2PublicKey) external payable;
   function lower(bytes memory leaf, bytes32[] calldata merklePath) external;
   function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath) external view returns (bool);
@@ -241,7 +208,7 @@ interface IAVN {
 </div><!-- /wrapper -->
 <div class='footer quiet pad2 space-top1 center small'>
   Code coverage
-  generated by <a href="http://istanbul-js.org/" target="_blank">istanbul</a> at Wed Oct 26 2022 16:46:32 GMT+0100 (British Summer Time)
+  generated by <a href="http://istanbul-js.org/" target="_blank">istanbul</a> at Mon Nov 14 2022 16:13:20 GMT+0000 (Greenwich Mean Time)
 </div>
 </div>
 <script src="../../prettify.js"></script>
