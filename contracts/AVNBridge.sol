@@ -87,7 +87,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     bytes memory t1PublicKey;
 
-    for (uint256 i; i < t1Address.length; i++) {
+    for (uint256 i; i < t1Address.length;) {
       require(t1AddressToId[t1Address[i]] == 0, "T1Address already in use");
       require(t2PublicKeyToId[t2PublicKey[i]] == 0, "T2PublicKey already in use");
       t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
@@ -98,8 +98,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t2PublicKeyToId[t2PublicKey[i]] = nextValidatorId;
       isRegisteredValidator[nextValidatorId] = true;
       isActiveValidator[nextValidatorId] = true;
-      numActiveValidators++;
-      nextValidatorId++;
+      unchecked {
+        numActiveValidators++;
+        nextValidatorId++;
+        i++;
+      }
     }
   }
 
@@ -177,7 +180,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenValidatorFunctionsAreEnabled
     external
   {
-    require(amount > 0, "Cannot trigger zero growth");
+    require(amount != 0, "Cannot trigger zero growth");
     require(growthAmount[period] == 0, "Cannot re-trigger growth");
 
     growthAmount[period] = amount;
@@ -192,7 +195,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
       } else {
-        uint256 releaseTime = block.timestamp + growthDelay;
+        uint256 releaseTime;
+        unchecked { releaseTime = block.timestamp + growthDelay; }
         growthRelease[period] = releaseTime;
         emit LogGrowthTriggered(amount, period, releaseTime);
       }
@@ -231,7 +235,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1AddressToId[t1Address] = id;
       idToT2PublicKey[id] = t2PublicKey;
       t2PublicKeyToId[t2PublicKey] = id;
-      nextValidatorId++;
+      unchecked { nextValidatorId++; }
     } else {
       require(idToT2PublicKey[id] == t2PublicKey, "Cannot change T2 public key");
     }
@@ -263,7 +267,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     isRegisteredValidator[id] = false;
     isActiveValidator[id] = false;
-    numActiveValidators--;
+    unchecked { numActiveValidators--; }
 
     bytes32 t1PublicKeyLHS;
     bytes32 t1PublicKeyRHS;
@@ -299,7 +303,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     require(ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) == address(0), "ERC20 lift only");
-    require(amount > 0, "Cannot lift zero ERC20 tokens");
+    require(amount != 0, "Cannot lift zero ERC20 tokens");
     bytes32 checkedT2PublicKey = _checkT2PublicKey(t2PublicKey);
     IERC20 erc20Contract = IERC20(erc20Address);
     uint256 currentBalance = erc20Contract.balanceOf(address(this));
@@ -314,9 +318,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    bytes32 checkedT2PublicKey = _checkT2PublicKey(t2PublicKey);
-    require(msg.value > 0, "Cannot lift zero ETH");
-    emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, checkedT2PublicKey, msg.value);
+    require(msg.value != 0, "Cannot lift zero ETH");
+    emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
   // ERC-777 automatic lifting
@@ -328,12 +331,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (from == priorInstance) return; // recovering funds so we don't lift here
     if (data.length == 0 && from == owner() && msg.sender == coreToken) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
-    require(amount > 0, "Cannot lift zero ERC777 tokens");
-    bytes32 checkedT2PublicKey = _checkT2PublicKey(data);
+    require(amount != 0, "Cannot lift zero ERC777 tokens");
     require(ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) == msg.sender, "Token must be registered");
-    IERC777 erc777Contract = IERC777(msg.sender);
-    require(erc777Contract.balanceOf(address(this)) <= LIFT_LIMIT, "Exceeds ERC777 lift limit");
-    emit LogLifted(msg.sender, from, checkedT2PublicKey, amount);
+    require(IERC777(msg.sender).balanceOf(address(this)) <= LIFT_LIMIT, "Exceeds ERC777 lift limit");
+    emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
   }
 
   function lower(bytes memory leaf, bytes32[] calldata merklePath)
@@ -346,13 +347,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     hasLowered[leafHash] = true;
 
     uint256 ptr;
-    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
-    require(uint8(leaf[ptr]) & 128 != 0, "Unsigned transaction"); // bitwise version check to ensure leaf is signed transaction
-    ptr += 99; // version (1 byte) + multiAddress type (1 byte) + sender (32 bytes) + curve type (1 byte) + signature (64 bytes)
-    ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
-    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
-    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
-    ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
+    unchecked {
+      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
+      require(uint8(leaf[ptr]) & 128 != 0, "Unsigned transaction"); // bitwise version check to ensure leaf is a signed tx
+      ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
+      ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
+      ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
+    }
 
     bytes2 callId;
 
@@ -361,7 +364,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     require(numBytesToLowerData[callId] != 0, "Not a lower leaf");
-    ptr += numBytesToLowerData[callId];
+    unchecked { ptr += numBytesToLowerData[callId]; }
     bytes32 t2PublicKey;
     address token;
     uint128 amount;
@@ -399,12 +402,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 rootHash = leafHash;
 
-    for (uint256 i; i < merklePath.length; i++) {
+    for (uint256 i; i < merklePath.length;) {
       bytes32 node = merklePath[i];
       if (rootHash < node)
         rootHash = keccak256(abi.encode(rootHash, node));
       else
         rootHash = keccak256(abi.encode(node, rootHash));
+
+      unchecked { i++; }
     }
 
     return isPublishedRootHash[rootHash];
@@ -438,7 +443,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else if (mode == 2) { // four-byte mode
       byteLength = 4;
     } else {
-      byteLength = uint8(checkByte >> 2) + 5; // upper 6 bits + 4 are the number of bytes following + 1 for the checkbyte itself
+      unchecked { byteLength = uint8(checkByte >> 2) + 5; } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
     }
   }
 
@@ -454,8 +459,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
-    uint256 numConfirmations = confirmations.length / SIGNATURE_LENGTH;
-    uint256 requiredConfirmations = numActiveValidators * quorum[0] / quorum[1] + 1;
+    uint256 numConfirmations;
+    uint256 requiredConfirmations;
+    unchecked {
+      numConfirmations = confirmations.length / SIGNATURE_LENGTH;
+      requiredConfirmations = numActiveValidators * quorum[0] / quorum[1] + 1;
+    }
     uint256 validConfirmations;
     uint256 id;
     bytes32 r;
@@ -470,7 +479,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         s := mload(add(confirmations, add(0x40, offset)))
         v := byte(0, mload(add(confirmations, add(0x60, offset))))
       }
-      if (v < 27) v += 27;
+      if (v < 27) {
+        unchecked { v += 27; }
+      }
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
         continue;
       } else {
@@ -480,12 +491,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
           if (isRegisteredValidator[id]) {
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
-            numActiveValidators++;
-            validConfirmations++;
+            unchecked {
+              numActiveValidators++;
+              validConfirmations++;
+            }
             confirmed[id] = true;
           }
         } else if (confirmed[id] == false) {
-          validConfirmations++;
+          unchecked { validConfirmations++; }
           confirmed[id] = true;
         }
       }
