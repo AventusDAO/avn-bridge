@@ -1,8 +1,7 @@
 const allowedGas = {
   ethLift: 27500,
   erc777Lift: 76200,
-  erc20Lift: 103500,
-  erc20ProxyLift: 117800,
+  erc20Lift: 103400,
   erc777Lower: 87000,
   erc20Lower: 76000,
   ethLower: 65300,
@@ -63,18 +62,6 @@ contract('AVN Gas [ @skip-on-coverage ]', async () => {
     const liftTx = await avn.lift(token20.address, someT2PublicKey, liftAmount);
     const tx = testHelper.sumTxGas(approveTx, liftTx);
     testHelper.checkGas(tx, allowedGas.erc20Lift);
-  });
-
-  it('ERC20 proxy lift()', async () => {
-    const liftAmount = 300;
-    const proofNonce = 1;
-    const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
-    const proof = await testHelper.sign(liftProofHash, owner);
-    const approveTx = await token20.approve(avn.address, liftAmount, {from: owner});
-    const proxyLiftTx = await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof,
-        {from: someOtherAccount});
-    const tx = testHelper.sumTxGas(approveTx, proxyLiftTx);
-    testHelper.checkGas(tx, allowedGas.erc20ProxyLift);
   });
 
   it('ERC777 lower()', async () => {

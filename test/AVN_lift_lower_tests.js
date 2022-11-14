@@ -159,42 +159,6 @@ contract('AVN', async () => {
       assert.equal(logArgs.amount, liftAmount.toString());
     });
 
-    it('can lift ERC20 tokens via proxyLift on behalf of someone else', async () => {
-      const liftAmount = new BN(200);
-      const proofNonce = 1;
-      const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
-      const proof = await testHelper.sign(liftProofHash, owner);
-
-      await token20.approve(avn.address, liftAmount, {from: owner});
-
-      // the someOtherAccount never holds any funds
-      assert.equal(await token20.balanceOf(someOtherAccount), 0);
-      await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
-      assert.equal(await token20.balanceOf(someOtherAccount), 0);
-
-      const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, token20.address);
-      assert.equal(logArgs.t1Address, owner);
-      assert.equal(logArgs.t2PublicKey, someT2PublicKey);
-      assert.equal(logArgs.amount, liftAmount.toString());
-    });
-
-    it('can lift ERC20 tokens via proxyLift for oneself', async () => {
-      const liftAmount = new BN(100);
-      const proofNonce = 2;
-      const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
-      const proof = await testHelper.sign(liftProofHash, owner);
-
-      await token20.approve(avn.address, liftAmount, {from: owner});
-      await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: owner});
-
-      const logArgs = await testHelper.getLogArgs(avn, 'LogLifted');
-      assert.equal(logArgs.token, token20.address);
-      assert.equal(logArgs.t1Address, owner);
-      assert.equal(logArgs.t2PublicKey, someT2PublicKey);
-      assert.equal(logArgs.amount, liftAmount.toString());
-    });
-
     context('fails when', async () => {
       let massiveERC20, massiveERC777, maxLiftAmount;
 
@@ -270,27 +234,6 @@ contract('AVN', async () => {
         await massiveERC20.approve(avn.address, 1);
         await testHelper.expectRevert(() => avn.lift(massiveERC20.address, someT2PublicKey, 1), 'Exceeds ERC20 lift limit');
       });
-
-      it('attempting a proxy ERC20 lift using an invalid lift proof', async () => {
-         const liftAmount = new BN(100);
-         const proofNonce = 100;
-         const proof = await testHelper.randomBytes32()
-         await token20.approve(avn.address, liftAmount, {from: owner});
-         await testHelper.expectRevert(() => avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce,
-            proof, {from: someOtherAccount}), 'Lift proof invalid');
-        });
-
-        it('attempting a proxy ERC20 lift by re-using a used lift proof', async () => {
-         const liftAmount = new BN(100);
-         const proofNonce = 1;
-         const liftProofHash = testHelper.hash(token20.address, someT2PublicKey, liftAmount, proofNonce);
-         const proof = await testHelper.sign(liftProofHash, owner);
-         await token20.approve(avn.address, liftAmount, {from: owner});
-         await avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce, proof, {from: someOtherAccount});
-         await token20.approve(avn.address, liftAmount, {from: owner});
-         await testHelper.expectRevert(() => avn.proxyLift(token20.address, someT2PublicKey, liftAmount, owner, proofNonce,
-            proof, {from: someOtherAccount}), 'Lift proof already used');
-        });
 
       it('attempting to lift ETH when lift is disabled', async () => {
         await avn.enableLifting(false);

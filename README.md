@@ -103,10 +103,6 @@ Allows the caller to move an amount of their ERC-20 tokens to the specified T2 a
 For lifting ERC-777 see [below](#lifting_erc_777_tokens)\
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
-- **proxyLift(address erc20Address, bytes calldata t2PublicKey, uint256 amount, address approver, uint256 proofNonce, bytes calldata proof)**\
-Allows the caller to move an amount of another party's ERC-20 tokens to the specified T2 account, providing the other party has previously set approval for this contract which covers the amount.\
-emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
-
 - **liftETH(bytes calldata t2PublicKey)**\
 Payable function which allows the caller to move all ETH sent to the specified T2 account.\
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
