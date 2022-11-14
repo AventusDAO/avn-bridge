@@ -6,18 +6,18 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const ONE_AVT_IN_ATTO = new BN(10).pow(new BN(18));
 const GROWTH_DELAY = 100;
 
-let avn, token20;
+let avnBridge, token20;
 let accounts, validators;
 let owner, someOtherAccount, someT2PublicKey, FROM_ACTIVE_VALIDATOR;
 let numInitialValidators, numActiveValidators, nextValidatorId;
 let bnEquals;
 
-contract('AVN', async () => {
+contract('AVNBridge', async () => {
 
   before(async () => {
     await testHelper.init();
     token20 = await Token20.deployed();
-    avn = await testHelper.deployAVN(token20.address);
+    avnBridge = await testHelper.deployAVNBridge(token20.address);
     bnEquals = testHelper.bnEquals;
     accounts = testHelper.accounts();
     owner = accounts[0];
@@ -27,61 +27,61 @@ contract('AVN', async () => {
     numInitialValidators = 6;
     numActiveValidators = numInitialValidators;
     nextValidatorId = numInitialValidators + 1;
-    await testHelper.loadValidators(avn, validators, numInitialValidators);
-    await token20.setOwner(avn.address);
+    await testHelper.loadValidators(avnBridge, validators, numInitialValidators);
+    await token20.setOwner(avnBridge.address);
     FROM_ACTIVE_VALIDATOR = {from: validators[1].t1Address};
   });
 
   context('setCoreOwner()', async () => {
 
     after(async () => {
-      await token20.setOwner(avn.address);
+      await token20.setOwner(avnBridge.address);
     });
 
-    it('can set the core token owner via the avn', async () => {
-      assert.equal(await token20.owner(), avn.address);
-      await avn.setCoreOwner();
+    it('can set the core token owner via the avn bridge', async () => {
+      assert.equal(await token20.owner(), avnBridge.address);
+      await avnBridge.setCoreOwner();
       const logArgs = await testHelper.getLogArgs(token20, 'LogSetOwner');
       assert.equal(logArgs.owner, owner);
       assert.equal(await token20.owner(), owner);
     });
 
     context('fails when', async () => {
-      it('not called by the AVN owner', async () => {
-        await testHelper.expectRevert(() => avn.setCoreOwner({from: someOtherAccount}), 'Ownable: caller is not the owner');
+      it('not called by the AVNBridge owner', async () => {
+        await testHelper.expectRevert(() => avnBridge.setCoreOwner({from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
     });
   });
 
   context('denyGrowth()', async () => {
 
-    it('succeeds when called by the AVN owner', async () => {
-      await avn.denyGrowth(0);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthDenied');
+    it('succeeds when called by the AVNBridge owner', async () => {
+      await avnBridge.denyGrowth(0);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowthDenied');
       assert.equal(logArgs.period, 0);
     });
 
     context('fails when', async () => {
-      it('not called by the AVN owner', async () => {
-        await testHelper.expectRevert(() => avn.denyGrowth(0, {from: someOtherAccount}), 'Ownable: caller is not the owner');
+      it('not called by the AVNBridge owner', async () => {
+        await testHelper.expectRevert(() => avnBridge.denyGrowth(0, {from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
     });
   });
 
   context('setGrowthDelay()', async () => {
     it('can set the core token owner via the avn', async () => {
-      const oldGrowthDelay = (await avn.growthDelay()).toNumber();
+      const oldGrowthDelay = (await avnBridge.growthDelay()).toNumber();
       assert.equal(60 * 60 * 24 * 7, oldGrowthDelay);
       const newGrowthDelay = GROWTH_DELAY;
-      await avn.setGrowthDelay(newGrowthDelay);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthDelayUpdated');
+      await avnBridge.setGrowthDelay(newGrowthDelay);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowthDelayUpdated');
       assert.equal(logArgs.oldDelaySeconds.toNumber(), oldGrowthDelay);
       assert.equal(logArgs.newDelaySeconds.toNumber(), newGrowthDelay);
     });
 
     context('fails when', async () => {
-      it('not called by the AVN owner', async () => {
-        await testHelper.expectRevert(() => avn.setGrowthDelay(5, {from: someOtherAccount}), 'Ownable: caller is not the owner');
+      it('not called by the AVNBridge owner', async () => {
+        await testHelper.expectRevert(() => avnBridge.setGrowthDelay(5, {from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
     });
   });
@@ -90,17 +90,17 @@ contract('AVN', async () => {
     let quorum;
 
     before(async () => {
-      quorum = [await avn.quorum(0), await avn.quorum(1)];
+      quorum = [await avnBridge.quorum(0), await avnBridge.quorum(1)];
     });
 
     after(async () => {
-      await avn.setQuorum(quorum);
+      await avnBridge.setQuorum(quorum);
     });
 
     it('can set a new quorum', async () => {
       const newQuorum = [3,4];
-      await avn.setQuorum(newQuorum);
-      let logArgs = await testHelper.getLogArgs(avn, 'LogQuorumUpdated');
+      await avnBridge.setQuorum(newQuorum);
+      let logArgs = await testHelper.getLogArgs(avnBridge, 'LogQuorumUpdated');
       assert.equal(logArgs.quorum[0].toNumber(), newQuorum[0]);
       assert.equal(logArgs.quorum[1].toNumber(), newQuorum[1]);
     });
@@ -109,13 +109,13 @@ contract('AVN', async () => {
 
     context('fails when', async () => {
       it('numerator is greater than denominator', async () => {
-        await testHelper.expectRevert(() => avn.setQuorum([2,1]), 'Invalid: above 100%');
+        await testHelper.expectRevert(() => avnBridge.setQuorum([2,1]), 'Invalid: above 100%');
       });
       it('denominator is zero', async () => {
-        await testHelper.expectRevert(() => avn.setQuorum([1,0]), 'Invalid: div by zero');
+        await testHelper.expectRevert(() => avnBridge.setQuorum([1,0]), 'Invalid: div by zero');
       });
       it('not called by the owner', async () => {
-        await testHelper.expectRevert(() => avn.setQuorum([2,3], {from: someOtherAccount}), 'Ownable: caller is not the owner');
+        await testHelper.expectRevert(() => avnBridge.setQuorum([2,3], {from: someOtherAccount}), 'Ownable: caller is not the owner');
       });
     });
   });
@@ -125,7 +125,7 @@ contract('AVN', async () => {
 
     async function getGrowthConfirmations(growthAmount, period, t2TransactionId) {
       const growthHash = web3.utils.sha3(web3.eth.abi.encodeParameters(['uint128', 'uint32'], [growthAmount, period]));
-      return await testHelper.getConfirmations(avn, growthHash, t2TransactionId);
+      return await testHelper.getConfirmations(avnBridge, growthHash, t2TransactionId);
     }
 
     it('fails to trigger zero growth', async () => {
@@ -134,7 +134,7 @@ contract('AVN', async () => {
       const t2TransactionId = testHelper.randomUint256();
       const confirmations = await getGrowthConfirmations(zeroAmount, period, t2TransactionId);
 
-      await testHelper.expectRevert(() => avn.triggerGrowth(zeroAmount, period, t2TransactionId, confirmations,
+      await testHelper.expectRevert(() => avnBridge.triggerGrowth(zeroAmount, period, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR), 'Cannot trigger zero growth');
     });
 
@@ -143,8 +143,8 @@ contract('AVN', async () => {
       const t2TransactionId = testHelper.randomUint256();
       const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
 
-      await avn.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowthTriggered');
+      await avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowthTriggered');
 
       testHelper.bnEquals(logArgs.amount, growthAmount);
       testHelper.bnEquals(logArgs.period, period);
@@ -153,39 +153,39 @@ contract('AVN', async () => {
 
     it('succeeds in releasing growth', async () => {
       const period = 1;
-      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
       const avtSupplyBefore = await token20.totalSupply();
 
       await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
-      await avn.releaseGrowth(period, { from: someOtherAccount });
-      const logArgs = await testHelper.getLogArgs(avn, 'LogGrowth');
+      await avnBridge.releaseGrowth(period, { from: someOtherAccount });
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowth');
       testHelper.bnEquals(logArgs.amount, growthAmount);
       testHelper.bnEquals(logArgs.period, period);
 
-      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avn.address));
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avnBridge.address));
       testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
     });
 
     it('fails to release growth that has since been denied by the owner', async () => {
-      const avnBalanceBefore = await token20.balanceOf(avn.address);
+      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
       const avtSupplyBefore = await token20.totalSupply();
 
       const period = 2;
       const t2TransactionId = testHelper.randomUint256();
       const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
 
-      await avn.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
-      let logArgs = await testHelper.getLogArgs(avn, 'LogGrowthTriggered');
+      await avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      let logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowthTriggered');
       testHelper.bnEquals(logArgs.amount, growthAmount);
       testHelper.bnEquals(logArgs.period, period);
       assert.equal(logArgs.releaseTime.toNumber(), await testHelper.getCurrentBlockTimestamp() + GROWTH_DELAY);
 
-      await avn.denyGrowth(period);
+      await avnBridge.denyGrowth(period);
 
       await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
-      await testHelper.expectRevert(() => avn.releaseGrowth(period), 'Growth unavailable for period');
+      await testHelper.expectRevert(() => avnBridge.releaseGrowth(period), 'Growth unavailable for period');
 
-      testHelper.bnEquals(avnBalanceBefore, await token20.balanceOf(avn.address));
+      testHelper.bnEquals(avnBalanceBefore, await token20.balanceOf(avnBridge.address));
       testHelper.bnEquals(avtSupplyBefore, await token20.totalSupply());
     });
   });
@@ -199,9 +199,9 @@ contract('AVN', async () => {
     });
 
     it('validator can publish a root with valid confirmations', async () => {
-      const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId);
-      await avn.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogRootPublished');
+      const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId);
+      await avnBridge.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogRootPublished');
       assert.equal(logArgs.rootHash, rootHash);
       assert.equal(logArgs.t2TransactionId.toString(), t2TransactionId.toString());
     });
@@ -209,38 +209,38 @@ contract('AVN', async () => {
     context('fails when', async () => {
 
       it('validator functions are disabled', async () => {
-        await avn.enableValidatorFunctions(false);
-        let logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
+        await avnBridge.enableValidatorFunctions(false);
+        let logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
         assert.equal(logArgs.status, false);
         const newT2TransactionId = testHelper.randomUint256();
         const newRootHash = testHelper.randomBytes32();
-        const confirmations = await testHelper.getConfirmations(avn, newRootHash, newT2TransactionId);
-        await testHelper.expectRevert(() => avn.publishRoot(newRootHash, newT2TransactionId, confirmations,
+        const confirmations = await testHelper.getConfirmations(avnBridge, newRootHash, newT2TransactionId);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(newRootHash, newT2TransactionId, confirmations,
             FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-        await avn.enableValidatorFunctions(true);
-        logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
+        await avnBridge.enableValidatorFunctions(true);
+        logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
         assert.equal(logArgs.status, true);
       });
 
       it('the t2 transaction ID is not unique', async () => {
         const newRootHash = testHelper.randomBytes32();
-        const confirmations = await testHelper.getConfirmations(avn, newRootHash, t2TransactionId);
-        await testHelper.expectRevert(() => avn.publishRoot(newRootHash, t2TransactionId, confirmations,
+        const confirmations = await testHelper.getConfirmations(avnBridge, newRootHash, t2TransactionId);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(newRootHash, t2TransactionId, confirmations,
             FROM_ACTIVE_VALIDATOR), 'T2 transaction must be unique');
       });
 
       it('the root has already been published', async () => {
         const newT2TransactionId = testHelper.randomUint256();
-        const confirmations = await testHelper.getConfirmations(avn, rootHash, newT2TransactionId);
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, newT2TransactionId, confirmations,
+        const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, newT2TransactionId);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, newT2TransactionId, confirmations,
             FROM_ACTIVE_VALIDATOR), 'Root already exists');
       });
 
       it('the publishing validator is not registered', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
-        const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId);
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, confirmations),
+        const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, confirmations),
             'Invalid confirmations');
       });
 
@@ -248,32 +248,32 @@ contract('AVN', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
 
-        let confirmations = '0xbad' + testHelper.strip_0x(await testHelper.getConfirmations(avn, rootHash, t2TransactionId));
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
+        let confirmations = '0xbad' + testHelper.strip_0x(await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId));
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
             'Invalid confirmations');
       });
 
       it('there are no confirmations', async () => {
         rootHash = testHelper.randomBytes32();
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, '0x', FROM_ACTIVE_VALIDATOR),
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, '0x', FROM_ACTIVE_VALIDATOR),
             'Invalid confirmations');
       });
 
       it('there are not enough confirmations', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
-        const numRequiredConfirmations = await testHelper.getNumRequiredConfirmations(avn);
-        const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId, -1);
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
+        const numRequiredConfirmations = await testHelper.getNumRequiredConfirmations(avnBridge);
+        const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId, -1);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
             'Invalid confirmations');
       });
 
       it('the confirmations are corrupted', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
-        let confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId);
+        let confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId);
         confirmations = confirmations.replace(/1/g, '2');
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
             'Invalid confirmations');
       });
 
@@ -281,8 +281,8 @@ contract('AVN', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
         const startFromNonValidator = nextValidatorId;
-        const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId, 0, startFromNonValidator);
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
+        const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId, 0, startFromNonValidator);
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR),
             'Invalid confirmations');
       });
 
@@ -290,9 +290,9 @@ contract('AVN', async () => {
         t2TransactionId = testHelper.randomUint256();
         rootHash = testHelper.randomBytes32();
         const halfSet = Math.round(numActiveValidators/2);
-        const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId, - halfSet);
+        const confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId, - halfSet);
         const duplicateConfirmations = confirmations + testHelper.strip_0x(confirmations);
-        await testHelper.expectRevert(() => avn.publishRoot(rootHash, t2TransactionId, duplicateConfirmations,
+        await testHelper.expectRevert(() => avnBridge.publishRoot(rootHash, t2TransactionId, duplicateConfirmations,
             FROM_ACTIVE_VALIDATOR), 'Invalid confirmations');
       });
     });
@@ -301,35 +301,35 @@ contract('AVN', async () => {
   context('registerValidator()', async () => {
 
     it('a new validator can be registered', async () => {
-      const numActiveValidatorsBefore = await avn.numActiveValidators();
+      const numActiveValidatorsBefore = await avnBridge.numActiveValidators();
 
       const newValidator = validators[nextValidatorId];
       let t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(newValidator.t1PublicKey, newValidator.t2PublicKey);
-      let confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await avn.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
+      let confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await avnBridge.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
-      const logArgs = await testHelper.getLogArgs(avn, 'LogValidatorRegistered');
-      assert.equal(await avn.idToT1Address(nextValidatorId), newValidator.t1Address);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorRegistered');
+      assert.equal(await avnBridge.idToT1Address(nextValidatorId), newValidator.t1Address);
       assert.equal(logArgs.t1PublicKeyLHS, newValidator.t1PublicKeyLHS);
       assert.equal(logArgs.t1PublicKeyRHS, newValidator.t1PublicKeyRHS);
       assert.equal(logArgs.t2PublicKey, newValidator.t2PublicKey);
       bnEquals(logArgs.t2TransactionId, t2TransactionId);
 
       // The validator is registered but not active
-      bnEquals(numActiveValidatorsBefore, await avn.numActiveValidators());
-      assert.equal(await avn.isActiveValidator(nextValidatorId), false);
+      bnEquals(numActiveValidatorsBefore, await avnBridge.numActiveValidators());
+      assert.equal(await avnBridge.isActiveValidator(nextValidatorId), false);
 
       // Publishing a root containing a confirmation from the new validator activates the validator
       rootHash = testHelper.randomBytes32();
       t2TransactionId = testHelper.randomUint256();
-      confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId);
-      newValidatorConfirmation = await testHelper.getSingleConfirmation(avn, rootHash, t2TransactionId, newValidator.t1Address);
+      confirmations = await testHelper.getConfirmations(avnBridge, rootHash, t2TransactionId);
+      newValidatorConfirmation = await testHelper.getSingleConfirmation(avnBridge, rootHash, t2TransactionId, newValidator.t1Address);
       const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
-      await avn.publishRoot(rootHash, t2TransactionId, confirmationsIncludingNewValidator, FROM_ACTIVE_VALIDATOR);
+      await avnBridge.publishRoot(rootHash, t2TransactionId, confirmationsIncludingNewValidator, FROM_ACTIVE_VALIDATOR);
 
-      bnEquals(numActiveValidatorsBefore.add(new BN(1)), await avn.numActiveValidators());
-      assert.equal(await avn.isActiveValidator(nextValidatorId), true);
+      bnEquals(numActiveValidatorsBefore.add(new BN(1)), await avnBridge.numActiveValidators());
+      assert.equal(await avnBridge.isActiveValidator(nextValidatorId), true);
       nextValidatorId++;
       numActiveValidators++;
     });
@@ -339,8 +339,8 @@ contract('AVN', async () => {
       const emptyKey = '0x';
       const t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(emptyKey, prospectValidator.t2PublicKey);
-      const confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.registerValidator(emptyKey, prospectValidator.t2PublicKey, t2TransactionId,
+      const confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.registerValidator(emptyKey, prospectValidator.t2PublicKey, t2TransactionId,
           confirmations, FROM_ACTIVE_VALIDATOR), 'T1 public key must be 64 bytes');
     });
 
@@ -348,8 +348,8 @@ contract('AVN', async () => {
       const existingValidator = validators[1];
       const t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(existingValidator.t1PublicKey, existingValidator.t2PublicKey);
-      const confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.registerValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey,
+      const confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.registerValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Validator is already registered');
     });
 
@@ -357,22 +357,22 @@ contract('AVN', async () => {
       const existingValidator = validators[numActiveValidators];
       let t2TransactionId = testHelper.randomUint256();
       const deregisterValidatorHash = testHelper.hash(existingValidator.t2PublicKey, existingValidator.t1PublicKey);
-      let confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await avn.deregisterValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey, t2TransactionId,
+      let confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await avnBridge.deregisterValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey, t2TransactionId,
           confirmations, FROM_ACTIVE_VALIDATOR);
       numActiveValidators--;
 
       const newValidator = validators[nextValidatorId];
       t2TransactionId = testHelper.randomUint256();
       let registerValidatorHash = testHelper.hash(existingValidator.t1PublicKey, newValidator.t2PublicKey);
-      confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.registerValidator(existingValidator.t1PublicKey, newValidator.t2PublicKey,
+      confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.registerValidator(existingValidator.t1PublicKey, newValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Cannot change T2 public key');
 
       t2TransactionId = testHelper.randomUint256();
       registerValidatorHash = testHelper.hash(existingValidator.t1PublicKey, existingValidator.t2PublicKey);
-      confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await avn.registerValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey, t2TransactionId, confirmations,
+      confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await avnBridge.registerValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
     });
 
@@ -381,8 +381,8 @@ contract('AVN', async () => {
       const existingValidator = validators[1];
       const t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(prospectValidator.t1PublicKey, existingValidator.t2PublicKey);
-      const confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.registerValidator(prospectValidator.t1PublicKey, existingValidator.t2PublicKey,
+      const confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.registerValidator(prospectValidator.t1PublicKey, existingValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'T2 public key already in use');
     });
   });
@@ -393,59 +393,59 @@ contract('AVN', async () => {
       const newValidator = validators[nextValidatorId];
       let t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(newValidator.t1PublicKey, newValidator.t2PublicKey)
-      let confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await avn.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
+      let confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await avnBridge.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
       nextValidatorId++;
-      let logArgs = await testHelper.getLogArgs(avn, 'LogValidatorRegistered');
+      let logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorRegistered');
 
       t2TransactionId = testHelper.randomUint256();
       const deregisterValidatorHash = testHelper.hash(newValidator.t2PublicKey, newValidator.t1PublicKey);
-      confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await avn.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
+      confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await avnBridge.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
-      logArgs = await testHelper.getLogArgs(avn, 'LogValidatorDeregistered');
+      logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorDeregistered');
       assert.equal(logArgs.t1PublicKeyLHS, newValidator.t1PublicKeyLHS);
       assert.equal(logArgs.t1PublicKeyRHS, newValidator.t1PublicKeyRHS);
       assert.equal(logArgs.t2PublicKey, newValidator.t2PublicKey);
       bnEquals(logArgs.t2TransactionId, t2TransactionId);
       numActiveValidators--;
-      bnEquals(await avn.numActiveValidators(), numActiveValidators);
+      bnEquals(await avnBridge.numActiveValidators(), numActiveValidators);
     });
 
     it('cannot deregister an already dergistered validator', async () => {
       const newValidator = validators[nextValidatorId];
       let t2TransactionId = testHelper.randomUint256();
       const registerValidatorHash = testHelper.hash(newValidator.t1PublicKey, newValidator.t2PublicKey)
-      let confirmations = await testHelper.getConfirmations(avn, registerValidatorHash, t2TransactionId);
-      await avn.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
+      let confirmations = await testHelper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await avnBridge.registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
       nextValidatorId++;
       t2TransactionId = testHelper.randomUint256();
       let deregisterValidatorHash = testHelper.hash(newValidator.t2PublicKey, newValidator.t1PublicKey);
-      confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await avn.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
+      confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await avnBridge.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId, confirmations,
           FROM_ACTIVE_VALIDATOR);
       numActiveValidators--;
       t2TransactionId = testHelper.randomUint256();
       deregisterValidatorHash = testHelper.hash(newValidator.t2PublicKey, newValidator.t1PublicKey);
-      confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
+      confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Validator is not registered');
     });
 
     it('validator functions are disabled', async () => {
-      await avn.enableValidatorFunctions(false);
-      let logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
+      await avnBridge.enableValidatorFunctions(false);
+      let logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
       assert.equal(logArgs.status, false);
       const activeValidator = validators[1];
       const t2TransactionId = testHelper.randomUint256();
       const deregisterValidatorHash = testHelper.hash(activeValidator.t2PublicKey, activeValidator.t1PublicKey);
-      const confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
+      const confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-      await avn.enableValidatorFunctions(true);
-      logArgs = await testHelper.getLogArgs(avn, 'LogValidatorFunctionsAreEnabled');
+      await avnBridge.enableValidatorFunctions(true);
+      logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
       assert.equal(logArgs.status, true);
     });
 
@@ -453,8 +453,8 @@ contract('AVN', async () => {
       const activeValidator = validators[1];
       const t2TransactionId = testHelper.randomUint256();
       const deregisterValidatorHash = testHelper.hash(activeValidator.t2PublicKey, activeValidator.t1PublicKey);
-      const confirmations = await testHelper.getConfirmations(avn, deregisterValidatorHash, t2TransactionId);
-      await testHelper.expectRevert(() => avn.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
+      const confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await testHelper.expectRevert(() => avnBridge.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
           t2TransactionId, confirmations), 'Invalid confirmations');
     });
   });

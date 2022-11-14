@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "./interfaces/IAVN.sol";
+import "./interfaces/IAVNBridge.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
@@ -10,7 +10,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
@@ -31,7 +31,6 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
   mapping (bytes32 => bool) public isPublishedRootHash;
   mapping (uint256 => bool) public isUsedT2TransactionId;
   mapping (bytes32 => bool) public hasLowered;
-  mapping (bytes32 => bool) public hasLifted;
   mapping (uint32 => uint256) public growthRelease;
   mapping (uint32 => uint128) public growthAmount;
 
@@ -64,6 +63,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     nextValidatorId = 1;
     quorum[0] = 2;
     quorum[1] = 3;
+    // TODO: Set delay
     growthDelay = 7 days;
   }
 
@@ -76,9 +76,6 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     require(validatorFunctionsAreEnabled, "Function currently disabled");
     _;
   }
-
-  // TODO: Move
-  function _authorizeUpgrade(address) internal override onlyOwner {}
 
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
@@ -187,13 +184,13 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
 
     if (confirmations.length == 0) {
       require(msg.sender == owner(), "Owner or validators only");
-      doReleaseGrowth(amount, period);
+      _releaseGrowth(amount, period);
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
-      verifyConfirmations(toConfirmationHash(growthHash, t2TransactionId), confirmations);
-      doStoreT2TransactionId(t2TransactionId);
+      _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
+      _storeT2TransactionId(t2TransactionId);
       if (growthDelay == 0) {
-        doReleaseGrowth(amount, period);
+        _releaseGrowth(amount, period);
       } else {
         uint256 releaseTime = block.timestamp + growthDelay;
         growthRelease[period] = releaseTime;
@@ -209,7 +206,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     require(releaseTime != 0, "Growth unavailable for period");
     require(block.timestamp >= releaseTime, "Cannot release growth yet");
     growthRelease[period] = 0;
-    doReleaseGrowth(growthAmount[period], period);
+    _releaseGrowth(growthAmount[period], period);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
@@ -224,8 +221,8 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
 
     // The order of the elements is the reverse of the deregisterValidatorHash
     bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
-    verifyConfirmations(toConfirmationHash(registerValidatorHash, t2TransactionId), confirmations);
-    doStoreT2TransactionId(t2TransactionId);
+    _verifyConfirmations(_toConfirmationHash(registerValidatorHash, t2TransactionId), confirmations);
+    _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
       require(t2PublicKeyToId[t2PublicKey] == 0, "T2 public key already in use");
@@ -261,8 +258,8 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
-    verifyConfirmations(toConfirmationHash(deregisterValidatorHash, t2TransactionId), confirmations);
-    doStoreT2TransactionId(t2TransactionId);
+    _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, t2TransactionId), confirmations);
+    _storeT2TransactionId(t2TransactionId);
 
     isRegisteredValidator[id] = false;
     isActiveValidator[id] = false;
@@ -282,8 +279,8 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     onlyWhenValidatorFunctionsAreEnabled
     external
   {
-    verifyConfirmations(toConfirmationHash(rootHash, t2TransactionId), confirmations);
-    doStoreT2TransactionId(t2TransactionId);
+    _verifyConfirmations(_toConfirmationHash(rootHash, t2TransactionId), confirmations);
+    _storeT2TransactionId(t2TransactionId);
     require(isPublishedRootHash[rootHash] == false, "Root already exists");
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TransactionId);
@@ -301,23 +298,15 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     onlyWhenLiftingIsEnabled
     external
   {
-    doLift(erc20Address, msg.sender, t2PublicKey, amount);
-  }
-
-  function proxyLift(address erc20Address, bytes calldata t2PublicKey, uint256 amount, address approver, uint256 proofNonce,
-      bytes calldata proof)
-    onlyWhenLiftingIsEnabled
-    external
-  {
-    if (msg.sender != approver) {
-      bytes32 proofHash = keccak256(proof);
-      require(hasLifted[proofHash] == false, "Lift proof already used");
-      hasLifted[proofHash] = true;
-      bytes32 msgHash = keccak256(abi.encodePacked(erc20Address, t2PublicKey, amount, proofNonce));
-      address signer = recoverSigner(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash)), proof);
-      require(signer == approver, "Lift proof invalid");
-    }
-    doLift(erc20Address, approver, t2PublicKey, amount);
+    require(ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) == address(0), "ERC20 lift only");
+    require(amount > 0, "Cannot lift zero ERC20 tokens");
+    bytes32 checkedT2PublicKey = _checkT2PublicKey(t2PublicKey);
+    IERC20 erc20Contract = IERC20(erc20Address);
+    uint256 currentBalance = erc20Contract.balanceOf(address(this));
+    assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
+    uint256 newBalance = erc20Contract.balanceOf(address(this));
+    require(newBalance <= LIFT_LIMIT, "Exceeds ERC20 lift limit");
+    emit LogLifted(erc20Address, msg.sender, checkedT2PublicKey, newBalance - currentBalance);
   }
 
   function liftETH(bytes calldata t2PublicKey)
@@ -325,7 +314,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     onlyWhenLiftingIsEnabled
     external
   {
-    bytes32 checkedT2PublicKey = checkT2PublicKey(t2PublicKey);
+    bytes32 checkedT2PublicKey = _checkT2PublicKey(t2PublicKey);
     require(msg.value > 0, "Cannot lift zero ETH");
     emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, checkedT2PublicKey, msg.value);
   }
@@ -340,7 +329,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     if (data.length == 0 && from == owner() && msg.sender == coreToken) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
-    bytes32 checkedT2PublicKey = checkT2PublicKey(data);
+    bytes32 checkedT2PublicKey = _checkT2PublicKey(data);
     require(ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) == msg.sender, "Token must be registered");
     IERC777 erc777Contract = IERC777(msg.sender);
     require(erc777Contract.balanceOf(address(this)) <= LIFT_LIMIT, "Exceeds ERC777 lift limit");
@@ -357,12 +346,12 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     hasLowered[leafHash] = true;
 
     uint256 ptr;
-    ptr += getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
+    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
     require(uint8(leaf[ptr]) & 128 != 0, "Unsigned transaction"); // bitwise version check to ensure leaf is signed transaction
     ptr += 99; // version (1 byte) + multiAddress type (1 byte) + sender (32 bytes) + curve type (1 byte) + signature (64 bytes)
     ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
-    ptr += getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
-    ptr += getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
+    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
+    ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
     ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
 
     bytes2 callId;
@@ -421,8 +410,9 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     return isPublishedRootHash[rootHash];
   }
 
-  // TODO: underscore private methods
-  function doReleaseGrowth(uint128 amount, uint32 period)
+  function _authorizeUpgrade(address) internal override onlyOwner {}
+
+  function _releaseGrowth(uint128 amount, uint32 period)
     private
   {
     uint256 oldBalance = IERC20(coreToken).balanceOf(address(this));
@@ -434,7 +424,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
   }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
-  function getCompactIntegerByteSize(bytes1 checkByte)
+  function _getCompactIntegerByteSize(bytes1 checkByte)
     private
     pure
     returns (uint256 byteLength)
@@ -452,7 +442,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     }
   }
 
-  function toConfirmationHash(bytes32 data, uint256 t2TransactionId)
+  function _toConfirmationHash(bytes32 data, uint256 t2TransactionId)
     private
     view
     returns (bytes32)
@@ -460,7 +450,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     return keccak256(abi.encode(data, t2TransactionId, idToT2PublicKey[t1AddressToId[msg.sender]]));
   }
 
-  function verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
+  function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
@@ -505,57 +495,19 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     require(validConfirmations == requiredConfirmations, "Invalid confirmations");
   }
 
-  function doStoreT2TransactionId(uint256 t2TransactionId)
+  function _storeT2TransactionId(uint256 t2TransactionId)
     private
   {
     require(isUsedT2TransactionId[t2TransactionId] == false, "T2 transaction must be unique");
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
-  function doLift(address erc20Address, address approver, bytes memory t2PublicKey, uint256 amount)
-    private
-  {
-    require(ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) == address(0), "ERC20 lift only");
-    require(amount > 0, "Cannot lift zero ERC20 tokens");
-    bytes32 checkedT2PublicKey = checkT2PublicKey(t2PublicKey);
-    IERC20 erc20Contract = IERC20(erc20Address);
-    uint256 currentBalance = erc20Contract.balanceOf(address(this));
-    assert(erc20Contract.transferFrom(approver, address(this), amount));
-    uint256 newBalance = erc20Contract.balanceOf(address(this));
-    require(newBalance <= LIFT_LIMIT, "Exceeds ERC20 lift limit");
-    emit LogLifted(erc20Address, approver, checkedT2PublicKey, newBalance - currentBalance);
-  }
-
-  function checkT2PublicKey(bytes memory t2PublicKey)
+  function _checkT2PublicKey(bytes memory t2PublicKey)
     private
     pure
     returns (bytes32 checkedT2PublicKey)
   {
     require(t2PublicKey.length == 32, "Bad T2 public key");
     checkedT2PublicKey = bytes32(t2PublicKey);
-  }
-
-  function recoverSigner(bytes32 hash, bytes memory signature)
-    private
-    pure
-    returns (address)
-  {
-    if (signature.length != 65) return address(0);
-
-    bytes32 r;
-    bytes32 s;
-    uint8 v;
-
-    assembly {
-      r := mload(add(signature, 0x20))
-      s := mload(add(signature, 0x40))
-      v := byte(0, mload(add(signature, 0x60)))
-    }
-
-    if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) return address(0);
-    if (v < 27) v += 27;
-    if (v != 27 && v != 28) return address(0);
-
-    return ecrecover(hash, v, r, s);
   }
 }

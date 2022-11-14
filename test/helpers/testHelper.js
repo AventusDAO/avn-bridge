@@ -1,6 +1,6 @@
 const {MerkleTree} = require('merkletreejs');
 const { deployProxy } = require('@openzeppelin/truffle-upgrades');
-const AVN = artifacts.require('AVN');
+const AVNBridge = artifacts.require('AVNBridge');
 const keccak256 = require('keccak256');
 const privateKeyToPublicKey = require('ethereum-private-key-to-public-key');
 const keys = require('../../keys.json');
@@ -45,9 +45,9 @@ async function init(_largeTree) {
   }
 }
 
-async function deployAVN(coreToken, prior) {
+async function deployAVNBridge(coreToken, prior) {
   priorInstance = prior || ZERO_ADDRESS;
-  return await deployProxy(AVN, [coreToken, priorInstance], {kind: 'uups'});
+  return await deployProxy(AVNBridge, [coreToken, priorInstance], {kind: 'uups'});
 }
 
 function bnEquals(a, b) {
@@ -95,7 +95,7 @@ async function getSingleConfirmation(_contract, _data, _t2TransactionId, _valida
   return await sign(confirmationHash, _validator);
 }
 
-async function loadValidators(avn, validators, numValidators) {
+async function loadValidators(avnBridge, validators, numValidators) {
   const initialValidators = validators.slice(1, numValidators + 1);
   let t1AddressArray = [];
   let t1PublicKeyLHSArray = [];
@@ -111,7 +111,7 @@ async function loadValidators(avn, validators, numValidators) {
     v.active = true;
   }
 
-  await avn.loadValidators(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
+  await avnBridge.loadValidators(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
 }
 
 async function createTreeAndPublishRoot(_contract, _tokenAddress, _amount, _isProxyLower, _id) {
@@ -277,7 +277,7 @@ module.exports = {
   createTreeAndPublishRoot,
   createTreeAndPublishRootFromTestLeaf,
   createTreeAndPublishRootWithLoweree,
-  deployAVN,
+  deployAVNBridge,
   expectRevert,
   getConfirmations,
   getCurrentBlockTimestamp,

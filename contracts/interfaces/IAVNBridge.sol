@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-interface IAVN {
+interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
@@ -47,8 +47,6 @@ interface IAVN {
   function releaseGrowth(uint32 period) external;
   function getIsPublishedRootHash(bytes32 rootHash) external view returns (bool);
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount) external;
-  function proxyLift(address erc20Address, bytes calldata t2PublicKey, uint256 amount, address approver, uint256 proofNonce,
-      bytes calldata proof) external;
   function liftETH(bytes calldata t2PublicKey) external payable;
   function lower(bytes memory leaf, bytes32[] calldata merklePath) external;
   function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath) external view returns (bool);
