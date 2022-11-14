@@ -184,6 +184,12 @@ contract('AVNBridge', async () => {
       testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
     });
 
+    it('fails to release growth that has already been released', async () => {
+      const period = 1;
+      await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+      await testHelper.expectRevert(() => avnBridge.releaseGrowth(period), 'Growth unavailable for period');
+    });
+
     it('fails to release growth that has since been denied by the owner', async () => {
       const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
       const avtSupplyBefore = await token20.totalSupply();
