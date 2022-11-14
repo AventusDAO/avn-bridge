@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "./interfaces/IAVN.sol";
+import "./interfaces/IAVNBridge.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
@@ -10,7 +10,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")

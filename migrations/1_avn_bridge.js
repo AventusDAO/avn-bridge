@@ -1,4 +1,4 @@
-const AVN = artifacts.require('AVN');
+const AVNBridge = artifacts.require('AVNBridge');
 const Unlocker = artifacts.require('Unlocker');
 const { deployProxy, erc1967, upgradeProxy } = require('@openzeppelin/truffle-upgrades');
 const fs = require('fs');
@@ -30,18 +30,18 @@ module.exports = async function(deployer, network, accounts) {
   }
 
   if (network !== 'development') {
-    const avnProxy = await deployProxy(AVN, [coreToken, priorInstance], { deployer, kind: 'uups' });
-    await deployer.deploy(Unlocker, avnProxy.address, priorInstance);
+    const avnBridge = await deployProxy(AVNBridge, [coreToken, priorInstance], { deployer, kind: 'uups' });
+    await deployer.deploy(Unlocker, avnBridge.address, priorInstance);
     const unlocker = await Unlocker.deployed();
-    const implementationAddress = await erc1967.getImplementationAddress(avnProxy.address);
-    fs.writeFileSync('./implementationAddress.txt', `AVN@${implementationAddress}`);
+    const implementationAddress = await erc1967.getImplementationAddress(avnBridge.address);
+    fs.writeFileSync('./implementationAddress.txt', `AVNBridge@${implementationAddress}`);
   }
 
   // if (network !== 'development') {
-  //   const avnProxyAddress = '' // FILL ME IN WITH: existing avnProxy address from initial deployment
-  //   // NOTE: Either extend original AVN or replace with an AVN_2 which inherits it
-  //   await upgradeProxy(avnProxyAddress, AVN, { deployer, kind: 'uups' });
-  //   const implementationAddress = await erc1967.getImplementationAddress(avnProxyAddress);
-  //   fs.writeFileSync('./implementationAddress.txt', `AVN@${implementationAddress}`);
+  //   const avnBridgeAddress = '' // FILL ME IN WITH: existing avnBridge address from initial deployment
+  //   // NOTE: Either extend original AVNBridge or replace with an AVNBridge_2 which inherits it
+  //   await upgradeProxy(avnBridgeAddress, AVNBridge, { deployer, kind: 'uups' });
+  //   const implementationAddress = await erc1967.getImplementationAddress(avnBridgeAddress);
+  //   fs.writeFileSync('./implementationAddress.txt', `AVNBridge@${implementationAddress}`);
   // }
 };

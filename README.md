@@ -1,12 +1,12 @@
-# AVN Overview
+# AVN Bridge Overview
 
-The purpose of the AVN (T1) contract is to provide a lightweight and gas-efficient means of facilitating a Substrate-based fungible-token-scaling sidechain (T2), be that a parachain or a sovereign chain.
+The purpose of the AVN Bridge (T1) contract is to provide a lightweight and gas-efficient means of facilitating a Substrate-based fungible-token-scaling sidechain (T2), be that a parachain or a sovereign chain.
 
 The contract utilises OpenZeppelin's implementation of the Universal Upgradeable Proxy Standard ([EIP-1822](https://eips.ethereum.org/EIPS/eip-1822)).
 
 The system is underwritten by its constructor-specified core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
 
-##### The AVN T1 has 3 main responsibilities:
+##### The AVN Bridge has 3 main responsibilities:
 
 1. Management of *validators* (POS transaction processors existing as actors within the AVN whose token deposits are locked in T2).
 2. The periodic checkpointing (*publishing*) of merkle tree roots encoding all transactions having occurred on the T2.
@@ -120,7 +120,7 @@ e.g: `send(to: AVN_address, amount: amount_to_lift, data: 32_byte_T2_recipient_p
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 
-# avn-tier1 usage
+# avn-bridge usage
 do `npm install`
 
 Edit 'config_.json' and save as 'config.json'

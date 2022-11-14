@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-interface IAVN {
+interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
