@@ -1,15 +1,19 @@
 const allowedGas = {
   ethLift: 27500,
   erc777Lift: 76200,
-  erc20Lift: 103500,
-  erc20ProxyLift: 117800,
+  erc20Lift: 103600,
+  erc20ProxyLift: 117900,
   erc777Lower: 87000,
   erc20Lower: 76000,
   ethLower: 65300,
   erc777ProxyLower: 89100,
   erc20ProxyLower: 78200,
   ethProxyLower: 67500,
-  publishRoot: 129100,
+  publishRoot: 129200,
+  triggerGrowth: 151600,
+  releaseGrowth: 40200,
+  triggerGrowth_via_owner: 72700,
+  triggerGrowth_immediate_release: 153600,
   updateLowerCall: 45800,
   transferOwnership: 31900
 }
@@ -18,6 +22,7 @@ const testHelper = require('./helpers/testHelper');
 const Token777 = artifacts.require('Token777');
 const Token20 = artifacts.require('Token20');
 const BN = web3.utils.BN;
+const GROWTH_DELAY = 100;
 
 let avn, token777, token20;
 let accounts, validators;
@@ -36,6 +41,8 @@ contract('AVN Gas [ @skip-on-coverage ]', async () => {
     someT2PublicKey = testHelper.someT2PublicKey();
     validators = testHelper.validators();
     await testHelper.loadValidators(avn, validators, 10);
+    await token20.transferOwnership(avn.address);
+    await avn.setGrowthDelay(GROWTH_DELAY);
   });
 
   it('ETH lift()', async () => {
@@ -138,6 +145,41 @@ contract('AVN Gas [ @skip-on-coverage ]', async () => {
     const confirmations = await testHelper.getConfirmations(avn, rootHash, t2TransactionId);
     const tx = await avn.publishRoot(rootHash, t2TransactionId, confirmations, {from: validators[1].t1Address});
     testHelper.checkGas(tx, allowedGas.publishRoot);
+  });
+
+  it('triggerGrowth()', async () => {
+    const amount = 100;
+    const period = 1;
+    const growthHash = web3.utils.sha3(web3.eth.abi.encodeParameters(['uint128', 'uint32'], [amount, period]));
+    const t2TransactionId = testHelper.randomUint256();
+    const confirmations = await testHelper.getConfirmations(avn, growthHash, t2TransactionId);
+    const tx = await avn.triggerGrowth(amount, period, t2TransactionId, confirmations, {from: validators[1].t1Address});
+    testHelper.checkGas(tx, allowedGas.triggerGrowth);
+  });
+
+  it('releaseGrowth()', async () => {
+    await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+    const period = 1;
+    const tx = await avn.releaseGrowth(period);
+    testHelper.checkGas(tx, allowedGas.releaseGrowth);
+  });
+
+  it('triggerGrowth() - via owner', async () => {
+    const amount = 1000;
+    const period = 2;
+    const tx = await avn.triggerGrowth(amount, period, 0, '0x');
+    testHelper.checkGas(tx, allowedGas.triggerGrowth_via_owner);
+  });
+
+  it('triggerGrowth() - immediate release', async () => {
+    await avn.setGrowthDelay(0);
+    const amount = 10000;
+    const period = 3;
+    const growthHash = web3.utils.sha3(web3.eth.abi.encodeParameters(['uint128', 'uint32'], [amount, period]));
+    const t2TransactionId = testHelper.randomUint256();
+    const confirmations = await testHelper.getConfirmations(avn, growthHash, t2TransactionId);
+    const tx = await avn.triggerGrowth(amount, period, t2TransactionId, confirmations, {from: validators[1].t1Address});
+    testHelper.checkGas(tx, allowedGas.triggerGrowth_immediate_release);
   });
 
   it('updateLowerCall()', async () => {

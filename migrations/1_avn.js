@@ -4,7 +4,7 @@ const { deployProxy, erc1967, upgradeProxy } = require('@openzeppelin/truffle-up
 const fs = require('fs');
 
 module.exports = async function(deployer, network, accounts) {
-  let coreToken = '0xdB1Cff52f66195f0a5Bd3db91137db98cfc54AE6';
+  let coreToken = '0xe0A9E4f2591be648f18001e21dB16dDAB114fEF9';
   const priorInstance = '0xecE457B95b3e8C6e3f174995a0BEe59Fff0b13Cd';
 
   if (network.startsWith('development')) {

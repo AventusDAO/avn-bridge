@@ -249,6 +249,25 @@ function toLittleEndianBytesStr(_amount) {
   return result.match(/.{1,2}/g).reverse().join('').padEnd(32, '0');
 }
 
+async function increaseBlockTimestamp(seconds) {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({
+      jsonrpc: '2.0',
+      method: 'evm_increaseTime',
+      params: [seconds],
+      id: new Date().getTime()
+    }, (err, result) => {
+      if (err) { return reject(err) }
+      return resolve(result)
+    })
+  })
+}
+
+async function getCurrentBlockTimestamp(){
+  const block = await web3.eth.getBlock('latest');
+  return block.timestamp;
+}
+
 // Keep exports alphabetical.
 module.exports = {
   accounts: () => accounts,
@@ -261,11 +280,13 @@ module.exports = {
   deployAVN,
   expectRevert,
   getConfirmations,
+  getCurrentBlockTimestamp,
   getLogArgs,
   getNumRequiredConfirmations,
   getPublicKey,
   getSingleConfirmation,
   hash,
+  increaseBlockTimestamp,
   init,
   loadValidators,
   LOWER_ID,
