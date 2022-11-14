@@ -32,11 +32,13 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
   mapping (uint256 => bool) public isUsedT2TransactionId;
   mapping (bytes32 => bool) public hasLowered;
   mapping (bytes32 => bool) public hasLifted;
+  mapping (uint32 => uint256) public growthRelease;
+  mapping (uint32 => uint128) public growthAmount;
 
   uint256[2] public quorum;
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
-  uint32 public growthPeriod;
+  uint256 public growthDelay;
   address public coreToken;
   address internal priorInstance;
   bool public validatorFunctionsAreEnabled;
@@ -60,9 +62,9 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextValidatorId = 1;
-    growthPeriod = 1;
     quorum[0] = 2;
     quorum[1] = 3;
+    growthDelay = 7 days;
   }
 
   modifier onlyWhenLiftingIsEnabled() {
@@ -75,6 +77,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     _;
   }
 
+  // TODO: Move
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
@@ -101,6 +104,22 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
       numActiveValidators++;
       nextValidatorId++;
     }
+  }
+
+  function setCoreOwner()
+    onlyOwner
+    external
+  {
+    (bool success, ) = coreToken.call(abi.encodeWithSignature("setOwner(address)", msg.sender));
+    require(success, "Failed to set core owner");
+  }
+
+  function setGrowthDelay(uint256 delaySeconds)
+    onlyOwner
+    external
+  {
+    emit LogGrowthDelayUpdated(growthDelay, delaySeconds);
+    growthDelay = delaySeconds;
   }
 
   function setQuorum(uint256[2] memory _quorum)
@@ -149,15 +168,40 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     require(msg.sender == priorInstance, "Cannot accept ETH unless lifting");
   }
 
-  function triggerGrowth(uint256 amount)
-    onlyOwner
+  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
+    onlyWhenValidatorFunctionsAreEnabled
     external
   {
     require(amount > 0, "Cannot trigger zero growth");
-    assert(IERC20(coreToken).transferFrom(owner(), address(this), amount));
-    uint256 newBalance = IERC20(coreToken).balanceOf(address(this));
-    require(newBalance <= LIFT_LIMIT, "Exceeds limit");
-    emit LogGrowth(amount, growthPeriod++);
+    require(growthAmount[period] == 0, "Cannot re-trigger growth");
+
+    growthAmount[period] = amount;
+
+    if (confirmations.length == 0) {
+      require(msg.sender == owner(), "Owner or validators only");
+      doReleaseGrowth(amount, period);
+    } else {
+      bytes32 growthHash = keccak256(abi.encode(amount, period));
+      verifyConfirmations(toConfirmationHash(growthHash, t2TransactionId), confirmations);
+      doStoreT2TransactionId(t2TransactionId);
+      if (growthDelay == 0) {
+        doReleaseGrowth(amount, period);
+      } else {
+        uint256 releaseTime = block.timestamp + growthDelay;
+        growthRelease[period] = releaseTime;
+        emit LogGrowthTriggered(amount, period, releaseTime);
+      }
+    }
+  }
+
+  function releaseGrowth(uint32 period)
+    external
+  {
+    uint256 releaseTime = growthRelease[period];
+    require(releaseTime != 0, "Growth unavailable for period");
+    require(block.timestamp >= releaseTime, "Cannot release growth yet");
+    growthRelease[period] = 0;
+    doReleaseGrowth(growthAmount[period], period);
   }
 
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
@@ -285,7 +329,7 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     external
   {
     if (from == priorInstance) return; // recovering funds so we don't lift here
-    if (data.length == 0 && from == owner() && msg.sender == address(coreToken)) return; // growth action so we don't lift here
+    if (data.length == 0 && from == owner() && msg.sender == coreToken) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount > 0, "Cannot lift zero ERC777 tokens");
     bytes32 checkedT2PublicKey = checkT2PublicKey(data);
@@ -367,6 +411,18 @@ contract AVN is IAVN, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableU
     }
 
     return isPublishedRootHash[rootHash];
+  }
+
+  // TODO: underscore private methods
+  function doReleaseGrowth(uint128 amount, uint32 period)
+    private
+  {
+    uint256 oldBalance = IERC20(coreToken).balanceOf(address(this));
+    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
+    uint256 newBalance = IERC20(coreToken).balanceOf(address(this));
+    require(success && oldBalance + amount == newBalance, "Core mint failed");
+    require(newBalance <= LIFT_LIMIT, "Exceeds limit");
+    emit LogGrowth(amount, period);
   }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
