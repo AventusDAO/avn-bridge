@@ -1,20 +1,20 @@
 const allowedGas = {
-  ethLift: 27500,
-  erc777Lift: 76200,
-  erc20Lift: 103400,
-  erc777Lower: 87000,
-  erc20Lower: 76000,
-  ethLower: 65300,
-  erc777ProxyLower: 89100,
-  erc20ProxyLower: 78200,
-  ethProxyLower: 67500,
-  publishRoot: 129200,
-  triggerGrowth: 151600,
-  releaseGrowth: 40200,
-  triggerGrowth_via_owner: 72700,
-  triggerGrowth_immediate_release: 153600,
-  updateLowerCall: 45800,
-  transferOwnership: 31900
+  ethLift: 27400,
+  erc777Lift: 76100,
+  erc20Lift: 58950,
+  erc777Lower: 86400,
+  erc20Lower: 75350,
+  ethLower: 64750,
+  erc777ProxyLower: 88550,
+  erc20ProxyLower: 77500,
+  ethProxyLower: 66900,
+  publishRoot: 127450,
+  triggerGrowth: 149750,
+  releaseGrowth: 39100,
+  triggerGrowth_via_owner: 71700,
+  triggerGrowth_immediate_release: 151000,
+  updateLowerCall: 45750,
+  transferOwnership: 31850
 }
 
 const testHelper = require('./helpers/testHelper');
@@ -58,9 +58,8 @@ contract('AVNBridge Gas [ @skip-on-coverage ]', async () => {
 
   it('ERC20 lift()', async () => {
     const liftAmount = 200;
-    const approveTx = await token20.approve(avnBridge.address, liftAmount);
-    const liftTx = await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
-    const tx = testHelper.sumTxGas(approveTx, liftTx);
+    await token20.approve(avnBridge.address, liftAmount);
+    const tx = await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
     testHelper.checkGas(tx, allowedGas.erc20Lift);
   });
 
