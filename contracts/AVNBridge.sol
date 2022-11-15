@@ -401,8 +401,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     returns (bool)
   {
     bytes32 rootHash = leafHash;
+    uint256 pathLength = merklePath.length;
 
-    for (uint256 i; i < merklePath.length;) {
+    for (uint256 i; i < pathLength;) {
       bytes32 node = merklePath[i];
       if (rootHash < node)
         rootHash = keccak256(abi.encode(rootHash, node));
@@ -423,7 +424,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 oldBalance = IERC20(coreToken).balanceOf(address(this));
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
     uint256 newBalance = IERC20(coreToken).balanceOf(address(this));
-    require(success && oldBalance + amount == newBalance, "Core mint failed");
+    uint256 expectedBalance;
+    unchecked { expectedBalance = oldBalance + amount; }
+    require(success && expectedBalance == newBalance, "Core mint failed");
     require(newBalance <= LIFT_LIMIT, "Exceeds limit");
     emit LogGrowth(amount, period);
   }
