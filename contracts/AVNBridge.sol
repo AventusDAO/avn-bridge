@@ -53,10 +53,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     coreToken = _coreToken;
     priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
-    // TODO: Set the lower IDs correctly
-    numBytesToLowerData[0x2d00] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
-    numBytesToLowerData[0x2700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
-    numBytesToLowerData[0x2702] = 2;   // callID (2 bytes)
+    numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
+    numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
+    numBytesToLowerData[0x5702] = 2;   // callID (2 bytes)
     validatorFunctionsAreEnabled = true;
     liftingIsEnabled = true;
     loweringIsEnabled = true;
