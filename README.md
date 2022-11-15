@@ -138,7 +138,7 @@ They will then be automatically lifted to the 32 byte T2 public key specified in
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 
-# avn-bridge usage
+## dev use
 do `npm install`
 
 Edit 'config_.json' and save as 'config.json'
@@ -155,7 +155,7 @@ do `run deploy-goerli` or `./run.sh deploy-goerli`
 To run coverage:\
 do `run coverage` or `./run.sh coverage`
 
-# Interaction via Etherscan
+### Interaction via Etherscan
 
 The deployment will automatically publish and verify the contracts.\
 \
