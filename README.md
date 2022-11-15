@@ -138,7 +138,7 @@ They will then be automatically lifted to the 32 byte T2 public key specified in
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 
-## dev use
+## Dev use
 do `npm install`
 
 Edit 'config_.json' and save as 'config.json'
