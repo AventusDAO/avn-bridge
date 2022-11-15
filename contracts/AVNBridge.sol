@@ -62,7 +62,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     nextValidatorId = 1;
     quorum[0] = 2;
     quorum[1] = 3;
-    // TODO: Set delay
     growthDelay = 7 days;
   }
 
