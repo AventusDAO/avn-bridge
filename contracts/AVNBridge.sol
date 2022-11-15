@@ -290,14 +290,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogRootPublished(rootHash, t2TransactionId);
   }
 
-  function getIsPublishedRootHash(bytes32 rootHash)
-    external
-    view
-    returns (bool)
-  {
-    return isPublishedRootHash[rootHash];
-  }
-
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)
     onlyWhenLiftingIsEnabled
     external

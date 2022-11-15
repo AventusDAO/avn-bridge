@@ -95,9 +95,6 @@ emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint2
 If the release time has passed, this will mint the previously requested core token amount for the specified period, locking it in the AVN.\
 emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
 
-- **function getIsPublishedRootHash(bytes32 rootHash)**\
-Easy means to view published roots.
-
 - **lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)**\
 Allows the caller to move an amount of their ERC-20 tokens to the specified T2 account, providing they have previously approved this contract for the amount.\
 For lifting ERC-777 see [below](#lifting_erc_777_tokens)\
