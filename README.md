@@ -19,7 +19,7 @@ The system is underwritten by its constructor-specified core token (in the case 
 
 # Contract Functionality
 
-## Administration functions
+## Owner functions
 ##### Only callable by the contract owner
 
 - **loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS, bytes32[] calldata t2PublicKey))**\
@@ -89,7 +89,7 @@ Stores a Merkle tree root hash representing the latest set of transactions to ha
 \
 emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId)**_
 
-## Validator Or Owner Functions
+## Validator Or Owner Function
 ##### Only callable by validators with proof (as above) or the Owner
 
 
@@ -107,7 +107,7 @@ emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint2
 
 ## Publicly Accessible Functions
 
-- **function releaseGrowth(uint32 period)**\
+- **releaseGrowth(uint32 period)**\
 Providing the release time has passed, this will mint the previously requested core token amount for the specified period, locking it in the AVN.\
 \
 emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
