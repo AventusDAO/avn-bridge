@@ -9,8 +9,8 @@ const BN = web3.utils.BN;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PSEUDO_ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PROXY_LOWER_PROOF_LENGTH = 131;
-const PROXY_LOWER_ID = '0x2d00';
-const LOWER_ID = '0x2702';
+const PROXY_LOWER_ID = '0x5900';
+const LOWER_ID = '0x5702';
 
 let lastEventBlockNumbers = {};
 let additionalTx = [];
