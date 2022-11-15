@@ -1,20 +1,20 @@
 const allowedGas = {
-  ethLift: 27450,
-  erc777Lift: 76150,
-  erc20Lift: 59200,
+  ethLift: 27400,
+  erc777Lift: 76100,
+  erc20Lift: 59000,
   erc777Lower: 86400,
-  erc20Lower: 75450,
-  ethLower: 64800,
+  erc20Lower: 75400,
+  ethLower: 64750,
   erc777ProxyLower: 88550,
-  erc20ProxyLower: 77600,
+  erc20ProxyLower: 77500,
   ethProxyLower: 66900,
   publishRoot: 127400,
-  triggerGrowth: 149800,
-  releaseGrowth: 40100,
-  triggerGrowth_via_owner: 72700,
-  triggerGrowth_immediate_release: 151900,
+  triggerGrowth: 149700,
+  releaseGrowth: 39900,
+  triggerGrowth_via_owner: 72450,
+  triggerGrowth_immediate_release: 151550,
   updateLowerCall: 45750,
-  transferOwnership: 31900
+  transferOwnership: 31850
 }
 
 const testHelper = require('./helpers/testHelper');
