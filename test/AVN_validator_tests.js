@@ -209,17 +209,17 @@ contract('AVNBridge', async () => {
     context('fails when', async () => {
 
       it('validator functions are disabled', async () => {
-        await avnBridge.enableValidatorFunctions(false);
+        await avnBridge.toggleValidatorFunctions(false);
         let logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
-        assert.equal(logArgs.status, false);
+        assert.equal(logArgs.state, false);
         const newT2TransactionId = testHelper.randomUint256();
         const newRootHash = testHelper.randomBytes32();
         const confirmations = await testHelper.getConfirmations(avnBridge, newRootHash, newT2TransactionId);
         await testHelper.expectRevert(() => avnBridge.publishRoot(newRootHash, newT2TransactionId, confirmations,
             FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-        await avnBridge.enableValidatorFunctions(true);
+        await avnBridge.toggleValidatorFunctions(true);
         logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
-        assert.equal(logArgs.status, true);
+        assert.equal(logArgs.state, true);
       });
 
       it('the t2 transaction ID is not unique', async () => {
@@ -435,18 +435,18 @@ contract('AVNBridge', async () => {
     });
 
     it('validator functions are disabled', async () => {
-      await avnBridge.enableValidatorFunctions(false);
+      await avnBridge.toggleValidatorFunctions(false);
       let logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
-      assert.equal(logArgs.status, false);
+      assert.equal(logArgs.state, false);
       const activeValidator = validators[1];
       const t2TransactionId = testHelper.randomUint256();
       const deregisterValidatorHash = testHelper.hash(activeValidator.t2PublicKey, activeValidator.t1PublicKey);
       const confirmations = await testHelper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
       await testHelper.expectRevert(() => avnBridge.deregisterValidator(activeValidator.t1PublicKey, activeValidator.t2PublicKey,
           t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR), 'Function currently disabled');
-      await avnBridge.enableValidatorFunctions(true);
+      await avnBridge.toggleValidatorFunctions(true);
       logArgs = await testHelper.getLogArgs(avnBridge, 'LogValidatorFunctionsAreEnabled');
-      assert.equal(logArgs.status, true);
+      assert.equal(logArgs.state, true);
     });
 
     it('the account making the call is not registered', async () => {

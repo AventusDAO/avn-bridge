@@ -137,28 +137,28 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogQuorumUpdated(quorum);
   }
 
-  function enableValidatorFunctions(bool status)
+  function toggleValidatorFunctions(bool state)
     onlyOwner
     external
   {
-    validatorFunctionsAreEnabled = status;
-    emit LogValidatorFunctionsAreEnabled(status);
+    validatorFunctionsAreEnabled = state;
+    emit LogValidatorFunctionsAreEnabled(state);
   }
 
-  function enableLifting(bool status)
+  function toggleLifting(bool state)
     onlyOwner
     external
   {
-    liftingIsEnabled = status;
-    emit LogLiftingIsEnabled(status);
+    liftingIsEnabled = state;
+    emit LogLiftingIsEnabled(state);
   }
 
-  function enableLowering(bool status)
+  function toggleLowering(bool state)
     onlyOwner
     external
   {
-    loweringIsEnabled = status;
-    emit LogLoweringIsEnabled(status);
+    loweringIsEnabled = state;
+    emit LogLoweringIsEnabled(state);
   }
 
   function updateLowerCall(bytes2 callId, uint256 numBytes)
