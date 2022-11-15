@@ -6,11 +6,11 @@ The contract utilises OpenZeppelin's implementation of the Universal Upgradeable
 
 The system is underwritten by its constructor-specified core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
 
-##### The AVN Bridge has 3 main responsibilities:
+#### The AVN Bridge has 3 main responsibilities:
 
 1. Management of *validators* (POS transaction processors existing as actors within the AVN whose token deposits are locked in T2).
 
-2. The periodic checkpointing (*publishing*) of merkle tree roots encoding all transactions having occurred on the T2.
+2. The periodic checkpointing (*publishing*) of Merkle tree roots encoding all transactions having occurred on the T2.
 
 3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between the T1 Ethereum mainnet and T2 AVN sidechain by the following processes:
 - *Lifting* (locking tokens received by T1 and recreating the equivalent amount in the specified T2 recipient account)
@@ -85,7 +85,7 @@ Deregisters and deactivates a validator, retaining their original registration d
 emits _**LogValidatorDeregistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId)**_
 
 - **publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)**\
-Stores a merkle tree root hash representing the latest set of transactions to have occurred on T2.\
+Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2.\
 \
 emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId)**_
 
@@ -129,12 +129,11 @@ Calling with a valid and unused lower leaf results in the amount of the token (E
 emits _**LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 - **confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)**\
-Free-to-call method allows a user to confirm whether any transaction leaf is included in any published merkle root.
+Free view method allowing a user to confirm whether any leaf representing a T2 transaction is included in a published Merkle root.
 
 ## Lifting ERC 777 Tokens
-ERC-777 tokens do not require approval and can be sent directly to the contract (using either `send` or `operatorSend`).
-They will then be automatically lifted to the 32byte T2 public key specified in the send transaction's `data` field (this value must be present or the call will fail).\
-e.g: `send(to: AVN_address, amount: amount_to_lift, data: 32_byte_T2_recipient_public_key)`\
+ERC-777 tokens do not require approval and can be sent directly to the contract (using either `send` or `operatorSend`).\
+They will then be automatically lifted to the 32 byte T2 public key specified in the send transaction's `data` field (this value must be present or the call will fail).\
 \
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
