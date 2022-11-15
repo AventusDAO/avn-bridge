@@ -5,9 +5,9 @@ interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
   event LogQuorumUpdated(uint256[2] quorum);
-  event LogValidatorFunctionsAreEnabled(bool status);
-  event LogLiftingIsEnabled(bool status);
-  event LogLoweringIsEnabled(bool status);
+  event LogValidatorFunctionsAreEnabled(bool state);
+  event LogLiftingIsEnabled(bool state);
+  event LogLoweringIsEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
 
   event LogValidatorRegistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey,
@@ -28,9 +28,9 @@ interface IAVNBridge {
   function denyGrowth(uint32 period) external;
   function setGrowthDelay(uint256 delaySeconds) external;
   function setQuorum(uint256[2] memory quorum) external;
-  function enableValidatorFunctions(bool status) external;
-  function enableLifting(bool status) external;
-  function enableLowering(bool status) external;
+  function toggleValidatorFunctions(bool state) external;
+  function toggleLifting(bool state) external;
+  function toggleLowering(bool state) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
 
   // Owner or validators only
