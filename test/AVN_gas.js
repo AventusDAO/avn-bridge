@@ -1,5 +1,5 @@
 const allowedGas = {
-  ethLift: 27400,
+  ethLift: 27450,
   erc777Lift: 76100,
   erc20Lift: 58950,
   erc777Lower: 86400,
@@ -13,7 +13,7 @@ const allowedGas = {
   releaseGrowth: 39100,
   triggerGrowth_via_owner: 71700,
   triggerGrowth_immediate_release: 151000,
-  updateLowerCall: 45750,
+  updateLowerCall: 45800,
   transferOwnership: 31850
 }
 
