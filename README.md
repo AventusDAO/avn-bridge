@@ -9,10 +9,12 @@ The system is underwritten by its constructor-specified core token (in the case 
 ##### The AVN Bridge has 3 main responsibilities:
 
 1. Management of *validators* (POS transaction processors existing as actors within the AVN whose token deposits are locked in T2).
+
 2. The periodic checkpointing (*publishing*) of merkle tree roots encoding all transactions having occurred on the T2.
+
 3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between the T1 Ethereum mainnet and T2 AVN sidechain by the following processes:
 - *Lifting* (locking tokens received by T1 and recreating the equivalent amount in the specified T2 recipient account)
-- *Lowering* (destroying tokens on T2 and unlocking and transferring the equivalent amount in T1 to the specified recipient account)
+- *Lowering* (destroying tokens on T2 and unlocking and transferring the equivalent amount to the specified T1 recipient account)
 - *Triggering Growth* (a special form of lifting which inflates the core token supply according to the reward mechanisms of T2)
 
 # Contract Functionality
@@ -71,19 +73,19 @@ emits _**LogOwnershipTransferred(address indexed previousOwner, address indexed 
 ##### Only callable by an active validator providing proof (the required number of confirmations) of validator consensus from the T2
 
 - **registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId, bytes calldata confirmations)**\
-Registers a new validator account, permanently associating their T1 Ethereum address with their T2 public key and enabling them to participate in consensus.\
-Does not immediately activate, this step instead occurs automatically upon the next confirmation received from the newly registered validator.\
+Registers a new validator account, permanently associating their T1 Ethereum address with their T2 public key and allowing them to participate in consensus validation on T1.\
+Does not immediately activate them internally, this step instead occurs automatically upon the next confirmation received from the newly registered validator.\
 May also be used to re-register a previously deregistered validator.\
 \
 emits _**LogValidatorRegistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId)**_
 
 - **deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId, bytes calldata confirmations)**\
-Deregisters and deactivates a validator, retaining their original registration details but immediately removing their ability to call validator functions or participate in consensus.\
+Deregisters and deactivates a validator, retaining their original registration details but immediately removing their ability to participate in consensus validation on T1.\
 \
 emits _**LogValidatorDeregistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId)**_
 
 - **publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)**\
-Stores a merkle tree root representing the latest set of transactions to have occurred on the T2.\
+Stores a merkle tree root hash representing the latest set of transactions to have occurred on T2.\
 \
 emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId)**_
 
@@ -93,12 +95,12 @@ emits _**LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2Transactio
 
 - **triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)**\
 Initialise inflating the core token supply by the amount specified.\
-The effect is immediate when either the current GrowthDelay is zero or when the AVN owner calls the function (by passing an empty t2TransactionId and confirmations values).\
+The effect is immediate when either the current GrowthDelay is set to zero or when the AVN owner calls the function (by passing an empty t2TransactionId and confirmations values).\
 The amount is minted, locked in the AVN, and the following event is emitted:\
 \
 _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
 \
-When GrowthDelay is non-zero, however, the request is stored against a timestamp, which must be passed before it can be enacted by a **releaseGrowth** request.\
+When GrowthDelay is non-zero, however, the request is stored against a timestamp, which must then be reached before the request can be enacted by a **releaseGrowth** call.\
 \
 emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint256 indexed releaseTime)**_
 
@@ -106,7 +108,7 @@ emits _**LogGrowthTriggered(uint256 indexed amount, uint32 indexed period, uint2
 ## Publicly Accessible Functions
 
 - **function releaseGrowth(uint32 period)**\
-If the release time has passed, this will mint the previously requested core token amount for the specified period, locking it in the AVN.\
+Providing the release time has passed, this will mint the previously requested core token amount for the specified period, locking it in the AVN.\
 \
 emits _**LogGrowth(uint256 indexed amount, uint32 indexed period)**_
 
@@ -117,21 +119,21 @@ For lifting ERC-777 see [below](#lifting_erc_777_tokens)\
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 - **liftETH(bytes calldata t2PublicKey)**\
-Payable function which allows the caller to move all ETH sent to the specified T2 account.\
+Payable function which allows the caller to lift all the ETH sent to their specified T2 account.\
 \
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 - **lower(bytes memory leaf, bytes32[] calldata merklePath)**\
-Calling with a valid, unused lower leaf results in the amount of the token (ERC-20/ERC-777/ETH) specified in the leaf being transferred to the recipient Ethereum address also specified in the leaf.\
+Calling with a valid and unused lower leaf results in the amount of the token (ERC-20/ERC-777/ETH) specified in the leaf being transferred to the recipient Ethereum address specified in the leaf.\
 \
 emits _**LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
 
 - **confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)**\
-Free-to-call method allows a user to confirm whether a transaction leaf is included in any published merkle root.
+Free-to-call method allows a user to confirm whether any transaction leaf is included in any published merkle root.
 
 ## Lifting ERC 777 Tokens
-ERC-777 tokens do not require approval and can be sent directly to the contract (using `send` or `operatorSend`).
-They will then be automatically lifted to the 32 byte T2 public key specified in the send transaction's `data` field (this value must be present).\
+ERC-777 tokens do not require approval and can be sent directly to the contract (using either `send` or `operatorSend`).
+They will then be automatically lifted to the 32byte T2 public key specified in the send transaction's `data` field (this value must be present or the call will fail).\
 e.g: `send(to: AVN_address, amount: amount_to_lift, data: 32_byte_T2_recipient_public_key)`\
 \
 emits _**LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount)**_
