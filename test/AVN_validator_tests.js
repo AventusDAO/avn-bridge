@@ -140,7 +140,7 @@ contract('AVNBridge', async () => {
 
     it('succeeds in triggering growth via validators', async () => {
       const period = 1;
-      const t2TransactionId = testHelper.randomUint256();
+      const t2TransactionId = 1;
       const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
 
       await avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
@@ -149,6 +149,24 @@ contract('AVNBridge', async () => {
       testHelper.bnEquals(logArgs.amount, growthAmount);
       testHelper.bnEquals(logArgs.period, period);
       assert.equal(logArgs.releaseTime.toNumber(), await testHelper.getCurrentBlockTimestamp() + GROWTH_DELAY);
+    });
+
+    it('fails to trigger growth with an invalid transaction ID', async () => {
+      const period = 2;
+      const t2TransactionId = 1;
+      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+
+      await testHelper.expectRevert(() => avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations,
+          FROM_ACTIVE_VALIDATOR), 'T2 transaction must be unique');
+    });
+
+    it('fails to trigger growth with invalid confirmations', async () => {
+      const period = 2;
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = "0xbad";
+
+      await testHelper.expectRevert(() => avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations,
+          FROM_ACTIVE_VALIDATOR), 'Invalid confirmations');
     });
 
     it('succeeds in releasing growth', async () => {
@@ -164,6 +182,12 @@ contract('AVNBridge', async () => {
 
       testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avnBridge.address));
       testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
+    });
+
+    it('fails to release growth that has already been released', async () => {
+      const period = 1;
+      await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+      await testHelper.expectRevert(() => avnBridge.releaseGrowth(period), 'Growth unavailable for period');
     });
 
     it('fails to release growth that has since been denied by the owner', async () => {
@@ -187,6 +211,45 @@ contract('AVNBridge', async () => {
 
       testHelper.bnEquals(avnBalanceBefore, await token20.balanceOf(avnBridge.address));
       testHelper.bnEquals(avtSupplyBefore, await token20.totalSupply());
+    });
+
+    it('fails to release growth before its release time', async () => {
+      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+      const avtSupplyBefore = await token20.totalSupply();
+
+      const period = 3;
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+
+      await avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      await testHelper.expectRevert(() => avnBridge.releaseGrowth(period), 'Cannot release growth yet');
+      testHelper.bnEquals(avnBalanceBefore, await token20.balanceOf(avnBridge.address));
+      testHelper.bnEquals(avtSupplyBefore, await token20.totalSupply());
+
+      await testHelper.increaseBlockTimestamp(GROWTH_DELAY);
+      await avnBridge.releaseGrowth(period);
+
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avnBridge.address));
+      testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
+    });
+
+    it('succeeds in triggering and releasing immediate growth', async () => {
+      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+      const avtSupplyBefore = await token20.totalSupply();
+
+      const period = 4;
+      const t2TransactionId = testHelper.randomUint256();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+
+      await avnBridge.setGrowthDelay(0);
+
+      await avnBridge.triggerGrowth(growthAmount, period, t2TransactionId, confirmations, FROM_ACTIVE_VALIDATOR);
+      const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowth');
+      testHelper.bnEquals(logArgs.amount, growthAmount);
+      testHelper.bnEquals(logArgs.period, period);
+
+      testHelper.bnEquals(avnBalanceBefore.add(growthAmount), await token20.balanceOf(avnBridge.address));
+      testHelper.bnEquals(avtSupplyBefore.add(growthAmount), await token20.totalSupply());
     });
   });
 

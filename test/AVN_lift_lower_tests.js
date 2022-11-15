@@ -510,6 +510,11 @@ contract('AVNBridge', async () => {
       await testHelper.expectRevert(() => avnBridge.triggerGrowth(0, 1, 0, '0x'), 'Cannot trigger zero growth');
     });
 
+    it('fails to trigger growth if called without validator confirmations by someone other than the owner', async () => {
+      await testHelper.expectRevert(() => avnBridge.triggerGrowth(growthAmount, 1, 0, '0x', { from: someOtherAccount }),
+          'Owner or validators only');
+    });
+
     it('succeeds for growth period "2"', async () => {
       const period = 2;
       const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
@@ -531,6 +536,10 @@ contract('AVNBridge', async () => {
       const logArgs = await testHelper.getLogArgs(avnBridge, 'LogGrowth');
       testHelper.bnEquals(logArgs.amount, growthAmount);
       testHelper.bnEquals(logArgs.period, period);
+    });
+
+    it('fails to re-trigger growth for an existing period', async () => {
+      await testHelper.expectRevert(() => avnBridge.triggerGrowth(growthAmount, 1, 0, '0x'), 'Cannot re-trigger growth');
     });
   });
 });
