@@ -304,13 +304,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     require(ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) == address(0), "ERC20 lift only");
     require(amount != 0, "Cannot lift zero ERC20 tokens");
-    bytes32 checkedT2PublicKey = _checkT2PublicKey(t2PublicKey);
     IERC20 erc20Contract = IERC20(erc20Address);
     uint256 currentBalance = erc20Contract.balanceOf(address(this));
     assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
     uint256 newBalance = erc20Contract.balanceOf(address(this));
     require(newBalance <= LIFT_LIMIT, "Exceeds ERC20 lift limit");
-    emit LogLifted(erc20Address, msg.sender, checkedT2PublicKey, newBalance - currentBalance);
+    emit LogLifted(erc20Address, msg.sender, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
   }
 
   function liftETH(bytes calldata t2PublicKey)
@@ -421,9 +420,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _releaseGrowth(uint128 amount, uint32 period)
     private
   {
-    uint256 oldBalance = IERC20(coreToken).balanceOf(address(this));
+    IERC20 erc20Token = IERC20(coreToken);
+    uint256 oldBalance = erc20Token.balanceOf(address(this));
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    uint256 newBalance = IERC20(coreToken).balanceOf(address(this));
+    uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
     unchecked { expectedBalance = oldBalance + amount; }
     require(success && expectedBalance == newBalance, "Core mint failed");
