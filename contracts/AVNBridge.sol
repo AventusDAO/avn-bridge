@@ -318,7 +318,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (from == priorInstance) return; // recovering funds so we don't lift here
-    if (data.length == 0 && from == owner() && msg.sender == coreToken) return; // growth action so we don't lift here
+    if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
     require(to == address(this), "Tokens must be sent to this contract");
     require(amount != 0, "Cannot lift zero ERC777 tokens");
     require(ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) == msg.sender, "Token must be registered");
@@ -333,9 +333,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 leafHash = keccak256(leaf);
     require(confirmAvnTransaction(leafHash, merklePath), "Leaf or path invalid");
     require(hasLowered[leafHash] == false, "Already lowered");
+    uint256 numBytes;
+    uint256 ptr;
+    bytes32 t2PublicKey;
+    address token;
+    address t1Address;
+    uint128 amount;
+    bytes2 callId;
     hasLowered[leafHash] = true;
 
-    uint256 ptr;
     unchecked {
       ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
       require(uint8(leaf[ptr]) & 128 != 0, "Unsigned transaction"); // bitwise version check to ensure leaf is a signed tx
@@ -346,18 +352,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
     }
 
-    bytes2 callId;
-
     assembly {
       callId := mload(add(leaf, ptr))
     }
 
-    require(numBytesToLowerData[callId] != 0, "Not a lower leaf");
-    unchecked { ptr += numBytesToLowerData[callId]; }
-    bytes32 t2PublicKey;
-    address token;
-    uint128 amount;
-    address t1Address;
+    numBytes = numBytesToLowerData[callId];
+    require(numBytes != 0, "Not a lower leaf");
+    unchecked { ptr += numBytes; }
 
     assembly {
       t2PublicKey := mload(add(leaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
@@ -391,9 +392,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 rootHash = leafHash;
     uint256 pathLength = merklePath.length;
+    bytes32 node;
 
     for (uint256 i; i < pathLength;) {
-      bytes32 node = merklePath[i];
+      node = merklePath[i];
       if (rootHash < node)
         rootHash = keccak256(abi.encode(rootHash, node));
       else
