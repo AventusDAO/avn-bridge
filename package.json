@@ -14,7 +14,7 @@
     "@openzeppelin/test-helpers": "^0.5.16",
     "@truffle/hdwallet-provider": "^2.0.15",
     "ethereum-private-key-to-public-key": "^0.0.5",
-    "ganache-cli": "^6.12.2",
+    "ganache": "^7.5.0",
     "keccak256": "^1.0.0",
     "merkletreejs": "^0.2.8",
     "web3": "^1.2.4"

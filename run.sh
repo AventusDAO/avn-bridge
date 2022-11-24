@@ -61,7 +61,7 @@ fi
 if [ "$?" != "0" ]; then exit $?; fi
 
 echo "** Starting new ganache"
-ganache_command=(ganache-cli --accounts=30 --acctKeys keys.json -l 10000000 -m "lady sad two vacuum rail siren barrel convince rare helmet wagon approve" -h 0.0.0.0 ${GANACHE_ADDITIONAL_ARGUMENTS})
+ganache_command=(ganache --accounts=30 --acctKeys keys.json -l 10000000 -m "lady sad two vacuum rail siren barrel convince rare helmet wagon approve" -h 0.0.0.0 ${GANACHE_ADDITIONAL_ARGUMENTS})
 
 if [ "${RUN_GANACHE_IN_BACKGROUND:-off}" == "on" ]; then
 "${ganache_command[@]}" > ganache.log 2>&1 &
