@@ -134,8 +134,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     public
   {
-    require(_quorum[1] != 0, "Invalid: div by zero");
-    require(_quorum[0] <= _quorum[1], "Invalid: above 100%");
+    require(_quorum[0] != 0 && _quorum[0] <= _quorum[1], "Invalid quorum");
     quorum = _quorum;
     emit LogQuorumUpdated(quorum);
   }

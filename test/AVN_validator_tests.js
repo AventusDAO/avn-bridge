@@ -109,10 +109,13 @@ contract('AVNBridge', async () => {
 
     context('fails when', async () => {
       it('numerator is greater than denominator', async () => {
-        await testHelper.expectRevert(() => avnBridge.setQuorum([2,1]), 'Invalid: above 100%');
+        await testHelper.expectRevert(() => avnBridge.setQuorum([2,1]), 'Invalid quorum');
+      });
+      it('numerator is zero', async () => {
+        await testHelper.expectRevert(() => avnBridge.setQuorum([0,1]), 'Invalid quorum');
       });
       it('denominator is zero', async () => {
-        await testHelper.expectRevert(() => avnBridge.setQuorum([1,0]), 'Invalid: div by zero');
+        await testHelper.expectRevert(() => avnBridge.setQuorum([1,0]), 'Invalid quorum');
       });
       it('not called by the owner', async () => {
         await testHelper.expectRevert(() => avnBridge.setQuorum([2,3], {from: someOtherAccount}), 'Ownable: caller is not the owner');
