@@ -292,12 +292,12 @@ contract('AVNBridge', async () => {
 
       it('calling FTSM tokensReceived hook directly with tokens not destined for the FTSM', async () => {
         await testHelper.expectCustomRevert(() => avnBridge.tokensReceived(owner, owner, someOtherAccount, 100, someT2PublicKey, '0x'),
-            'CannotReceive()');
+            'TokensMustBeSentToThisAddress()');
       });
 
       it('calling FTSM tokensReceived hook directly and not a registered contract', async () => {
         await testHelper.expectCustomRevert(() => avnBridge.tokensReceived(owner, owner, avnBridge.address, 100, someT2PublicKey, '0x'),
-            'InvalidERC777()');
+            'InvalidERC777Token()');
       });
     });
   });

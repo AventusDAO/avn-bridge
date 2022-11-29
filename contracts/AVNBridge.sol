@@ -51,7 +51,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error AddressAlreadyInUse(address t1Address);
   error T2PublicKeyAlreadyInUse(bytes32 t2PublicKey);
   error AddressMismatch(address t1Address, bytes t1PublicKey);
-  error ExternalCallFailed();
+  error SetCoreOwnerFailed();
   error InvalidQuorum();
   error CannotReceiveETHUnlessLifting();
   error AmountCannotBeZero();
@@ -66,8 +66,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error RootHashAlreadyPublished();
   error ERC20LiftingOnly();
   error LiftLimitExceeded();
-  error CannotReceive();
-  error InvalidERC777();
+  error TokensMustBeSentToThisAddress();
+  error InvalidERC777Token();
   error LoweringIsDisabled();
   error InvalidLowerData();
   error LowerAlreadyUsed();
@@ -150,7 +150,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     (bool success, ) = coreToken.call(abi.encodeWithSignature("setOwner(address)", msg.sender));
-    if (!success) revert ExternalCallFailed();
+    if (!success) revert SetCoreOwnerFailed();
   }
 
   function denyGrowth(uint32 period)
@@ -360,8 +360,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (from == priorInstance) return; // recovering funds so we don't lift here
     if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
     if (amount == 0) revert AmountCannotBeZero();
-    if (to != address(this)) revert CannotReceive();
-    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
+    if (to != address(this)) revert TokensMustBeSentToThisAddress();
+    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777Token();
     if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
   }
@@ -455,11 +455,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     IERC20 erc20Token = IERC20(coreToken);
     uint256 oldBalance = erc20Token.balanceOf(address(this));
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    if (!success) revert ExternalCallFailed();
     uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
     unchecked { expectedBalance = oldBalance + amount; }
-    if (expectedBalance != newBalance) revert CoreMintFailed();
+    if (!success || expectedBalance != newBalance) revert CoreMintFailed();
     if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogGrowth(amount, period);
   }
