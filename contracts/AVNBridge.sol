@@ -44,11 +44,46 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
+  error NoCoreTokenSupplied();
+  error LiftingIsDisabled();
+  error ValidatorFunctionsAreDisabled();
+  error MissingValidatorKeys();
+  error AddressAlreadyInUse(address t1Address);
+  error T2PublicKeyAlreadyInUse(bytes32 t2PublicKey);
+  error AddressMismatch(address t1Address, bytes t1PublicKey);
+  error ExternalCallFailed();
+  error InvalidQuorum();
+  error CannotReceiveETHUnlessLifting();
+  error AmountCannotBeZero();
+  error GrowthPeriodAlreadyUsed();
+  error OwnerOnly();
+  error GrowthUnavailableForPeriod();
+  error ReleaseTimeNotPassed(uint256 releaseTime);
+  error InvalidT1PublicKey();
+  error ValidatorAlreadyRegistered();
+  error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
+  error ValidatorNotRegistered();
+  error RootHashAlreadyPublished();
+  error ERC20LiftingOnly();
+  error LiftLimitExceeded();
+  error CannotReceive();
+  error InvalidERC777();
+  error LoweringIsDisabled();
+  error InvalidLowerData();
+  error LowerAlreadyUsed();
+  error UnsignedTransaction();
+  error NotALowerTransaction();
+  error PaymentFailed();
+  error CoreMintFailed();
+  error InvalidConfirmations();
+  error TransactionIdAlreadyUsed();
+  error InvalidT2PublicKey();
+
   function initialize(address _coreToken, address _priorInstance)
     public
     initializer
   {
-    require(_coreToken != address(0), "Core token not specified");
+    if (_coreToken == address(0)) revert NoCoreTokenSupplied();
     __Ownable_init();
     coreToken = _coreToken;
     priorInstance = _priorInstance; // We allow address(0) for no prior instance
@@ -66,12 +101,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   modifier onlyWhenLiftingIsEnabled() {
-    require(liftingIsEnabled, "Lifting currently disabled");
+    if (!liftingIsEnabled) revert LiftingIsDisabled();
     _;
   }
 
   modifier onlyWhenValidatorFunctionsAreEnabled() {
-    require(validatorFunctionsAreEnabled, "Function currently disabled");
+    if (!validatorFunctionsAreEnabled) revert ValidatorFunctionsAreDisabled();
     _;
   }
 
@@ -85,16 +120,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address _t1Address;
     bytes memory t1PublicKey;
 
-    require(numToLoad == t1PublicKeyLHS.length && numToLoad == t1PublicKeyRHS.length && numToLoad == t2PublicKey.length,
-        "Validator keys missing");
+    if (t1PublicKeyLHS.length != numToLoad && t1PublicKeyRHS.length != numToLoad && t2PublicKey.length != numToLoad) {
+      revert MissingValidatorKeys();
+    }
 
     for (uint256 i; i < numToLoad;) {
       _t1Address = t1Address[i];
       _t2PublicKey = t2PublicKey[i];
-      require(t1AddressToId[_t1Address] == 0, "T1Address already in use");
-      require(t2PublicKeyToId[_t2PublicKey] == 0, "T2PublicKey already in use");
+      if (t1AddressToId[_t1Address] != 0) revert AddressAlreadyInUse(_t1Address);
+      if (t2PublicKeyToId[_t2PublicKey] != 0) revert T2PublicKeyAlreadyInUse(_t2PublicKey);
       t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
-      require(address(uint160(uint256(keccak256(t1PublicKey)))) == _t1Address, "T1 account mismatch");
+      if (address(uint160(uint256(keccak256(t1PublicKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PublicKey);
       idToT1Address[nextValidatorId] = _t1Address;
       idToT2PublicKey[nextValidatorId] = _t2PublicKey;
       t1AddressToId[_t1Address] = nextValidatorId;
@@ -114,7 +150,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     (bool success, ) = coreToken.call(abi.encodeWithSignature("setOwner(address)", msg.sender));
-    require(success, "Failed to set core owner");
+    if (success == false) revert ExternalCallFailed();
   }
 
   function denyGrowth(uint32 period)
@@ -137,7 +173,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     public
   {
-    require(_quorum[0] != 0 && _quorum[0] <= _quorum[1], "Invalid quorum");
+    if (_quorum[0] == 0 || _quorum[0] > _quorum[1]) revert InvalidQuorum();
     quorum = _quorum;
     emit LogQuorumUpdated(quorum);
   }
@@ -175,20 +211,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   receive() payable external {
-    require(msg.sender == priorInstance, "Cannot accept ETH unless lifting");
+    if (msg.sender != priorInstance) revert CannotReceiveETHUnlessLifting();
   }
 
   function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     external
   {
-    require(amount != 0, "Cannot trigger zero growth");
-    require(growthAmount[period] == 0, "Cannot re-trigger growth");
+    if (amount == 0) revert AmountCannotBeZero();
+    if (growthAmount[period] != 0) revert GrowthPeriodAlreadyUsed();
 
     growthAmount[period] = amount;
 
     if (confirmations.length == 0) {
-      require(msg.sender == owner(), "Owner or validators only");
+      if (msg.sender != owner()) revert OwnerOnly();
       _releaseGrowth(amount, period);
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
@@ -209,8 +245,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 releaseTime = growthRelease[period];
-    require(releaseTime != 0, "Growth unavailable for period");
-    require(block.timestamp >= releaseTime, "Cannot release growth yet");
+    if (releaseTime == 0) revert GrowthUnavailableForPeriod();
+    if (block.timestamp < releaseTime) revert ReleaseTimeNotPassed(releaseTime);
     growthRelease[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
@@ -220,10 +256,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenValidatorFunctionsAreEnabled
     external
   {
-    require(t1PublicKey.length == 64, "T1 public key must be 64 bytes");
+    if (t1PublicKey.length != 64) revert InvalidT1PublicKey();
     address t1Address = address(uint160(uint256(keccak256(t1PublicKey))));
     uint256 id = t1AddressToId[t1Address];
-    require(isRegisteredValidator[id] == false, "Validator is already registered");
+    if (isRegisteredValidator[id]) revert ValidatorAlreadyRegistered();
 
     // The order of the elements is the reverse of the deregisterValidatorHash
     bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
@@ -231,7 +267,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
-      require(t2PublicKeyToId[t2PublicKey] == 0, "T2 public key already in use");
+      if (t2PublicKeyToId[t2PublicKey] != 0) revert T2PublicKeyAlreadyInUse(t2PublicKey);
       id = nextValidatorId;
       idToT1Address[id] = t1Address;
       t1AddressToId[t1Address] = id;
@@ -239,7 +275,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t2PublicKeyToId[t2PublicKey] = id;
       unchecked { nextValidatorId++; }
     } else {
-      require(idToT2PublicKey[id] == t2PublicKey, "Cannot change T2 public key");
+      if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2PublicKey(idToT2PublicKey[id]);
     }
 
     isRegisteredValidator[id] = true;
@@ -260,7 +296,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
-    require(isRegisteredValidator[id], "Validator is not registered");
+    if (isRegisteredValidator[id] == false) revert ValidatorNotRegistered();
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
@@ -287,7 +323,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     _verifyConfirmations(_toConfirmationHash(rootHash, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
-    require(isPublishedRootHash[rootHash] == false, "Root already exists");
+    if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TransactionId);
   }
@@ -296,13 +332,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    require(ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) == address(0), "ERC20 lift only");
-    require(amount != 0, "Cannot lift zero ERC20 tokens");
+    if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
+    if (amount == 0) revert AmountCannotBeZero();
     IERC20 erc20Contract = IERC20(erc20Address);
     uint256 currentBalance = erc20Contract.balanceOf(address(this));
     assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
     uint256 newBalance = erc20Contract.balanceOf(address(this));
-    require(newBalance <= LIFT_LIMIT, "Exceeds ERC20 lift limit");
+    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogLifted(erc20Address, msg.sender, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
   }
 
@@ -311,7 +347,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    require(msg.value != 0, "Cannot lift zero ETH");
+    if (msg.value == 0) revert AmountCannotBeZero();
     emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
@@ -323,20 +359,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (from == priorInstance) return; // recovering funds so we don't lift here
     if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
-    require(to == address(this), "Tokens must be sent to this contract");
-    require(amount != 0, "Cannot lift zero ERC777 tokens");
-    require(ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) == msg.sender, "Token must be registered");
-    require(IERC777(msg.sender).balanceOf(address(this)) <= LIFT_LIMIT, "Exceeds ERC777 lift limit");
+    if (amount == 0) revert AmountCannotBeZero();
+    if (to != address(this)) revert CannotReceive();
+    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
+    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
   }
 
   function lower(bytes memory leaf, bytes32[] calldata merklePath)
     external
   {
-    require(loweringIsEnabled, "Lowering currently disabled");
+    if (loweringIsEnabled == false) revert LoweringIsDisabled();
     bytes32 leafHash = keccak256(leaf);
-    require(confirmAvnTransaction(leafHash, merklePath), "Leaf or path invalid");
-    require(hasLowered[leafHash] == false, "Already lowered");
+    if (confirmAvnTransaction(leafHash, merklePath) == false) revert InvalidLowerData();
+    if (hasLowered[leafHash]) revert LowerAlreadyUsed();
     uint256 numBytes;
     uint256 ptr;
     bytes32 t2PublicKey;
@@ -348,7 +384,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     unchecked {
       ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
-      require(uint8(leaf[ptr]) & 128 != 0, "Unsigned transaction"); // bitwise version check to ensure leaf is a signed tx
+      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
       ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
       ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
       ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
@@ -361,7 +397,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     numBytes = numBytesToLowerData[callId];
-    require(numBytes != 0, "Not a lower leaf");
+    if (numBytes == 0) revert NotALowerTransaction();
     unchecked { ptr += numBytes; }
 
     assembly {
@@ -379,7 +415,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
-      require(success, "ETH transfer failed");
+      if (success == false) revert PaymentFailed();
     } else if (ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH) == token) {
       IERC777(token).send(t1Address, amount, "");
     } else {
@@ -419,11 +455,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     IERC20 erc20Token = IERC20(coreToken);
     uint256 oldBalance = erc20Token.balanceOf(address(this));
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
+    if (success == false) revert ExternalCallFailed();
     uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
     unchecked { expectedBalance = oldBalance + amount; }
-    require(success && expectedBalance == newBalance, "Core mint failed");
-    require(newBalance <= LIFT_LIMIT, "Exceeds limit");
+    if (expectedBalance != newBalance) revert CoreMintFailed();
+    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogGrowth(amount, period);
   }
 
@@ -510,13 +547,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       unchecked { i++; }
     }
 
-    require(validConfirmations == requiredConfirmations, "Invalid confirmations");
+    if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
   }
 
   function _storeT2TransactionId(uint256 t2TransactionId)
     private
   {
-    require(isUsedT2TransactionId[t2TransactionId] == false, "T2 transaction must be unique");
+    if (isUsedT2TransactionId[t2TransactionId]) revert TransactionIdAlreadyUsed();
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
@@ -525,7 +562,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     pure
     returns (bytes32 checkedT2PublicKey)
   {
-    require(t2PublicKey.length == 32, "Bad T2 public key");
+    if (t2PublicKey.length != 32) revert InvalidT2PublicKey();
     checkedT2PublicKey = bytes32(t2PublicKey);
   }
 }
