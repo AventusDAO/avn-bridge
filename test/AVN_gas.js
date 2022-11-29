@@ -8,11 +8,11 @@ const allowedGas = {
   erc777ProxyLower: 87700,
   erc20ProxyLower: 76650,
   ethProxyLower: 66050,
-  publishRoot: 127200,
-  triggerGrowth: 149500,
+  publishRoot: 127450,
+  triggerGrowth: 149700,
   releaseGrowth: 39100,
   triggerGrowth_via_owner: 71650,
-  triggerGrowth_immediate_release: 150500,
+  triggerGrowth_immediate_release: 150900,
   updateLowerCall: 45800,
   transferOwnership: 31850
 }
