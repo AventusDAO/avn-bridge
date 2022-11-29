@@ -80,14 +80,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-
     uint256 numToLoad = t1Address.length;
+    bytes32 _t2PublicKey;
+    address _t1Address;
+    bytes memory t1PublicKey;
+
     require(numToLoad == t1PublicKeyLHS.length && numToLoad == t1PublicKeyRHS.length && numToLoad == t2PublicKey.length,
         "Validator keys missing");
-
-    bytes memory t1PublicKey;
-    address _t1Address;
-    bytes32 _t2PublicKey;
 
     for (uint256 i; i < numToLoad;) {
       _t1Address = t1Address[i];
