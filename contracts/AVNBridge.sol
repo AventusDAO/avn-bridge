@@ -150,7 +150,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     (bool success, ) = coreToken.call(abi.encodeWithSignature("setOwner(address)", msg.sender));
-    if (success == false) revert ExternalCallFailed();
+    if (!success) revert ExternalCallFailed();
   }
 
   function denyGrowth(uint32 period)
@@ -296,7 +296,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
-    if (isRegisteredValidator[id] == false) revert ValidatorNotRegistered();
+    if (!isRegisteredValidator[id]) revert ValidatorNotRegistered();
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
@@ -369,9 +369,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function lower(bytes memory leaf, bytes32[] calldata merklePath)
     external
   {
-    if (loweringIsEnabled == false) revert LoweringIsDisabled();
+    if (!loweringIsEnabled) revert LoweringIsDisabled();
     bytes32 leafHash = keccak256(leaf);
-    if (confirmAvnTransaction(leafHash, merklePath) == false) revert InvalidLowerData();
+    if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
     uint256 numBytes;
     uint256 ptr;
@@ -415,7 +415,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
-      if (success == false) revert PaymentFailed();
+      if (!success) revert PaymentFailed();
     } else if (ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH) == token) {
       IERC777(token).send(t1Address, amount, "");
     } else {
@@ -455,7 +455,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     IERC20 erc20Token = IERC20(coreToken);
     uint256 oldBalance = erc20Token.balanceOf(address(this));
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    if (success == false) revert ExternalCallFailed();
+    if (!success) revert ExternalCallFailed();
     uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
     unchecked { expectedBalance = oldBalance + amount; }
@@ -526,7 +526,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
 
-        if (isActiveValidator[id] == false) {
+        if (!isActiveValidator[id]) {
           if (isRegisteredValidator[id]) {
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
@@ -537,7 +537,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             if (validConfirmations == requiredConfirmations) break;
             confirmed[id] = true;
           }
-        } else if (confirmed[id] == false) {
+        } else if (!confirmed[id]) {
           unchecked { validConfirmations++; }
           if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
