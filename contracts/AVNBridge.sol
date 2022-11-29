@@ -86,16 +86,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         "Validator keys missing");
 
     bytes memory t1PublicKey;
+    address _t1Address;
+    bytes32 _t2PublicKey;
 
     for (uint256 i; i < numToLoad;) {
-      require(t1AddressToId[t1Address[i]] == 0, "T1Address already in use");
-      require(t2PublicKeyToId[t2PublicKey[i]] == 0, "T2PublicKey already in use");
+      _t1Address = t1Address[i];
+      _t2PublicKey = t2PublicKey[i];
+      require(t1AddressToId[_t1Address] == 0, "T1Address already in use");
+      require(t2PublicKeyToId[_t2PublicKey] == 0, "T2PublicKey already in use");
       t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
-      require(address(uint160(uint256(keccak256(t1PublicKey)))) == t1Address[i], "T1 account mismatch");
-      idToT1Address[nextValidatorId] = t1Address[i];
-      idToT2PublicKey[nextValidatorId] = t2PublicKey[i];
-      t1AddressToId[t1Address[i]] = nextValidatorId;
-      t2PublicKeyToId[t2PublicKey[i]] = nextValidatorId;
+      require(address(uint160(uint256(keccak256(t1PublicKey)))) == _t1Address, "T1 account mismatch");
+      idToT1Address[nextValidatorId] = _t1Address;
+      idToT2PublicKey[nextValidatorId] = _t2PublicKey;
+      t1AddressToId[_t1Address] = nextValidatorId;
+      t2PublicKeyToId[_t2PublicKey] = nextValidatorId;
       isRegisteredValidator[nextValidatorId] = true;
       isActiveValidator[nextValidatorId] = true;
       unchecked {
