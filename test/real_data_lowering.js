@@ -116,7 +116,7 @@ contract('AVNBridge lowering', async () => {
     it('fails with unsigned tx', async () => {
       const leaf = '0x1d02042b00174301007a707b3b193c0a81e39b486ab9bca005b5e053ffaf71f70157b7ccad2cbfac057ef238cd7a02453b2518873172e6ed5bf19989ba5921997dd7c3d4d71c1b38010842caa7e9abc2fe2a60b434aeea105e56c4947980e254d8e2d9a5a58a2aa66fd7b49cc8800f0911e61ee7af8b13f0a067f33e2e8f3717b00fdac3352fbda883';
       const tree = await testHelper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
-      await testHelper.expectRevert(() => avnBridge.lower(tree.leafData, tree.merklePath), "Unsigned transaction");
+      await testHelper.expectCustomRevert(() => avnBridge.lower(tree.leafData, tree.merklePath), "UnsignedTransaction()");
     });
   });
 });

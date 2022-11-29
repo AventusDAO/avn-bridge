@@ -181,6 +181,18 @@ async function expectRevert(_myFunc, _expectedError) {
   }
 }
 
+async function expectCustomRevert(myFunc, expectedErrorSignature) {
+  try {
+      await myFunc();
+    } catch (error) {
+      const encoded = web3.eth.abi.encodeFunctionSignature(expectedErrorSignature);
+      const returnValue = Object.entries(error.data).filter(it=>it.length>1).map(it=>it[1]).find(it=>it!=null && it.constructor.name==='Object' && 'return' in it).return
+      assert.equal(returnValue.slice(0,10), encoded);
+      return;
+    }
+    expect.fail('Expected an exception but none was received');
+}
+
 function getLogArgs(_contract, _event, _expectLog) {
   const expectLog = (_expectLog === undefined) ? true : _expectLog;
   return new Promise(async (resolve, reject) => {
@@ -274,6 +286,7 @@ module.exports = {
   createTreeAndPublishRootFromTestLeaf,
   createTreeAndPublishRootWithLoweree,
   deployAVNBridge,
+  expectCustomRevert,
   expectRevert,
   getConfirmations,
   getCurrentBlockTimestamp,
