@@ -463,7 +463,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param data 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
     This function is not called directly by users.
-    It is called when ERC777 tokens are sent to this contract using either send or operatorSend, passing the recpient as "data".
+    It is called when ERC777 tokens are sent to this contract using either send or operatorSend, passing the recipient as "data".
     Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
     Emits a corresponding lift event to be read by T2.
