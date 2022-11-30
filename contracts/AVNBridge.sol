@@ -482,7 +482,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
   }
 
-  /// @notice Unlock ERC20/ERC777/ETH to the receipient specified in the transaction leaf, providing the T2 state is published
+  /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
