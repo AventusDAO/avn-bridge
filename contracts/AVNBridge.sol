@@ -4,11 +4,11 @@ pragma solidity 0.8.17;
 /// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
 /// @author Aventus Network Services
 /** @notice
-  Enables POS validators to periodically publish the complete T2 transactions state to this contract
-  Enables validators to be added and removed from participating in consensus
-  Enables triggering periodic growth of the core token according to the reward calculation mechanisms of T2
-  Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2
-  Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2
+  Enables POS validators to periodically publish the complete T2 transactions state to this contract.
+  Enables validators to be added and removed from participating in consensus.
+  Enables triggering periodic growth of the core token according to the reward calculation mechanisms of T2.
+  Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2.
+  Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2.
 */
 /// @dev Proxy upgradeable implementation utilising EIP-1822
 
@@ -135,6 +135,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Bulk initialise a set of validators
+  /// @param t1Address Array of Ethereum addresses
+  /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
+  /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
+  /// @param t2PublicKey Array of 32 byte sr25519 public key values
   /// @dev This is useful for seting up existing networks, after which registerValidator should be used instead
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
@@ -182,6 +186,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Cancel a single growth period, preventing that period's growth from ever being released
+  /// @param period Period to deny growth for
   /// @dev Sets the release time for an unreleased growth period to zero (the growthAmount persists to lock that period)
   function denyGrowth(uint32 period)
     onlyOwner
@@ -259,11 +264,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Initialise inflating the core token supply by the specified amount
+  /// @param amount Amount of new tokens to mint for period
+  /// @param period Unique growth period
+  /// @param t2TransactionId Unique transaction ID
+  /// @param confirmations Concatenated validator confirmations
   /** @dev
-    Immediate growth release occurs when called by the owner (passing zero for the t2TransactionId and empty confirmation bytes)
-    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero
-    In these immediate cases a growth event is then emitted to be read by T2
-    Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay
+    Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
+    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero.
+    In these immediate cases a growth event is then emitted to be read by T2.
+    Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
   function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -293,9 +302,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Release the requested growth for a period
+  /// @param period Unique growth period
   /** @dev
-    This mints the core token amount requested to this contract, locking it and emitting a growth event to be read by T2
-    This function can be called by anyone but will only succeed if the release time has passed
+    This mints the core token amount requested to this contract, locking it and emitting a growth event to be read by T2.
+    This function can be called by anyone but will only succeed if the release time has passed.
   */
   function releaseGrowth(uint32 period)
     external
@@ -308,12 +318,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Register a new validator, allowing them to participate in consensus
+  /// @param t1PublicKey 64 byte Ethereum public key of validator
+  /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @param t2TransactionId Unique transaction ID
+  /// @param confirmations Concatenated validator confirmations
   /** @dev
-    This permanently associates the validator's T1 Ethereum address with their T2 public key
-    May also be used to re-register a previously deregistered validator, providing their associated accounts do not change
-    Does not immediately activate the validator
-    Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator
-    Emits a validator registration event to be read by T2
+    This permanently associates the validator's T1 Ethereum address with their T2 public key.
+    May also be used to re-register a previously deregistered validator, providing their associated accounts do not change.
+    Does not immediately activate the validator.
+    Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
+    Emits a validator registration event to be read by T2.
   */
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
@@ -354,10 +368,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogValidatorRegistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
   }
 
-  /// @notice Deregister and deactivate a validator
+  /// @notice Deregister and deactivate a validator, removing them from consensus
+  /// @param t1PublicKey 64 byte Ethereum public key of validator
+  /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @param t2TransactionId Unique transaction ID
+  /// @param confirmations Concatenated validator confirmations
   /** @dev
-    Validator details are retained but their ability to participate in consensus is immediately revoked
-    Emits a validator dergeistration event to be read by T2
+    Validator details are retained.
+    Emits a validator dergeistration event to be read by T2.
   */
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
@@ -387,6 +405,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
+  /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
+  /// @param t2TransactionId Unique transaction ID
+  /// @param confirmations Concatenated validator confirmations
   /// @dev Emits a toot published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -404,9 +425,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
   /// @param amount of token to lift (in the token's full decimals)
   /** @dev
-    Locks the tokens in the contract and emits a corresponding lift event to be read by T2
-    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required)
-    Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint)
+    Locks the tokens in the contract and emits a corresponding lift event to be read by T2.
+    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
+    Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
   */
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)
     onlyWhenLiftingIsEnabled
@@ -426,8 +447,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Lift all ETH sent to the specified T2 recipient
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
-    Locks the ETH in the contract and emits a corresponding lift event to be read by T2
-    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required)
+    Locks the ETH in the contract and emits a corresponding lift event to be read by T2.
+    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
   */
   function liftETH(bytes calldata t2PublicKey)
     payable
@@ -439,13 +460,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
-  /// @param data 32 byte sr25519 public key value of the T2 recipient accoun
+  /// @param data 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
-    This function is not called directly by users
-    It is called when ERC777 tokens are sent to this contract using either send or operatorSend, passing the recpient as "data"
-    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required)
-    Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint)
-    Emits a corresponding lift event to be read by T2
+    This function is not called directly by users.
+    It is called when ERC777 tokens are sent to this contract using either send or operatorSend, passing the recpient as "data".
+    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
+    Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
+    Emits a corresponding lift event to be read by T2.
   */
   function tokensReceived(address /* operator */, address from, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
