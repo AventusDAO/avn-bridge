@@ -306,7 +306,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     growthRelease[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
-\
+
   /// @notice Register a new validator, allowing them to participate in consensus
   /** @dev
     This permanently associates the validator's T1 Ethereum address with their T2 public key
