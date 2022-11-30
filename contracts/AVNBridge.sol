@@ -375,7 +375,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
     Validator details are retained.
-    Emits a validator dergeistration event to be read by T2.
+    Emits a validator deregistration event to be read by T2.
   */
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
