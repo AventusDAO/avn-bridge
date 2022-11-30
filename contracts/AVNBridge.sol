@@ -175,8 +175,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
-  /// @notice Revert the owner of the associated core token to the owner of this contract
-  /// @dev Note: doing this will prevent growth until the owner of the core contract is set back to this contract
+  /// @notice Sets the owner of the associated core token contract to the owner of this contract
+  /// @dev Note: Growth depends upon this contract owning the core token contract, so it cannot occur until the owner of the
+  /// core token contract is set back to this contract
   function setCoreOwner()
     onlyOwner
     external
@@ -408,7 +409,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
-  /// @dev Emits a toot published event to be read by T2
+  /// @dev Emits a root published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     external
