@@ -267,7 +267,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param amount Amount of new tokens to mint for period
   /// @param period Unique growth period
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator confirmations
+  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
     Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
     Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero.
@@ -321,7 +321,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator confirmations
+  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
     This permanently associates the validator's T1 Ethereum address with their T2 public key.
     May also be used to re-register a previously deregistered validator, providing their associated accounts do not change.
@@ -372,7 +372,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator confirmations
+  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
     Validator details are retained.
     Emits a validator dergeistration event to be read by T2.
@@ -407,7 +407,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator confirmations
+  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a toot published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
