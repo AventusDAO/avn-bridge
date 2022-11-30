@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+/// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
+/// @author Aventus Network Services
+/** @notice
+  Enables POS validators to periodically publish the complete state of T2 to this contract
+  Enables validators to be registered and deregistered
+  Enables triggering periodic growth of the core token
+  Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2
+  Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2
+*/
+/// @dev Proxy upgradeable implementation utilising EIP-1822
+
 import "./interfaces/IAVNBridge.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
@@ -21,17 +32,30 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
+  /// @notice Query a validator's current registration status by their internal ID
   mapping (uint256 => bool) public isRegisteredValidator;
+  /// @notice Query a validator's current activation status by their internal ID
   mapping (uint256 => bool) public isActiveValidator;
+  /// @notice Query a validator's persistent internal validator ID by their Ethereum address
   mapping (address => uint256) public t1AddressToId;
+  /// @notice Query a validator's persistent internal validator ID by their T2 public key
   mapping (bytes32 => uint256) public t2PublicKeyToId;
+  /// @notice Query a validator's persistent Ethereum address by their internal validator ID
   mapping (uint256 => address) public idToT1Address;
+  /// @notice Query a validator's persistent T2 public key by their internal validator ID
   mapping (uint256 => bytes32) public idToT2PublicKey;
+  /// @notice Mapping of T2 extrinsic IDs to the number of bytes that require traversing in a leaf before reaching lower data
   mapping (bytes2 => uint256) public numBytesToLowerData;
+  /// @notice Query whether a particular Merkle tree root Hash of T2 state has been published
   mapping (bytes32 => bool) public isPublishedRootHash;
+  /// @notice Query whether a unique T2 transaction ID has been used
   mapping (uint256 => bool) public isUsedT2TransactionId;
+  /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
+  /// @notice Query the release time of a unique growth period
+  /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or cancelled
   mapping (uint32 => uint256) public growthRelease;
+  /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
   uint256[2] public quorum;
@@ -110,6 +134,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
+  /// @notice Bulk initialise a set of validators
+  /// @dev This is useful for seting up existing networks, after which registerValidator should be used instead
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
     onlyOwner
@@ -145,6 +171,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  /// @notice Revert the owner of the core token to the owner of this contract
   function setCoreOwner()
     onlyOwner
     external
@@ -153,6 +180,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (!success) revert SetCoreOwnerFailed();
   }
 
+  /// @notice Cancel a growth period, preventing that period's growth from ever being released
+  /// @dev Sets the release time for an unreleased growth period to zero (the growthAmount persists to lock that period)
   function denyGrowth(uint32 period)
     onlyOwner
     external
@@ -161,6 +190,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogGrowthDenied(period);
   }
 
+  /// @notice Set the amount of time that must pass between triggering and releasing any future period's growth
+  /// @param delaySeconds Delay in whole seconds
   function setGrowthDelay(uint256 delaySeconds)
     onlyOwner
     external
@@ -169,6 +200,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     growthDelay = delaySeconds;
   }
 
+  /// @notice Set the proportion of active validators required to prove T2 validator consensus
+  /// @param _quorum 2 element array of ratio's numerator followed by its denominator
+  /// @dev Number of validators * quorum[0] / quorum[1] + 1 = confirmations required to pass validator consensus
   function setQuorum(uint256[2] memory _quorum)
     onlyOwner
     public
@@ -178,6 +212,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogQuorumUpdated(quorum);
   }
 
+  /// @notice Switch all validator functions on or off
+  /// @param state true = functions on, false = functions off
   function toggleValidatorFunctions(bool state)
     onlyOwner
     external
@@ -186,6 +222,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogValidatorFunctionsAreEnabled(state);
   }
 
+  /// @notice Switch all lifting functions on or off
+  /// @param state true = functions on, false = functions off
   function toggleLifting(bool state)
     onlyOwner
     external
@@ -194,6 +232,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLiftingIsEnabled(state);
   }
 
+  /// @notice Switch the lower function on or off
+  /// @param state true = function on, false = function off
   function toggleLowering(bool state)
     onlyOwner
     external
@@ -202,6 +242,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLoweringIsEnabled(state);
   }
 
+  /// @notice Add or update T2 lower methods
+  /// @param callId the call ID of the extrinsic in T2
+  /// @param numBytes the distance (in bytes) required to reach relevant lower data arguments encoded within a transaction leaf
   function updateLowerCall(bytes2 callId, uint256 numBytes)
     onlyOwner
     external
@@ -214,6 +257,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (msg.sender != priorInstance) revert CannotReceiveETHUnlessLifting();
   }
 
+  /// @notice Initialise inflating the core token supply by the specified amount
+  /** @dev
+    Immediate growth release occurs when called by the owner (passing zero for the t2TransactionId and empty confirmation bytes)
+    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero
+    In these immediate cases a growth event is emitted to be read by T2
+    Otherwise values are stored to be released at a later time, calculated according to the current value of GrowthDelay
+  */
   function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     external
@@ -241,6 +291,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  /// @notice Release the requested growth for a period
+  /** @dev
+    This mints the core token amount requested to this contract, locking it and emitting a growth event to be read by T2
+    This function can be called by anyone but will only succeed if the release time has passed
+  */
   function releaseGrowth(uint32 period)
     external
   {
@@ -251,6 +306,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _releaseGrowth(growthAmount[period], period);
   }
 
+  /// @notice Register a new validator, allowing them to participate in consensus
+  /** @dev
+    This permanently associates the validator's T1 Ethereum address with their T2 public key
+    May also be used to re-register a previously deregistered validator, provinding their associated accounts do not change
+    Does not immediately activate the validator
+    Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator
+    Emits a validator registration event to be read by T2
+  */
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -290,6 +353,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogValidatorRegistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
   }
 
+  /// @notice Deregister and deactivate a validator
+  /** @dev
+    Validator registration details are retained but their ability to participate in consensus is immediately revoked
+    Emits a validator dergeistration event to be read by T2
+  */
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -317,6 +385,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogValidatorDeregistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
   }
 
+  /// @notice Stores a Merkle tree root hash representing the latest set of all the transactions to have occurred on T2
+  /// @dev Emits a toot published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     external
@@ -328,6 +398,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogRootPublished(rootHash, t2TransactionId);
   }
 
+  /// @notice Lift an amount of ERC20 tokens to the specified T2 recipient, providing the amount has first been approved
+  /// @param erc20Address address of the ERC20 token contract
+  /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
+  /// @param amount of token to lift (in the token's full decimals)
+  /** @dev
+    Locks the tokens in the contract and emits a corresponding lift event to be read by T2
+    Fails if it causes the total amount of a token held in this contract to exceed uint128 max (this is a T2 constraint)
+  */
   function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)
     onlyWhenLiftingIsEnabled
     external
@@ -342,6 +420,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(erc20Address, msg.sender, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
   }
 
+
+  /// @notice Lift all ETH sent to the specified T2 recipient
+  /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
+  /// @dev Locks the ETH in the contract and emits a corresponding lift event to be read by T2
   function liftETH(bytes calldata t2PublicKey)
     payable
     onlyWhenLiftingIsEnabled
@@ -351,7 +433,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
-  // ERC-777 automatic lifting
+  /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
+  /// @param data 32 byte sr25519 public key value of the T2 recipient accoun
+  /** @dev
+    This function is not called directly by users
+    It gets called when ERC777 tokens are sent to this contract using send or operatorSend, passing the T2 key as data
+    Emits a corresponding lift event to be read by T2
+  */
   function tokensReceived(address /* operator */, address from, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
     onlyWhenLiftingIsEnabled
@@ -366,6 +454,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
   }
 
+  /// @notice Unlock ERC20/ERC777/ETH to the receipient specified in the transaction leaf, providing the T2 state is published
+  /// @param leaf Raw encoded T2 transaction data
+  /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
+  /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
   function lower(bytes memory leaf, bytes32[] calldata merklePath)
     external
   {
@@ -425,6 +517,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLowered(token, t1Address, t2PublicKey, amount);
   }
 
+  /// @notice Confirm the existence of any T2 transaction in a published root
+  /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
+  /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)
     public
     view

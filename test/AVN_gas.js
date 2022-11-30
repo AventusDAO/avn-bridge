@@ -12,7 +12,7 @@ const allowedGas = {
   triggerGrowth: 149550,
   releaseGrowth: 39100,
   triggerGrowth_via_owner: 71650,
-  triggerGrowth_immediate_release: 150650,
+  triggerGrowth_immediate_release: 150700,
   updateLowerCall: 45800,
   transferOwnership: 31850
 }
