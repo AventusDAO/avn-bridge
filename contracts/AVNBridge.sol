@@ -4,9 +4,9 @@ pragma solidity 0.8.17;
 /// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
 /// @author Aventus Network Services
 /** @notice
-  Enables POS validators to periodically publish the complete state of T2 to this contract
-  Enables validators to be registered and deregistered
-  Enables triggering periodic growth of the core token
+  Enables POS validators to periodically publish the complete T2 transactions state to this contract
+  Enables validators to be added and removed from participating in consensus
+  Enables triggering periodic growth of the core token according to the reward calculation mechanisms of T2
   Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2
   Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2
 */
