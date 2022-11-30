@@ -490,6 +490,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return keccak256(abi.encode(data, t2TransactionId, idToT2PublicKey[t1AddressToId[msg.sender]]));
   }
 
+  function _requiredConfirmations()
+    private
+    view
+    returns (uint256 required)
+  {
+    uint256 active = numActiveValidators;
+    unchecked {
+      required = active * quorum[0] / quorum[1];
+      required = required == active ? required : required + 1;
+    }
+  }
+
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
@@ -498,8 +510,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 requiredConfirmations;
     unchecked {
       numConfirmations = confirmations.length / SIGNATURE_LENGTH;
-      requiredConfirmations = numActiveValidators * quorum[0] / quorum[1] + 1;
     }
+    requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
     bytes32 r;
@@ -533,6 +545,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
               numActiveValidators++;
               validConfirmations++;
             }
+            // Update the number of required confirmations to account for the newly activated validator
+            requiredConfirmations = _requiredConfirmations();
+
             if (validConfirmations == requiredConfirmations) break;
             confirmed[id] = true;
           }
