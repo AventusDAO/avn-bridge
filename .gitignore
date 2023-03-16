@@ -8,3 +8,4 @@ allFiredEvents
 keys.json
 .openzeppelin/unknown-1337.json
 cache/
+artifacts
