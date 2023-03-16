@@ -1,11 +1,9 @@
 # Node modules
 **/node_modules
 
-build/
 config.json
 coverage.json
 allFiredEvents
-keys.json
 .openzeppelin/unknown-1337.json
 cache/
 artifacts
