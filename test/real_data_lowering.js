@@ -1,5 +1,5 @@
-const testHelper = require('./helpers/testHelper');
-const Token20 = artifacts.require('Token20');
+const helper = require('./helpers/testHelper');
+const { expect } = require('chai');
 
 const ORIGINAL_TOKEN = 'c20ac8c712e8f7daee54f56c3e7e8b9f37893c0f';
 const T1_ADDRESS = '0x4d22263DCEe1B1D87980AB014b7184726c044517';
@@ -7,45 +7,36 @@ const T2_PUBLIC_KEY = '0x50368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a
 
 let avnBridge, token20;
 
-contract('AVNBridge lowering', async () => {
+describe('AVNBridge lowering', async () => {
 
   before(async () => {
-    await testHelper.init();
-    token20 = await Token20.deployed();
-    avnBridge = await testHelper.deployAVNBridge(token20.address);
-    const accounts = testHelper.accounts();
-    const someT2PublicKey = testHelper.someT2PublicKey();
-    const validators = testHelper.validators();
+    await helper.init();
+    const Token20 = await ethers.getContractFactory('Token20');
+    token20 = await Token20.deploy(10000000);
+    avnBridge = await helper.deployAVNBridge(token20.address);
+    const accounts = helper.accounts();
+    const someT2PublicKey = helper.someT2PublicKey();
+    const validators = helper.validators();
 
     // lift enough funds to cover all the lowers
     const liftAmount = 100000;
     await token20.approve(avnBridge.address, liftAmount);
     await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
-    await testHelper.loadValidators(avnBridge, validators, 10);
+    await helper.loadValidators(avnBridge, validators, 10);
   });
 
  // Using the sets from: https://docs.google.com/spreadsheets/d/10AwBVX60VwQyw0tK_A2ND4qOf-XILvQzVJ1hXwontWk/edit#gid=0
   context('lower with real data', async () => {
 
     async function checkLower(leaves, incrementingAmount) {
-      const amount = 1;
+      let amount = 1;
 
       for (let i=0; i < leaves.length; i++) {
         // replace the token address from the real leaf data with the local mock token so lowering will pass
-        const leaf = leaves[i].replace(ORIGINAL_TOKEN, testHelper.strip_0x(token20.address.toLowerCase()));
-        const tree = await testHelper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
-        await avnBridge.lower(tree.leafData, tree.merklePath);
-
-        const logArgs = await testHelper.getLogArgs(avnBridge, 'LogLowered');
-        assert.equal(token20.address, logArgs.token);
-        assert.equal(T1_ADDRESS, logArgs.t1Address);
-        assert.equal(T2_PUBLIC_KEY, logArgs.t2PublicKey);
-
-        if (incrementingAmount === true) {
-          assert.equal(amount + 1 + i, logArgs.amount.toNumber());
-        } else {
-          assert.equal(amount, logArgs.amount.toNumber());
-        }
+        const leaf = leaves[i].replace(ORIGINAL_TOKEN, helper.strip_0x(token20.address.toLowerCase()));
+        const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
+        if (incrementingAmount === true) amount = i + 2;
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered').withArgs(token20.address, T1_ADDRESS, T2_PUBLIC_KEY, amount);
       }
     }
 
@@ -115,8 +106,8 @@ contract('AVNBridge lowering', async () => {
 
     it('fails with unsigned tx', async () => {
       const leaf = '0x1d02042b00174301007a707b3b193c0a81e39b486ab9bca005b5e053ffaf71f70157b7ccad2cbfac057ef238cd7a02453b2518873172e6ed5bf19989ba5921997dd7c3d4d71c1b38010842caa7e9abc2fe2a60b434aeea105e56c4947980e254d8e2d9a5a58a2aa66fd7b49cc8800f0911e61ee7af8b13f0a067f33e2e8f3717b00fdac3352fbda883';
-      const tree = await testHelper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
-      await testHelper.expectCustomRevert(() => avnBridge.lower(tree.leafData, tree.merklePath), "UnsignedTransaction()");
+      const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
+      await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'UnsignedTransaction');
     });
   });
 });

@@ -1,27 +1,27 @@
 {
-  "name": "avn-t1-standalone",
+  "name": "avn-bridge",
   "version": "1.0.0",
   "description": "AVN T1 standalone contract for AVN parachain and consoritium networks",
   "author": "Aventus Network Services Ltd",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArtosSystems/avn-t1-standalone"
+    "url": "git+https://github.com/Aventus-Network-Services/avn-bridge"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.7.3",
-    "@openzeppelin/contracts-upgradeable": "^4.7.3",
-    "@openzeppelin/test-helpers": "^0.5.16",
-    "@truffle/hdwallet-provider": "^2.0.15",
-    "ethereum-private-key-to-public-key": "^0.0.5",
-    "ganache-cli": "^6.12.2",
-    "keccak256": "^1.0.0",
-    "merkletreejs": "^0.2.8",
-    "web3": "^1.2.4"
-  },
-  "devDependencies": {
-    "@openzeppelin/truffle-upgrades": "^1.17.0",
-    "solidity-coverage": "^0.8.0-beta.1",
-    "truffle-plugin-verify": "^0.4.6"
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.6",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+    "@nomiclabs/hardhat-ethers": "^2.2.2",
+    "@nomiclabs/hardhat-etherscan": "^3.1.7",
+    "@openzeppelin/contracts": "^4.8.2",
+    "@openzeppelin/contracts-upgradeable": "^4.8.2",
+    "@openzeppelin/hardhat-upgrades": "^1.22.1",
+    "hardhat": "^2.13.0",
+    "hardhat-erc1820": "^0.1.0",
+    "hardhat-gas-reporter": "^1.0.9",
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.3.9",
+    "solidity-coverage": "^0.8.2"
   }
 }
