@@ -56,12 +56,3 @@ The following manual steps are then required to interact with the AVN contract o
 AVNBridge Persistent Proxy: 0xF05Df39f745A240fb133cC4a11E42467FAB10f1F
 AVNBridge Version 1 Implementation Address: 0xd0800E6cb9Fe4327BF6e791398f68ab1d76E59a1
 Unlocker: 0x9FC92E791FD6315ab267eC0990D701d81a068c76
-
-#### loadValidators
-Tool to initialise an AVN Bridge contract with existing validators.
-
-Accepts json files of the validator keys format.
-
-To run pass 3 arguments: <chain> <avn bridge contract address> <key file path>
-
-e.g.: `node tools/loadValidators.js goerli 0x4C6d630Da5DB0Ba48AF8a9a5875d0d5d88E4Bfe3 "./validators.json"`
