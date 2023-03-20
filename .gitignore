@@ -5,6 +5,7 @@ config.json
 coverage.json
 allFiredEvents
 .openzeppelin/unknown-1337.json
+.openzeppelin/unknown-73799.json
 .openzeppelin/goerli.json
 cache/
 artifacts

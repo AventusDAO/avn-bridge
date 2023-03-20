@@ -30,11 +30,11 @@ fill in "__config.json" and save locally as "config.json"
 #### Run coverage report
 `npx hardhat coverage`
 
-#### Deploy to Goerli
-`npx hardhat run scripts/deploy.js --network goerli`
+#### Deploy to a test network
+`npx hardhat run scripts/deploy.js --network <test network>`
 
 #### Load a set of validators
-`npx hardhat --network goerli loadValidators --file <validators json file path> --address <target contract address> `
+`npx hardhat --network <test network> loadValidators --file "<validators json file path>" --address <target contract address> `
 
 #### Deploy to Mainnet
 `npx hardhat run scripts/deploy.js --network mainnet`

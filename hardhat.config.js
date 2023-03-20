@@ -50,6 +50,10 @@ module.exports = {
       url: `https://goerli.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [GOERLI_PRIVATE_KEY]
     },
+    volta: {
+      url: "https://volta-rpc.energyweb.org",
+      accounts: [GOERLI_PRIVATE_KEY]
+    },
     hardhat: {},
     mainnet: {
       url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,

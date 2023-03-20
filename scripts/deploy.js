@@ -1,4 +1,5 @@
 const hh = require('hardhat');
+const network = hh.network;
 const ethers = hh.ethers;
 const upgrades = hh.upgrades;
 const runtime = hh.run;
@@ -10,27 +11,33 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 async function main() {
   const [deployer] = await ethers.getSigners();
 
-  if (network === 'mainnet') {
+  if (network.name === 'mainnet') {
     console.log('Requires manual setup for mainnet deployment');
     process.exit(1); // safety
   } else {
     if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
-    console.log(`\nDeploying to Goerli using account ${deployer.address}...`);
-    const { maxFeePerGas, maxPriorityFeePerGas } = await ethers.provider.getFeeData();
+    if (fs.existsSync('./.openzeppelin/unknown-73799.json')) fs.unlinkSync('./.openzeppelin/unknown-73799.json');
+
+    console.log(`\nDeploying to ${network.name} using account ${deployer.address}...`);
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await ethers.getContractFactory('AVNBridge');
     const avnBridge = await upgrades.deployProxy(AVNBridge, [GOERLI_CORE_TOKEN, ZERO_ADDRESS], { kind: 'uups' });
     await avnBridge.deployed();
-    await wait();
     const implementationAddress = await upgrades.erc1967.getImplementationAddress(avnBridge.address);
-    await runtime('verify', { address: implementationAddress });
-    await runtime('verify', { address: avnBridge.address });
+
+    if (network.name === 'goerli') { // publish contracts
+      await wait();
+      await runtime('verify', { address: implementationAddress });
+      await runtime('verify', { address: avnBridge.address });
+    }
+
     console.log(`\nTotal cost: ${ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
+    console.log(`\nImplementation: ${implementationAddress}`);
     console.log(`\nContract: ${avnBridge.address}`);
   }
 };
 
-const wait = () => new Promise((r) => setTimeout(r, 10000));
+const wait = () => new Promise((r) => setTimeout(r, 20000));
 
 main()
   .then(() => process.exit(0))
