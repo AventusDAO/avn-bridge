@@ -1,10 +1,12 @@
 # Node modules
 **/node_modules
 
-build/
 config.json
 coverage.json
 allFiredEvents
-keys.json
-implementationAddress.txt
 .openzeppelin/unknown-1337.json
+.openzeppelin/unknown-73799.json
+.openzeppelin/goerli.json
+cache/
+artifacts
+validators.json

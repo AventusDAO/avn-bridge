@@ -18,22 +18,27 @@ The system is underwritten by its constructor-specified core token (in the case 
 
 4. *Triggering Growth* - a special form of lifting which inflates the core token supply according to the reward mechanisms of T2.
 
-## Dev use
-do `npm install`
+## Development
 
-Edit 'config_.json' and save as 'config.json'
+### Setup
+do `npm i`\
+fill in "__config.json" and save locally as "config.json"
 
-To run local tests:\
-do `run test` or `./run.sh test`
+#### Run tests
+`npx hardhat test`
 
-To deploy to local network:\
-do `run deploy-dev` or `./run.sh deploy-dev`
+#### Run coverage report
+`npx hardhat coverage`
 
-To deploy to goerli test network:\
-do `run deploy-goerli` or `./run.sh deploy-goerli`
+#### Deploy to a test network
+`npx hardhat run scripts/deploy.js --network <test network>`
 
-To run coverage:\
-do `run coverage` or `./run.sh coverage`
+#### Load a set of validators
+`npx hardhat --network <test network> loadValidators --file "<validators json file path>" --address <target contract address> `
+
+#### Deploy to Mainnet
+`npx hardhat run scripts/deploy.js --network mainnet`
+
 
 ### Interaction via Etherscan
 
