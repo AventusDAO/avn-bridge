@@ -9,3 +9,4 @@ allFiredEvents
 .openzeppelin/goerli.json
 cache/
 artifacts
+validators.json
