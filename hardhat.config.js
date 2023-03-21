@@ -57,7 +57,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
         await hre.run('verify', { address: avnBridge.address });
       }
 
-      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
+      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} VT`);
       console.log(`\nContract: ${avnBridge.address}`);
 
       if (args.validators) { // run optional loadValidators task
@@ -98,7 +98,7 @@ module.exports = {
     },
     volta: {
       url: "https://volta-rpc.energyweb.org",
-      accounts: [GOERLI_PRIVATE_KEY]
+      accounts: [VOLTA_PRIVATE_KEY]
     },
     hardhat: {},
     mainnet: {

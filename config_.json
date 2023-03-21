@@ -1,6 +1,7 @@
 {
   "ETHERSCAN_API_KEY": "",
   "GOERLI_PRIVATE_KEY": "",
+  "VOLTA_PRIVATE_KEY": "",
   "INFURA_API_KEY": "",
   "MAINNET_PRIVATE_KEY": ""
 }
