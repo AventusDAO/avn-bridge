@@ -1,46 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-/// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
+/// @title Bridging contract between Volta tier 1 (T1) and AVN tier 2 (T2) blockchains
 /// @author Aventus Network Services
 /** @notice
   Enables POS validators to periodically publish the transactional state of T2 to this contract.
   Enables validators to be added and removed from participating in consensus.
   Enables triggering periodic growth of the core token according to the reward calculation mechanisms of T2.
-  Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2.
-  Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2.
+  Enables the "lifting" of any VT or ERC20 tokens received, locking them in the contract to be recreated on T2.
+  Enables the "lowering" of VT and ERC20 tokens, unlocking them from the contract via proof of their destruction on T2.
 */
 /// @dev Proxy upgradeable implementation utilising EIP-1822
 
 import "./interfaces/IAVNBridge.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
-import "@openzeppelin/contracts/interfaces/IERC777.sol";
-import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
-import "@openzeppelin/contracts/interfaces/IERC1820Registry.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
-  // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
-  IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
-  // keccak256("ERC777Token")
-  bytes32 constant internal ERC777_TOKEN_HASH = 0xac7fbab5f54a3ca8194167523c6753bfeb96a445279294b6125b68cce2177054;
-  // keccak256("ERC777TokensRecipient")
-  bytes32 constant internal ERC777_TOKENS_RECIPIENT_HASH = 0xb281fc8c12954d22544db45de3159a39272895b169a852b314f9cc762e44c53b;
+contract AVNBridge is IAVNBridge, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   uint256 constant internal SIGNATURE_LENGTH = 65;
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
-  address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  address constant internal PSEUDO_VT_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
   /// @notice Query a validator's current registration status by their internal ID
   mapping (uint256 => bool) public isRegisteredValidator;
   /// @notice Query a validator's current activation status by their internal ID
   mapping (uint256 => bool) public isActiveValidator;
-  /// @notice Query a validator's persistent internal validator ID by their Ethereum address
+  /// @notice Query a validator's persistent internal validator ID by their Volta address
   mapping (address => uint256) public t1AddressToId;
   /// @notice Query a validator's persistent internal validator ID by their T2 public key
   mapping (bytes32 => uint256) public t2PublicKeyToId;
-  /// @notice Query a validator's persistent Ethereum address by their internal validator ID
+  /// @notice Query a validator's persistent Volta address by their internal validator ID
   mapping (uint256 => address) public idToT1Address;
   /// @notice Query a validator's persistent T2 public key by their internal validator ID
   mapping (uint256 => bytes32) public idToT2PublicKey;
@@ -61,57 +52,41 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256[2] public quorum;
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
-  uint256 public growthDelay;
-  address public coreToken;
-  address internal priorInstance;
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
-  error NoCoreTokenSupplied();
   error LiftingIsDisabled();
   error ValidatorFunctionsAreDisabled();
   error MissingValidatorKeys();
   error AddressAlreadyInUse(address t1Address);
   error T2PublicKeyAlreadyInUse(bytes32 t2PublicKey);
   error AddressMismatch(address t1Address, bytes t1PublicKey);
-  error SetCoreOwnerFailed();
   error InvalidQuorum();
-  error CannotReceiveETHUnlessLifting();
+  error CannotReceiveVTUnlessLifting();
   error AmountCannotBeZero();
-  error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
-  error GrowthUnavailableForPeriod();
-  error ReleaseTimeNotPassed(uint256 releaseTime);
   error InvalidT1PublicKey();
   error ValidatorAlreadyRegistered();
   error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
   error ValidatorNotRegistered();
   error RootHashAlreadyPublished();
-  error ERC20LiftingOnly();
   error LiftLimitExceeded();
-  error TokensMustBeSentToThisAddress();
-  error InvalidERC777Token();
   error LoweringIsDisabled();
   error InvalidLowerData();
   error LowerAlreadyUsed();
   error UnsignedTransaction();
   error NotALowerTransaction();
   error PaymentFailed();
-  error CoreMintFailed();
   error InvalidConfirmations();
   error TransactionIdAlreadyUsed();
   error InvalidT2PublicKey();
 
-  function initialize(address _coreToken, address _priorInstance)
+  function initialize()
     public
     initializer
   {
-    if (_coreToken == address(0)) revert NoCoreTokenSupplied();
     __Ownable_init();
-    coreToken = _coreToken;
-    priorInstance = _priorInstance; // We allow address(0) for no prior instance
-    ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
     numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5702] = 2;   // callID (2 bytes)
@@ -121,7 +96,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     nextValidatorId = 1;
     quorum[0] = 2;
     quorum[1] = 3;
-    growthDelay = 7 days;
   }
 
   modifier onlyWhenLiftingIsEnabled() {
@@ -135,9 +109,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Bulk initialise a set of validators
-  /// @param t1Address Array of Ethereum addresses
-  /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
-  /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
+  /// @param t1Address Array of Volta addresses
+  /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Volta public keys corresponding to addresses
+  /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Volta public keys corresponding to addresses
   /// @param t2PublicKey Array of 32 byte sr25519 public key values
   /// @dev This is useful for seting up existing networks, after which registerValidator should be used instead
   function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
@@ -173,38 +147,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         i++;
       }
     }
-  }
-
-  /// @notice Sets the owner of the associated core token contract to the owner of this contract
-  /// @dev Note: Growth depends upon this contract owning the core token contract, so it cannot occur until the owner of the
-  /// core token contract is set back to this contract
-  function setCoreOwner()
-    onlyOwner
-    external
-  {
-    (bool success, ) = coreToken.call(abi.encodeWithSignature("setOwner(address)", msg.sender));
-    if (!success) revert SetCoreOwnerFailed();
-  }
-
-  /// @notice Cancel a single growth period, preventing that period's growth from ever being released
-  /// @param period Period to deny growth for
-  /// @dev Sets the release time for an unreleased growth period to zero (the growthAmount persists to lock that period)
-  function denyGrowth(uint32 period)
-    onlyOwner
-    external
-  {
-    growthRelease[period] = 0;
-    emit LogGrowthDenied(period);
-  }
-
-  /// @notice Set the amount of time that must pass between triggering and releasing any future period's growth
-  /// @param delaySeconds Delay in whole seconds
-  function setGrowthDelay(uint256 delaySeconds)
-    onlyOwner
-    external
-  {
-    emit LogGrowthDelayUpdated(growthDelay, delaySeconds);
-    growthDelay = delaySeconds;
   }
 
   /// @notice Set the proportion of active validators required to prove T2 validator consensus
@@ -261,70 +203,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   receive() payable external {
-    if (msg.sender != priorInstance) revert CannotReceiveETHUnlessLifting();
-  }
-
-  /// @notice Initialise inflating the core token supply by the specified amount
-  /// @param amount Amount of new tokens to mint for period
-  /// @param period Unique growth period
-  /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
-  /** @dev
-    Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
-    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero.
-    In these immediate cases a growth event is then emitted to be read by T2.
-    Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
-  */
-  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
-    onlyWhenValidatorFunctionsAreEnabled
-    external
-  {
-    if (amount == 0) revert AmountCannotBeZero();
-    if (growthAmount[period] != 0) revert GrowthPeriodAlreadyUsed();
-
-    growthAmount[period] = amount;
-
-    if (confirmations.length == 0) {
-      if (msg.sender != owner()) revert OwnerOnly();
-      _releaseGrowth(amount, period);
-    } else {
-      bytes32 growthHash = keccak256(abi.encode(amount, period));
-      _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
-      _storeT2TransactionId(t2TransactionId);
-      if (growthDelay == 0) {
-        _releaseGrowth(amount, period);
-      } else {
-        uint256 releaseTime;
-        unchecked { releaseTime = block.timestamp + growthDelay; }
-        growthRelease[period] = releaseTime;
-        emit LogGrowthTriggered(amount, period, releaseTime);
-      }
-    }
-  }
-
-  /// @notice Release the requested growth for a period
-  /// @param period Unique growth period
-  /** @dev
-    This mints the core token amount requested to this contract, locking it and emitting a growth event to be read by T2.
-    This function can be called by anyone but will only succeed if the release time has passed.
-  */
-  function releaseGrowth(uint32 period)
-    external
-  {
-    uint256 releaseTime = growthRelease[period];
-    if (releaseTime == 0) revert GrowthUnavailableForPeriod();
-    if (block.timestamp < releaseTime) revert ReleaseTimeNotPassed(releaseTime);
-    growthRelease[period] = 0;
-    _releaseGrowth(growthAmount[period], period);
+    revert CannotReceiveVTUnlessLifting();
   }
 
   /// @notice Register a new validator, allowing them to participate in consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of validator
+  /// @param t1PublicKey 64 byte Volta public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
-    This permanently associates the validator's T1 Ethereum address with their T2 public key.
+    This permanently associates the validator's T1 Volta address with their T2 public key.
     May also be used to re-register a previously deregistered validator, providing their associated accounts do not change.
     Does not immediately activate the validator.
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
@@ -370,7 +258,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Deregister and deactivate a validator, removing them from consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of validator
+  /// @param t1PublicKey 64 byte Volta public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
@@ -434,7 +322,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
     IERC20 erc20Contract = IERC20(erc20Address);
     uint256 currentBalance = erc20Contract.balanceOf(address(this));
@@ -445,45 +332,22 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
 
-  /// @notice Lift all ETH sent to the specified T2 recipient
+  /// @notice Lift all VT sent to the specified T2 recipient
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
-    Locks the ETH in the contract and emits a corresponding lift event to be read by T2.
+    Locks the VT in the contract and emits a corresponding lift event to be read by T2.
     Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
   */
-  function liftETH(bytes calldata t2PublicKey)
+  function liftVT(bytes calldata t2PublicKey)
     payable
     onlyWhenLiftingIsEnabled
     external
   {
     if (msg.value == 0) revert AmountCannotBeZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
+    emit LogLifted(PSEUDO_VT_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
-  /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
-  /// @param data 32 byte sr25519 public key value of the T2 recipient account
-  /** @dev
-    This function is not called directly by users.
-    It is called when ERC777 tokens are sent to this contract using either send or operatorSend, passing the recipient as "data".
-    Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
-    Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
-    Emits a corresponding lift event to be read by T2.
-  */
-  function tokensReceived(address /* operator */, address from, address to, uint256 amount, bytes calldata data,
-      bytes calldata /* operatorData */)
-    onlyWhenLiftingIsEnabled
-    external
-  {
-    if (from == priorInstance) return; // recovering funds so we don't lift here
-    if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
-    if (amount == 0) revert AmountCannotBeZero();
-    if (to != address(this)) revert TokensMustBeSentToThisAddress();
-    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777Token();
-    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
-  }
-
-  /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
+  /// @notice Unlock ERC20/VT to the recipient specified in the transaction leaf, providing the T2 state is published
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
@@ -534,11 +398,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     amount = ((amount & 0xFFFFFFFF00000000FFFFFFFF00000000) >> 32) | ((amount & 0x00000000FFFFFFFF00000000FFFFFFFF) << 32);
     amount = (amount >> 64) | (amount << 64);
 
-    if (token == PSEUDO_ETH_ADDRESS) {
+    if (token == PSEUDO_VT_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
       if (!success) revert PaymentFailed();
-    } else if (ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH) == token) {
-      IERC777(token).send(t1Address, amount, "");
     } else {
       assert(IERC20(token).transfer(t1Address, amount));
     }
@@ -572,20 +434,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
-
-  function _releaseGrowth(uint128 amount, uint32 period)
-    private
-  {
-    IERC20 erc20Token = IERC20(coreToken);
-    uint256 oldBalance = erc20Token.balanceOf(address(this));
-    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    uint256 newBalance = erc20Token.balanceOf(address(this));
-    uint256 expectedBalance;
-    unchecked { expectedBalance = oldBalance + amount; }
-    if (!success || expectedBalance != newBalance) revert CoreMintFailed();
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogGrowth(amount, period);
-  }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
   function _getCompactIntegerByteSize(bytes1 checkByte)

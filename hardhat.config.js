@@ -30,7 +30,6 @@ task('loadValidators', 'initialise a new avn-bridge contract with a set of valid
   });
 
 task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise with validators')
-  .addOptionalParam('token', 'optional core token address (eg: AVT contract)', '0xe0A9E4f2591be648f18001e21dB16dDAB114fEF9')
   .addOptionalParam('validators', 'optional path to file containing any validators to be loaded')
   .setAction(async (args, hre) => {
     await hre.run('compile');
@@ -48,7 +47,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
 
       const balanceBefore = await deployer.getBalance();
       const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token, '0x0000000000000000000000000000000000000000'], { kind: 'uups' });
+      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, { kind: 'uups' });
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 

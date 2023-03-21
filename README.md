@@ -31,13 +31,13 @@ fill in "__config.json" and save locally as "config.json"
 `npx hardhat coverage`
 
 #### Deploy
-`npx hardhat --network <network> deploy --token [optional core token address]`
+`npx hardhat --network <network> deploy`
 
 #### Load a set of validators
 `npx hardhat --network <network> loadValidators --contract <target contract address> --validators <path to validators json file>`
 
 #### Deploy AND load a set of validators
-`npx hardhat --network <network> deploy --token [optional core token address] --validators <path to validators json file>`
+`npx hardhat --network <network> deploy --validators <path to validators json file>`
 
 
 ### Interaction via Etherscan
