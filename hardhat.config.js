@@ -42,6 +42,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       const [deployer] = await hre.ethers.getSigners();
       console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
 
+      // delete any existing OZ manifests as we want to deploy anew, not upgrade
       if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
       if (fs.existsSync('./.openzeppelin/unknown-73799.json')) fs.unlinkSync('./.openzeppelin/unknown-73799.json');
 
@@ -51,7 +52,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
-      if (network.name === 'goerli') { // publish contracts
+      if (network.name === 'goerli') { // publish contracts to Etherscan
         await new Promise((r) => setTimeout(r, 20000));
         await hre.run('verify', { address: implementationAddress });
         await hre.run('verify', { address: avnBridge.address });
@@ -64,9 +65,11 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
         await hre.run('loadValidators', { contract: avnBridge.address, validators: args.validators });
       }
 
-      const addresses = fs.existsSync('./addresses.json') ? require('./addresses.json') : {};
+      // output new contract address to file
+      const outFile = './addresses.json';
+      const addresses = fs.existsSync(outFile) ? require(outFile) : {};
       addresses[hre.network.name] = avnBridge.address;
-      fs.writeFileSync('./addresses.json', JSON.stringify(addresses, null, 2));
+      fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
     }
   });
