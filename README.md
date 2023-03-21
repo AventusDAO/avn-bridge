@@ -34,7 +34,7 @@ fill in "__config.json" and save locally as "config.json"
 `npx hardhat --network <network> deploy --token [optional core token address]`
 
 #### Load a set of validators
-`npx hardhat --network <network> loadValidators --address <target contract address> --validators <path to validators json file>`
+`npx hardhat --network <network> loadValidators --contract <target contract address> --validators <path to validators json file>`
 
 #### Deploy AND load a set of validators
 `npx hardhat --network <network> deploy --token [optional core token address] --validators <path to validators json file>`
