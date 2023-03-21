@@ -7,7 +7,7 @@ require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('hardhat-erc1820');
 
-const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
+const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, VOLTA_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
 const fs = require('fs');
 
 task('loadValidators', 'initialise a new avn-bridge contract with a set of validators')
