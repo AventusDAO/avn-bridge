@@ -34,8 +34,7 @@ task('publishRoot', 'test publish root')
   .setAction(async (args) => {
     const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', args.contract);
 
-    const randomBytes32 = hre.ethers.utils.randomBytes(32);
-    const rootHash = hre.ethers.utils.hexlify(randomBytes32);
+    const rootHash = hre.ethers.utils.hexlify(hre.ethers.utils.randomBytes(32));
     const txId = hre.ethers.BigNumber.from(hre.ethers.utils.randomBytes(32));
     const t2PubKey = '0x4a9a2c1b8aa9d2a0cc948ae1c911e0640642f02dd638d32aa0d359899d69f63c'
 
@@ -60,6 +59,7 @@ task('publishRoot', 'test publish root')
     confirmations += (await account_4.signMessage(hre.ethers.utils.arrayify(confirmationHash))).substring(2);
 
     const [deployer] = await hre.ethers.getSigners();
+    // fund validator with enough for tx fee
     await deployer.sendTransaction({ to: account_1.address, value: '1000000000000000' });
 
     console.log(`\nBEFORE: Root hash ${rootHash} is published = ${await avnBridge.isPublishedRootHash(rootHash)}`);
