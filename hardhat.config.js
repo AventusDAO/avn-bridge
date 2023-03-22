@@ -112,6 +112,25 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
     }
   });
 
+task('publishToken', 'deploy a new erc20 test token and publish it')
+  .setAction(async (args, hre) => {
+    await hre.run('compile');
+
+    if (hre.network.name === 'mainnet') {
+      console.log('Requires manual setup for mainnet deployment');
+      process.exit(1);
+    } else {
+      const [deployer] = await hre.ethers.getSigners();
+      console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
+      const supply = 100000;
+      const Token20 = await hre.ethers.getContractFactory('Token20');
+      const token20 = await Token20.deploy(supply);
+      await token20.deployed();
+      await new Promise((r) => setTimeout(r, 20000));
+      await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
+    }
+  });
+
 module.exports = {
   mocha: {
     timeout: 100000000000
@@ -146,7 +165,17 @@ module.exports = {
     }
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: ETHERSCAN_API_KEY,
+    customChains: [
+    {
+      network: "volta",
+      chainId:73799,
+      urls: {
+        apiURL: "https://volta-explorer.energyweb.org/api",
+        browserURL: "https://volta-explorer.energyweb.org"
+      }
+    }
+  ]
   },
   gasReporter: {
    enabled: true,
