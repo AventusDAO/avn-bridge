@@ -29,6 +29,45 @@ task('loadValidators', 'initialise a new avn-bridge contract with a set of valid
     await avnBridge.loadValidators(t1Address, t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey);
   });
 
+task('publishRoot', 'test publish root')
+  .addParam('contract', 'avn-bridge contract address')
+  .setAction(async (args) => {
+    const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', args.contract);
+
+    const randomBytes32 = hre.ethers.utils.randomBytes(32);
+    const rootHash = hre.ethers.utils.hexlify(randomBytes32);
+    const txId = hre.ethers.BigNumber.from(hre.ethers.utils.randomBytes(32));
+    const t2PubKey = '0x4a9a2c1b8aa9d2a0cc948ae1c911e0640642f02dd638d32aa0d359899d69f63c'
+
+    const encodedParams = hre.ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'bytes32'], [rootHash, txId.toString(), t2PubKey]);
+    const confirmationHash = hre.ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
+
+    const wallet_1 = new hre.ethers.Wallet('0x86feedf619afe622df79b37a515b5966b99af05799eac662f1fff26a1217bc47');
+    const wallet_2 = new hre.ethers.Wallet('0xc1f68d01466651168f90861e23e01e3a189ceb28b84b41598237e1cbe3edd694');
+    const wallet_3 = new hre.ethers.Wallet('0x3678d0030042131b2680aecc37a2eed7b7f734c9d09b5756120b82ab7eb2ab7b');
+    const wallet_4 = new hre.ethers.Wallet('0x38a13bda245f22751b157846c0709e1b534ac37f03da318b90d15a024d9a7379');
+
+    const account_1 = wallet_1.connect(hre.ethers.provider);
+    const account_2 = wallet_2.connect(hre.ethers.provider);
+    const account_3 = wallet_3.connect(hre.ethers.provider);
+    const account_4 = wallet_4.connect(hre.ethers.provider);
+
+    let confirmations = '0x';
+
+    confirmations += (await account_1.signMessage(hre.ethers.utils.arrayify(confirmationHash))).substring(2);
+    confirmations += (await account_2.signMessage(hre.ethers.utils.arrayify(confirmationHash))).substring(2);
+    confirmations += (await account_3.signMessage(hre.ethers.utils.arrayify(confirmationHash))).substring(2);
+    confirmations += (await account_4.signMessage(hre.ethers.utils.arrayify(confirmationHash))).substring(2);
+
+    const [deployer] = await hre.ethers.getSigners();
+    await deployer.sendTransaction({ to: account_1.address, value: '1000000000000000' });
+
+    console.log(`\nBEFORE: Root hash ${rootHash} is published = ${await avnBridge.isPublishedRootHash(rootHash)}`);
+    await avnBridge.connect(account_1).publishRoot(rootHash, txId, confirmations);
+    await new Promise((r) => setTimeout(r, 10000));
+    console.log(`\nAFTER: Root hash ${rootHash} is published = ${await avnBridge.isPublishedRootHash(rootHash)}`);
+  });
+
 task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise with validators')
   .addOptionalParam('validators', 'optional path to file containing any validators to be loaded')
   .setAction(async (args, hre) => {
