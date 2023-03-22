@@ -90,18 +90,16 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
-      if (network.name === 'goerli') { // publish contracts to Etherscan
-        await new Promise((r) => setTimeout(r, 20000));
-        await hre.run('verify', { address: implementationAddress });
-        await hre.run('verify', { address: avnBridge.address });
-      }
-
-      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} VT`);
-      console.log(`\nContract: ${avnBridge.address}`);
-
       if (args.validators) { // run optional loadValidators task
         await hre.run('loadValidators', { contract: avnBridge.address, validators: args.validators });
       }
+
+      await new Promise((r) => setTimeout(r, 20000));
+      await hre.run('verify', { address: implementationAddress });
+      await hre.run('verify', { address: avnBridge.address });
+
+      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} VT`);
+      console.log(`\nContract: ${avnBridge.address}`);
 
       // output new contract address to file
       const outFile = './addresses.json';
