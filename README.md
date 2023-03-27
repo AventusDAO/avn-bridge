@@ -39,6 +39,9 @@ fill in "__config.json" and save locally as "config.json"
 #### Deploy AND load a set of validators
 `npx hardhat --network <network> deploy --token [optional core token address] --validators <path to validators json file>`
 
+#### Publish a new test token
+`npx hardhat --network <network> publishToken`
+
 
 ### Interaction via Etherscan
 

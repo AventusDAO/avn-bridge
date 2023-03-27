@@ -44,22 +44,12 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
 
       // delete any existing OZ manifests as we want to deploy anew, not upgrade
       if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
-      if (fs.existsSync('./.openzeppelin/unknown-73799.json')) fs.unlinkSync('./.openzeppelin/unknown-73799.json');
 
       const balanceBefore = await deployer.getBalance();
       const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
       const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token, '0x0000000000000000000000000000000000000000'], { kind: 'uups' });
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
-
-      if (network.name === 'goerli') { // publish contracts to Etherscan
-        await new Promise((r) => setTimeout(r, 20000));
-        await hre.run('verify', { address: implementationAddress });
-        await hre.run('verify', { address: avnBridge.address });
-      }
-
-      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
-      console.log(`\nContract: ${avnBridge.address}`);
 
       if (args.validators) { // run optional loadValidators task
         await hre.run('loadValidators', { contract: avnBridge.address, validators: args.validators });
@@ -71,6 +61,32 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       addresses[hre.network.name] = avnBridge.address;
       fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
+      await new Promise((r) => setTimeout(r, 20000));
+      await hre.run('verify', { address: implementationAddress });
+      await hre.run('verify', { address: avnBridge.address });
+
+      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
+      console.log(`\nContract: ${avnBridge.address}`);
+
+    }
+  });
+
+task('publishToken', 'deploy a new erc20 test token and publish it')
+  .setAction(async (args, hre) => {
+    await hre.run('compile');
+
+    if (hre.network.name === 'mainnet') {
+      console.log('Requires manual setup for mainnet deployment');
+      process.exit(1);
+    } else {
+      const [deployer] = await hre.ethers.getSigners();
+      console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
+      const supply = 100000;
+      const Token20 = await hre.ethers.getContractFactory('Token20');
+      const token20 = await Token20.deploy(supply);
+      await token20.deployed();
+      await new Promise((r) => setTimeout(r, 10000));
+      await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
     }
   });
 
@@ -95,10 +111,6 @@ module.exports = {
   networks: {
     goerli: {
       url: `https://goerli.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [GOERLI_PRIVATE_KEY]
-    },
-    volta: {
-      url: "https://volta-rpc.energyweb.org",
       accounts: [GOERLI_PRIVATE_KEY]
     },
     hardhat: {},
