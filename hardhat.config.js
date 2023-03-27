@@ -62,9 +62,10 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
       await new Promise((r) => setTimeout(r, 20000));
-      await hre.run('verify', { address: implementationAddress });
-      await hre.run('verify', { address: avnBridge.address });
-
+      try {
+        await hre.run('verify', { address: implementationAddress });
+        await hre.run('verify', { address: avnBridge.address });
+      } catch (e) {};
       console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
       console.log(`\nContract: ${avnBridge.address}`);
 
