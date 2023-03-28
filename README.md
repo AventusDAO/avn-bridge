@@ -22,7 +22,8 @@ The system is underwritten by its constructor-specified core token (in the case 
 
 ### Setup
 do `npm i`\
-fill in "__config.json" and save locally as "config.json"
+fill in "config_.json" and save locally as "config.json"
+The values in config.json can also be set as environment variables.
 
 #### Run tests
 `npx hardhat test`

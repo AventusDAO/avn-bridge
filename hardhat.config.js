@@ -91,6 +91,14 @@ task('publishToken', 'deploy a new erc20 test token and publish it')
     }
   });
 
+function getWeb3Url(networkName) {
+  if (!process.env.WEB3_URL_OVERRIDE) {
+    return `https://${networkName}.infura.io/v3/${process.env.INFURA_API_KEY || INFURA_API_KEY}`;
+  }
+  else {
+    return process.env.WEB3_URL_OVERRIDE
+  }
+}
 module.exports = {
   mocha: {
     timeout: 100000000000
@@ -111,17 +119,17 @@ module.exports = {
   },
   networks: {
     goerli: {
-      url: `https://goerli.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [GOERLI_PRIVATE_KEY]
+      url: getWeb3Url(`goerli`),
+      accounts: [GOERLI_PRIVATE_KEY || process.env.GOERLI_PRIVATE_KEY]
     },
     hardhat: {},
     mainnet: {
-      url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [MAINNET_PRIVATE_KEY]
+      url: getWeb3Url(`mainnet`),
+      accounts: [MAINNET_PRIVATE_KEY || process.env.MAINNET_PRIVATE_KEY]
     }
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: ETHERSCAN_API_KEY || process.env.ETHERSCAN_API_KEY
   },
   gasReporter: {
    enabled: true,
