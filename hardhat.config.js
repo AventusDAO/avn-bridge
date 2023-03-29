@@ -125,7 +125,7 @@ module.exports = {
     hardhat: {},
     mainnet: {
       url: getWeb3Url(`mainnet`),
-      accounts: [process.env.MAINNET_PRIVATE_KEY || MAINNET_PRIVATE_KEY]
+      accounts: [process.env.MAINNET_PRIVATE_KEY || MAINNET_PRIVATE_KEY || "0000000000000000000000000000000000000000000000000000000000000000"]
     }
   },
   etherscan: {
