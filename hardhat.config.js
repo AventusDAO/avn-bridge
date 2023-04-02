@@ -58,7 +58,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       // output new contract address to file
       const outFile = './addresses.json';
       const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-      addresses[hre.network.name] = avnBridge.address;
+      addresses[hre.network.name]['avn'] = avnBridge.address;
       fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
       await new Promise((r) => setTimeout(r, 20000));
@@ -88,6 +88,11 @@ task('publishToken', 'deploy a new erc20 test token and publish it')
       await token20.deployed();
       await new Promise((r) => setTimeout(r, 10000));
       await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
+
+      const outFile = './addresses.json';
+      const addresses = fs.existsSync(outFile) ? require(outFile) : {};
+      addresses[hre.network.name]['erc20token'] = token20.address;
+      fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
     }
   });
 
