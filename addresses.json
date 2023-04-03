@@ -1,4 +1,9 @@
 {
-  "goerli": "0x29F08400e8F236f808D22347370Be887E4ab00a3",
-  "mainnet": "0xF05Df39f745A240fb133cC4a11E42467FAB10f1F"
+  "goerli": {
+    "avn": "0x29F08400e8F236f808D22347370Be887E4ab00a3",
+    "erc20token": ""
+  },
+  "mainnet": {
+    "avn": "0xF05Df39f745A240fb133cC4a11E42467FAB10f1F"
+  }
 }
