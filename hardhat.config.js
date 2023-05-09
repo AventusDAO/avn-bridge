@@ -96,6 +96,23 @@ task('publishToken', 'deploy a new erc20 test token and publish it')
     }
   });
 
+task('upgrade', 'upgrade existing avn-bridge contract')
+  .addParam('proxy', 'existing AVN Bridge proxy address')
+  .setAction(async (args, hre) => {
+    await hre.run('compile');
+    const [upgrader] = await hre.ethers.getSigners();
+    const balanceBefore = await upgrader.getBalance();
+    console.log(`\nUpgrading ${args.proxy} on ${hre.network.name} network using account ${upgrader.address}...`);
+    const AVNBridge = await ethers.getContractFactory('AVNBridge');
+    await upgrades.upgradeProxy(args.proxy, AVNBridge);
+    console.log(`\nCost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await upgrader.getBalance()))} ETH`);
+    await new Promise((r) => setTimeout(r, 30000));
+    try {
+      const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.proxy);
+      await hre.run('verify', { address: implementationAddress });
+    } catch (e) {};
+  });
+
 function getWeb3Url(networkName) {
   if (!process.env.WEB3_URL_OVERRIDE) {
     return `https://${networkName}.infura.io/v3/${process.env.INFURA_API_KEY || INFURA_API_KEY}`;

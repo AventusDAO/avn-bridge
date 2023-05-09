@@ -40,6 +40,9 @@ The values in config.json can also be set as environment variables.
 #### Deploy AND load a set of validators
 `npx hardhat --network <network> deploy --token [optional core token address] --validators <path to validators json file>`
 
+#### Upgrade an existing avn-bridge contract
+`npx hardhat --network <network> upgrade --proxy <proxy contract address>`
+
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
 
