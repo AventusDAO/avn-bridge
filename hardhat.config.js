@@ -144,7 +144,12 @@ module.exports = {
       url: getWeb3Url(`goerli`),
       accounts: [process.env.GOERLI_PRIVATE_KEY || GOERLI_PRIVATE_KEY]
     },
-    hardhat: {},
+    hardhat: {
+      forking: {
+        url: getWeb3Url(`mainnet`),
+      },
+      allowUnlimitedContractSize: true
+    },
     mainnet: {
       url: getWeb3Url(`mainnet`),
       accounts: [process.env.MAINNET_PRIVATE_KEY || MAINNET_PRIVATE_KEY || "0000000000000000000000000000000000000000000000000000000000000000"]
