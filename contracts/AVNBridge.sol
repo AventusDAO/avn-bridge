@@ -386,14 +386,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 id = t2PublicKeyToId[t2PublicKey];
     if (!isRegisteredValidator[id]) revert ValidatorNotRegistered();
 
+    isRegisteredValidator[id] = false;
+    isActiveValidator[id] = false;
+    unchecked { numActiveValidators--; }
+
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
     _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
-
-    isRegisteredValidator[id] = false;
-    isActiveValidator[id] = false;
-    unchecked { numActiveValidators--; }
 
     bytes32 t1PublicKeyLHS;
     bytes32 t1PublicKeyRHS;
@@ -622,11 +622,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (uint256 required)
   {
-    uint256 active = numActiveValidators;
-    unchecked {
-      required = active * quorum[0] / quorum[1];
-      required = required == active ? required : required + 1;
-    }
+    uint256 numerator = numActiveValidators * quorum[0];
+    uint256 denominator = quorum[1];
+    unchecked { required = (numerator % denominator == 0) ? numerator / denominator : numerator / denominator + 1; }
   }
 
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
