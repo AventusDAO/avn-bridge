@@ -625,7 +625,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 active = numActiveValidators;
     unchecked {
       required = active * quorum[0] / quorum[1];
-      // handle the [1,1] quorum case:
+      // ensure the quorum cannot go over 100%:
       required = required == active ? required : required + 1;
     }
   }
