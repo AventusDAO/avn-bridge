@@ -113,6 +113,16 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     } catch (e) {};
   });
 
+  task('prepare-upgrade', 'prepare the openzeppelin mainfest (if required)')
+    .addParam('proxy', 'existing AVN Bridge proxy address')
+    .setAction(async (args, hre) => {
+      if (hre.network.name !== 'goerli') return;
+      await hre.run('compile');
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
+      await upgrades.forceImport(args.proxy, AVNBridge);
+      console.log('Done');
+    });
+
 function getWeb3Url(networkName) {
   if (!process.env.WEB3_URL_OVERRIDE) {
     return `https://${networkName}.infura.io/v3/${process.env.INFURA_API_KEY || INFURA_API_KEY}`;

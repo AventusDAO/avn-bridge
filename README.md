@@ -43,6 +43,12 @@ The values in config.json can also be set as environment variables.
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`
 
+#### Prepare for an upgrade (testnet only)
+If the above upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` you will need to:
+- temporarily replace the AVNBridge.sol contract file you were attempting to deploy with the previous version of that contract
+- prepare the openzeppelin manifest by running `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
+- now you can revert AVNBridge.sol back to the version you were attempting to upgrade to and run the upgrade command again
+
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
 
