@@ -73,7 +73,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
   });
 
   task('lift', 'lift a token to the chain')
-  .addParam('recipient', 'Recipient in tier2')
+  .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
   .addParam('token', 'token contract contract address')
   .addParam('bridge', 'avn-bridge contract address')
   .addParam('amount', 'amount to be lifted')
@@ -82,7 +82,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
     console.log(`\nLifting token ${args.token} into avn-bridge @ ${bridge}`);
     try {
       const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', bridge);
-      const tokenContract = await hre.ethers.getContractAt("ERC20", token);
+      const tokenContract = await hre.ethers.getContractAt(`ERC20`, token);
       const approvalTx = await tokenContract.approve(bridge, amount);
       await approvalTx.wait();
       console.log(`Successfully approved ${amount} tokens for avn-bridge ${bridge} - approval tx: ${approvalTx.hash}`);
@@ -92,8 +92,8 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       await liftTx.wait();
       console.log(`Successfully lifted ${amount} tokens for avn-bridge ${bridge} - lift tx: ${liftTx.hash}`);
     } catch (error) {
-    console.error("Error occurred during lift:", error);
-  }
+      console.error(`Error occurred during lift:`, error);
+    }
   });
 
 task('publishToken', 'deploy a new erc20 test token and publish it')
