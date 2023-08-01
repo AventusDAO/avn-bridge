@@ -74,14 +74,29 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
 
   task('lift', 'lift a token to the chain')
   .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
-  .addParam('token', 'token contract contract address')
   .addParam('bridge', 'avn-bridge contract address')
   .addParam('amount', 'amount to be lifted')
+  .addOptionalParam('token', 'The contract address of the token to be lifted. If "chain" is passed, it will use the ethereum chain native token. If "core" is passed it will pass the bridge core token')
   .setAction(async (args, hre) => {
-    const { bridge, token, amount, recipient } = args;
-    console.log(`\nLifting token ${args.token} into avn-bridge @ ${bridge}`);
+    const bridge = args.bridge;
+    const amount = args.amount;
+    const recipient = args.recipient;
     try {
       const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', bridge);
+
+      // Handle the case of the chain native token
+      if (args.token === "chain") {
+        const liftTx = await avnBridge.liftETH(recipient, { value: amount });
+        await liftTx.wait();
+        console.log(`Successfully lifted ${amount} of Ether for avn-bridge ${bridge} - lift tx: ${liftTx.hash}`);
+        return;
+      }
+
+      const token = args.token === undefined || args.token === 'core'
+        ? await avnBridge.coreToken()
+        : args.token;
+
+      console.log(`\nLifting token ${token} into avn-bridge @ ${bridge}`);
       const tokenContract = await hre.ethers.getContractAt(`ERC20`, token);
       const approvalTx = await tokenContract.approve(bridge, amount);
       await approvalTx.wait();
