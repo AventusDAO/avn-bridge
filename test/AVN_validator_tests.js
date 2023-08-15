@@ -422,7 +422,9 @@ describe('AVNBridge', async () => {
 
   context('deregisterValidator()', async () => {
 
-    it('a validator can be deregistered', async () => {
+    it('a validator can be registered, activated and deregistered', async () => {
+      let numActiveValidatorsBeforeRegistration = await avnBridge.numActiveValidators();
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       const newValidator = validators[nextValidatorId];
       let t2TransactionId = helper.randomUint256();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
@@ -430,6 +432,17 @@ describe('AVNBridge', async () => {
       await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId,
           confirmations);
       nextValidatorId++;
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
+      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
+
+      // Publishing a root with a confirmation from the newly registered validator activates them
+      t2TransactionId = helper.randomUint256();
+      const rootHash = helper.randomBytes32();
+      confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
+      const newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, t2TransactionId, newValidator);
+      const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
+      await avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmationsIncludingNewValidator);
+      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration.add(1));
 
       t2TransactionId = helper.randomUint256();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newValidator.t2PublicKey, newValidator.t1PublicKey]);
@@ -437,11 +450,36 @@ describe('AVNBridge', async () => {
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
           t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
           .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
-      numActiveValidators--;
-      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidators);
+
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
+      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
     });
 
-    it('cannot deregister an already dergistered validator', async () => {
+    it('a validator can be registered and deregistered without being activated', async () => {
+      const numActiveValidatorsBeforeRegistration = await avnBridge.numActiveValidators();
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
+      const newValidator = validators[nextValidatorId];
+      let t2TransactionId = helper.randomUint256();
+      const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
+      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId,
+          confirmations);
+      nextValidatorId++;
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
+      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
+
+      t2TransactionId = helper.randomUint256();
+      const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newValidator.t2PublicKey, newValidator.t1PublicKey]);
+      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
+          t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
+          .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
+
+      expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
+      expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
+    });
+
+    it('cannot deregister an already deregistered validator', async () => {
       const newValidator = validators[nextValidatorId];
       let t2TransactionId = helper.randomUint256();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);

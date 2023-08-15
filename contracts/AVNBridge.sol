@@ -387,8 +387,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (!isRegisteredValidator[id]) revert ValidatorNotRegistered();
 
     isRegisteredValidator[id] = false;
-    isActiveValidator[id] = false;
-    unchecked { numActiveValidators--; }
+
+    if (isActiveValidator[id]) {
+      isActiveValidator[id] = false;
+      unchecked { numActiveValidators--; }
+    }
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
