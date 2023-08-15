@@ -297,7 +297,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         uint256 releaseTime;
         unchecked { releaseTime = block.timestamp + growthDelay; }
         growthRelease[period] = releaseTime;
-        emit LogGrowthTriggered(amount, period, releaseTime);
+        emit LogGrowthTriggered(amount, period, releaseTime, t2TransactionId);
       }
     }
   }
