@@ -135,7 +135,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWithinWindow(uint64 expiry) {
+  modifier onlyWithinCallWindow(uint64 expiry) {
     if (block.timestamp > expiry) revert WindowHasExpired();
     _;
   }
@@ -273,7 +273,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Initialise inflating the core token supply by the specified amount
   /// @param amount Amount of new tokens to mint for period
   /// @param period Unique growth period
-  /// @param expiry Timestamp after which the call will be rejected
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
@@ -284,7 +284,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   */
   function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint128 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
-    onlyWithinWindow(expiry)
+    onlyWithinCallWindow(expiry)
     external
   {
     if (amount == 0) revert AmountCannotBeZero();
@@ -329,7 +329,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Register a new validator, allowing them to participate in consensus
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
-  /// @param expiry Timestamp after which the call will be rejected
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
@@ -342,7 +342,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint128 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
-    onlyWithinWindow(expiry)
+    onlyWithinCallWindow(expiry)
     external
   {
     if (t1PublicKey.length != 64) revert InvalidT1PublicKey();
@@ -382,7 +382,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Deregister and deactivate a validator, removing them from consensus
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
-  /// @param expiry Timestamp after which the call will be rejected
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
@@ -392,7 +392,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint128 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
-    onlyWithinWindow(expiry)
+    onlyWithinCallWindow(expiry)
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
@@ -422,13 +422,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
-  /// @param expiry Timestamp after which the call will be rejected
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
   function publishRoot(bytes32 rootHash, uint64 expiry, uint128 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
-    onlyWithinWindow(expiry)
+    onlyWithinCallWindow(expiry)
     external
   {
     _verifyConfirmations(_toConfirmationHash(rootHash, expiry, t2TransactionId), confirmations);
