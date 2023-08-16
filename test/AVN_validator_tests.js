@@ -112,44 +112,47 @@ describe('AVNBridge', async () => {
   context('Growth', async () => {
     const growthAmount = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(3));
 
-    async function getGrowthConfirmations(growthAmount, period, t2TransactionId) {
+    async function getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId) {
       const growthHash = helper.keccak256(ethers.utils.defaultAbiCoder.encode(['uint128', 'uint32'], [growthAmount, period]));
-      return await helper.getConfirmations(avnBridge, growthHash, t2TransactionId);
+      return await helper.getConfirmations(avnBridge, growthHash, expiry, t2TransactionId);
     }
 
     it('fails to trigger zero growth', async () => {
       const zeroAmount = 0;
       const period = 1;
-      const t2TransactionId = helper.randomUint256();
-      const confirmations = await getGrowthConfirmations(zeroAmount, period, t2TransactionId);
-
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(zeroAmount, period, t2TransactionId, confirmations))
+      const expiry = await helper.getValidExpiry();
+      const t2TransactionId = helper.randomT2TxId();
+      const confirmations = await getGrowthConfirmations(zeroAmount, period, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(zeroAmount, period, expiry, t2TransactionId, confirmations))
           .to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
     });
 
     it('succeeds in triggering growth via validators', async () => {
       const period = 1;
+      const expiry = await helper.getValidExpiry();
       const t2TransactionId = 1;
-      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
           .to.emit(avnBridge, 'LogGrowthTriggered')
           .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1, t2TransactionId);
     });
 
     it('fails to trigger growth with an invalid transaction ID', async () => {
       const period = 2;
+      const expiry = await helper.getValidExpiry();
       const t2TransactionId = 1;
-      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
           .to.be.revertedWithCustomError(avnBridge, 'TransactionIdAlreadyUsed');
     });
 
     it('fails to trigger growth with InvalidConfirmations', async () => {
       const period = 2;
-      const t2TransactionId = helper.randomUint256();
+      const expiry = await helper.getValidExpiry();
+      const t2TransactionId = helper.randomT2TxId();
       const confirmations = "0xbadd";
 
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
           .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
     });
 
@@ -176,10 +179,11 @@ describe('AVNBridge', async () => {
       const avtSupplyBefore = await token20.totalSupply();
 
       const period = 2;
-      const t2TransactionId = helper.randomUint256();
-      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const t2TransactionId = helper.randomT2TxId();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
 
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
           .to.emit(avnBridge, 'LogGrowthTriggered')
           .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1, t2TransactionId);
 
@@ -197,10 +201,11 @@ describe('AVNBridge', async () => {
       const avtSupplyBefore = await token20.totalSupply();
 
       const period = 3;
-      const t2TransactionId = helper.randomUint256();
-      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const t2TransactionId = helper.randomT2TxId();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
 
-      await avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations);
+      await avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations);
       await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'ReleaseTimeNotPassed');
       expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
       expect(avtSupplyBefore).to.equal(await token20.totalSupply());
@@ -217,12 +222,13 @@ describe('AVNBridge', async () => {
       const avtSupplyBefore = await token20.totalSupply();
 
       const period = 4;
-      const t2TransactionId = helper.randomUint256();
-      const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const t2TransactionId = helper.randomT2TxId();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
 
       await avnBridge.setGrowthDelay(0);
 
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogGrowth').withArgs(growthAmount, period);
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogGrowth').withArgs(growthAmount, period);
 
       expect(avnBalanceBefore.add(growthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(avtSupplyBefore.add(growthAmount)).to.equal(await token20.totalSupply());
@@ -234,12 +240,13 @@ describe('AVNBridge', async () => {
 
     before(async () => {
       rootHash = helper.randomBytes32();
-      t2TransactionId = helper.randomUint256();
+      t2TransactionId = helper.randomT2TxId();
     });
 
     it('validator can publish a root with valid confirmations', async () => {
-      const confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
-      await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmations))
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations))
           .to.emit(avnBridge, 'LogRootPublished').withArgs(rootHash, t2TransactionId);
     });
 
@@ -248,10 +255,11 @@ describe('AVNBridge', async () => {
       it('validator functions are disabled', async () => {
         await expect(avnBridge.toggleValidatorFunctions(false)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
             .withArgs(false);
-        const newT2TransactionId = helper.randomUint256();
+        const newT2TransactionId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
-        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, newT2TransactionId);
-        await expect(avnBridge.connect(activeValidator).publishRoot(newRootHash, newT2TransactionId, confirmations,))
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newT2TransactionId);
+        await expect(avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, newT2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
         await expect(avnBridge.toggleValidatorFunctions(true)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
             .withArgs(true);
@@ -259,75 +267,83 @@ describe('AVNBridge', async () => {
 
       it('the t2 transaction ID is not unique', async () => {
         const newRootHash = helper.randomBytes32();
-        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, t2TransactionId);
-        await expect(avnBridge.connect(activeValidator).publishRoot(newRootHash, t2TransactionId, confirmations,))
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, t2TransactionId);
+        await expect(avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, t2TransactionId, confirmations,))
             .to.be.revertedWithCustomError(avnBridge, 'TransactionIdAlreadyUsed');
       });
 
       it('the root has already been published', async () => {
-        const newT2TransactionId = helper.randomUint256();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, newT2TransactionId);
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, newT2TransactionId, confirmations))
+        const newT2TransactionId = helper.randomT2TxId();
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, newT2TransactionId);
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, newT2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'RootHashAlreadyPublished');
       });
 
       it('the publishing ValidatorNotRegistered()', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
-        await expect(avnBridge.publishRoot(rootHash, t2TransactionId, confirmations))
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
+        await expect(avnBridge.publishRoot(rootHash, expiry, t2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
 
       it('the confirmations are invalid', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
-
-        let confirmations = '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, rootHash, t2TransactionId));
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmations))
+        const expiry = await helper.getValidExpiry();
+        let confirmations = '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId));
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
 
       it('there are no confirmations', async () => {
         rootHash = helper.randomBytes32();
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, '0x'))
+        const expiry = await helper.getValidExpiry();
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, '0x'))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
 
       it('there are not enough confirmations', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const numRequiredConfirmations = await helper.getNumRequiredConfirmations(avnBridge);
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId, -1);
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmations))
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId, -1);
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge,  'InvalidConfirmations');
       });
 
       it('the confirmations are corrupted', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
-        let confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
+        const expiry = await helper.getValidExpiry();
+        let confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
         confirmations = confirmations.replace(/1/g, '2');
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmations))
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
 
       it('the confirmations are not signed by registered validators', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const startFromNonValidator = nextValidatorId;
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId, 0, startFromNonValidator);
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmations))
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId, 0, startFromNonValidator);
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
 
       it('the confirmations are not unique', async () => {
-        t2TransactionId = helper.randomUint256();
+        t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const halfSet = Math.round(numActiveValidators/2);
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId, - halfSet);
+        const expiry = await helper.getValidExpiry();
+        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId, - halfSet);
         const duplicateConfirmations = confirmations + helper.strip_0x(confirmations);
-        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, duplicateConfirmations,))
+        await expect(avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, duplicateConfirmations,))
             .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
       });
     });
@@ -339,11 +355,12 @@ describe('AVNBridge', async () => {
       const numActiveValidatorsBefore = await avnBridge.numActiveValidators();
 
       const newValidator = validators[nextValidatorId];
-      let t2TransactionId = helper.randomUint256();
+      let t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
-      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      let expiry = await helper.getValidExpiry();
+      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorRegistered')
+          expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorRegistered')
           .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
       expect(await avnBridge.idToT1Address(nextValidatorId)).to.equal(newValidator.t1Address);
 
@@ -353,11 +370,12 @@ describe('AVNBridge', async () => {
 
       // Publishing a root containing a confirmation from the new validator activates the validator
       rootHash = helper.randomBytes32();
-      t2TransactionId = helper.randomUint256();
-      confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
-      newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, t2TransactionId, newValidator);
+      expiry = await helper.getValidExpiry();
+      t2TransactionId = helper.randomT2TxId();
+      confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
+      newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TransactionId, newValidator);
       const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
-      await avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmationsIncludingNewValidator);
+      await avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmationsIncludingNewValidator);
 
       expect(numActiveValidatorsBefore.add(ethers.BigNumber.from(1))).to.equal(await avnBridge.numActiveValidators());
       expect(await avnBridge.isActiveValidator(nextValidatorId)).to.equal(true);
@@ -368,54 +386,59 @@ describe('AVNBridge', async () => {
     it('a validator cannot be registered with an empty t1 public key', async () => {
       const prospectValidator = validators[nextValidatorId];
       const emptyKey = '0x';
-      const t2TransactionId = helper.randomUint256();
+      const t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [emptyKey, prospectValidator.t2PublicKey]);
-      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(emptyKey, prospectValidator.t2PublicKey,
-        t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'InvalidT1PublicKey');
+        expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'InvalidT1PublicKey');
     });
 
     it('an existing active validator cannot be re-registered', async () => {
       const existingValidator = validators[1];
-      const t2TransactionId = helper.randomUint256();
+      const t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = helper.keccak256(existingValidator.t1PublicKey, existingValidator.t2PublicKey);
-      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(existingValidator.t1PublicKey,
-          existingValidator.t2PublicKey, t2TransactionId, confirmations))
+          existingValidator.t2PublicKey, expiry, t2TransactionId, confirmations))
           .to.be.revertedWithCustomError(avnBridge, 'ValidatorAlreadyRegistered');
     });
 
     it('an existing deregistered validator cannot be re-registered with a different public key', async () => {
       const existingValidator = validators[numActiveValidators];
-      let t2TransactionId = helper.randomUint256();
+      let expiry = await helper.getValidExpiry();
+      let t2TransactionId = helper.randomT2TxId();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [existingValidator.t2PublicKey, existingValidator.t1PublicKey]);
-      let confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      let confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await avnBridge.connect(activeValidator).deregisterValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey,
-          t2TransactionId, confirmations);
+          expiry, t2TransactionId, confirmations);
       numActiveValidators--;
 
       const newValidator = validators[nextValidatorId];
-      t2TransactionId = helper.randomUint256();
+      expiry = await helper.getValidExpiry();
+      t2TransactionId = helper.randomT2TxId();
       let registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [existingValidator.t1PublicKey, newValidator.t2PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(existingValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2PublicKey');
+          expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2PublicKey');
 
-      t2TransactionId = helper.randomUint256();
+      t2TransactionId = helper.randomT2TxId();
       registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [existingValidator.t1PublicKey, existingValidator.t2PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await avnBridge.connect(activeValidator).registerValidator(existingValidator.t1PublicKey, existingValidator.t2PublicKey,
-          t2TransactionId, confirmations);
+          expiry, t2TransactionId, confirmations);
     });
 
     it('validators cannot be registered with a T2 public key that is already in use', async () => {
       const prospectValidator = validators[nextValidatorId];
       const existingValidator = validators[1];
-      const t2TransactionId = helper.randomUint256();
+      const t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [prospectValidator.t1PublicKey, existingValidator.t2PublicKey]);
-      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(prospectValidator.t1PublicKey,
-        existingValidator.t2PublicKey, t2TransactionId, confirmations))
+        existingValidator.t2PublicKey, expiry, t2TransactionId, confirmations))
         .to.be.revertedWithCustomError(avnBridge, 'T2PublicKeyAlreadyInUse');
     });
   });
@@ -426,29 +449,32 @@ describe('AVNBridge', async () => {
       let numActiveValidatorsBeforeRegistration = await avnBridge.numActiveValidators();
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       const newValidator = validators[nextValidatorId];
-      let t2TransactionId = helper.randomUint256();
+      let expiry = await helper.getValidExpiry();
+      let t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
-      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
-      await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId,
+      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
+      await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, expiry, t2TransactionId,
           confirmations);
       nextValidatorId++;
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
 
       // Publishing a root with a confirmation from the newly registered validator activates them
-      t2TransactionId = helper.randomUint256();
+      expiry = await helper.getValidExpiry();
+      t2TransactionId = helper.randomT2TxId();
       const rootHash = helper.randomBytes32();
-      confirmations = await helper.getConfirmations(avnBridge, rootHash, t2TransactionId);
-      const newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, t2TransactionId, newValidator);
+      confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
+      const newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TransactionId, newValidator);
       const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
-      await avnBridge.connect(activeValidator).publishRoot(rootHash, t2TransactionId, confirmationsIncludingNewValidator);
+      await avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmationsIncludingNewValidator);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration.add(1));
 
-      t2TransactionId = helper.randomUint256();
+      expiry = await helper.getValidExpiry();
+      t2TransactionId = helper.randomT2TxId();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newValidator.t2PublicKey, newValidator.t1PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
+          expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
           .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
 
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
@@ -459,20 +485,22 @@ describe('AVNBridge', async () => {
       const numActiveValidatorsBeforeRegistration = await avnBridge.numActiveValidators();
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       const newValidator = validators[nextValidatorId];
-      let t2TransactionId = helper.randomUint256();
+      let t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
-      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
-      await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, t2TransactionId,
+      let expiry = await helper.getValidExpiry();
+      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
+      await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, expiry, t2TransactionId,
           confirmations);
       nextValidatorId++;
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
 
-      t2TransactionId = helper.randomUint256();
+      t2TransactionId = helper.randomT2TxId();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newValidator.t2PublicKey, newValidator.t1PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      expiry = await helper.getValidExpiry();
+      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
+          expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
           .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
 
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
@@ -481,35 +509,39 @@ describe('AVNBridge', async () => {
 
     it('cannot deregister an already deregistered validator', async () => {
       const newValidator = validators[nextValidatorId];
-      let t2TransactionId = helper.randomUint256();
+      let t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [newValidator.t1PublicKey, newValidator.t2PublicKey]);
-      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, t2TransactionId);
+      let expiry = await helper.getValidExpiry();
+      let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations);
+          expiry, t2TransactionId, confirmations);
       nextValidatorId++;
-      t2TransactionId = helper.randomUint256();
+      t2TransactionId = helper.randomT2TxId();
+      expiry = await helper.getValidExpiry();
       let deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newValidator.t2PublicKey, newValidator.t1PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations);
+          expiry, t2TransactionId, confirmations);
       numActiveValidators--;
-      t2TransactionId = helper.randomUint256();
+      t2TransactionId = helper.randomT2TxId();
+      expiry = await helper.getValidExpiry();
       deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'],
           [newValidator.t2PublicKey, newValidator.t1PublicKey]);
-      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
-          t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'ValidatorNotRegistered');
+          expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'ValidatorNotRegistered');
     });
 
     it('validator functions are disabled', async () => {
       await expect(avnBridge.toggleValidatorFunctions(false)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
           .withArgs(false);
-      const t2TransactionId = helper.randomUint256();
+      const t2TransactionId = helper.randomT2TxId();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [validators[0].t2PublicKey,
           validators[0].t1PublicKey]);
-      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey,
-          t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
+          expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
       await expect(avnBridge.toggleValidatorFunctions(true)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
           .withArgs(true);
 
@@ -517,11 +549,12 @@ describe('AVNBridge', async () => {
 
     it('the account making the call is not registered', async () => {
       const activeValidator = validators[1];
-      const t2TransactionId = helper.randomUint256();
+      const t2TransactionId = helper.randomT2TxId();
       const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [validators[0].t2PublicKey,
           validators[0].t1PublicKey]);
-      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, t2TransactionId);
-      await expect(avnBridge.deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, t2TransactionId,
+      const expiry = await helper.getValidExpiry();
+      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
+      await expect(avnBridge.deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, expiry, t2TransactionId,
           confirmations)).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
     });
   });
