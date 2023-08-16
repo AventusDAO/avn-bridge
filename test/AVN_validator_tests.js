@@ -146,6 +146,15 @@ describe('AVNBridge', async () => {
           .to.be.revertedWithCustomError(avnBridge, 'TransactionIdAlreadyUsed');
     });
 
+    it('fails to trigger growth with an expiry that has passed', async () => {
+      const period = 2;
+      const expiry = await helper.getCurrentBlockTimestamp() - 1;
+      const t2TransactionId = helper.randomT2TxId();
+      const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
+          .to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+    });
+
     it('fails to trigger growth with InvalidConfirmations', async () => {
       const period = 2;
       const expiry = await helper.getValidExpiry();
@@ -263,6 +272,15 @@ describe('AVNBridge', async () => {
             .to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
         await expect(avnBridge.toggleValidatorFunctions(true)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
             .withArgs(true);
+      });
+
+      it('the expiry time has passed', async () => {
+        const newT2TransactionId = helper.randomT2TxId();
+        const newRootHash = helper.randomBytes32();
+        const expiry = await helper.getCurrentBlockTimestamp() - 1;
+        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newT2TransactionId);
+        await expect(avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, newT2TransactionId, confirmations,))
+            .to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
       });
 
       it('the t2 transaction ID is not unique', async () => {
@@ -386,19 +404,29 @@ describe('AVNBridge', async () => {
     it('a validator cannot be registered with an empty t1 public key', async () => {
       const prospectValidator = validators[nextValidatorId];
       const emptyKey = '0x';
+      const expiry = await helper.getValidExpiry();
       const t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [emptyKey, prospectValidator.t2PublicKey]);
-      const expiry = await helper.getValidExpiry();
       const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(emptyKey, prospectValidator.t2PublicKey,
         expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'InvalidT1PublicKey');
     });
 
+    it('a validator cannot be registered if the expiry time has passed', async () => {
+      const prospectValidator = validators[nextValidatorId];
+      const expiry = await helper.getCurrentBlockTimestamp() - 1;
+      const t2TransactionId = helper.randomT2TxId();
+      const registerValidatorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [prospectValidator.t1PublicKey, prospectValidator.t2PublicKey]);
+      const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
+      await expect(avnBridge.connect(activeValidator).registerValidator(prospectValidator.t1PublicKey, prospectValidator.t2PublicKey,
+        expiry, t2TransactionId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+    });
+
     it('an existing active validator cannot be re-registered', async () => {
       const existingValidator = validators[1];
+      const expiry = await helper.getValidExpiry();
       const t2TransactionId = helper.randomT2TxId();
       const registerValidatorHash = helper.keccak256(existingValidator.t1PublicKey, existingValidator.t2PublicKey);
-      const expiry = await helper.getValidExpiry();
       const confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(existingValidator.t1PublicKey,
           existingValidator.t2PublicKey, expiry, t2TransactionId, confirmations))
@@ -545,6 +573,16 @@ describe('AVNBridge', async () => {
       await expect(avnBridge.toggleValidatorFunctions(true)).to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
           .withArgs(true);
 
+    });
+
+    it('the expiry time for the call has passed', async () => {
+      const expiry = await helper.getCurrentBlockTimestamp() - 1;
+      const t2TransactionId = helper.randomT2TxId();
+      const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [validators[0].t2PublicKey,
+          validators[0].t1PublicKey]);
+      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
+      await expect(avnBridge.deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, expiry, t2TransactionId,
+          confirmations)).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
     });
 
     it('the account making the call is not registered', async () => {
