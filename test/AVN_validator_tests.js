@@ -133,7 +133,7 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(growthAmount, period, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
           .to.emit(avnBridge, 'LogGrowthTriggered')
-          .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1);
+          .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1, t2TransactionId);
     });
 
     it('fails to trigger growth with an invalid transaction ID', async () => {
@@ -181,7 +181,7 @@ describe('AVNBridge', async () => {
 
       await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, t2TransactionId, confirmations))
           .to.emit(avnBridge, 'LogGrowthTriggered')
-          .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1);
+          .withArgs(growthAmount, period, await helper.getCurrentBlockTimestamp() + GROWTH_DELAY + 1, t2TransactionId);
 
       await avnBridge.denyGrowth(period);
 
