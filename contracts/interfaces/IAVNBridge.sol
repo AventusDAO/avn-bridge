@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.21;
 
 interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
@@ -16,8 +16,8 @@ interface IAVNBridge {
       uint256 indexed t2TransactionId);
   event LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId);
 
-  event LogLifted(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
-  event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogLifted(address indexed token, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogLowered(bytes32 indexed t2PublicKey);
   event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint256 indexed releaseTime, uint256 indexed t2TransactionId);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 

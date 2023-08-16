@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.21;
 
 /// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
 /// @author Aventus Network Services
@@ -458,7 +458,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
     uint256 newBalance = erc20Contract.balanceOf(address(this));
     if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(erc20Address, msg.sender, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
+    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
   }
 
 
@@ -474,7 +474,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (msg.value == 0) revert AmountCannotBeZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
+    emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
   /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
@@ -486,18 +486,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
     Emits a corresponding lift event to be read by T2.
   */
-  function tokensReceived(address /* operator */, address from, address to, uint256 amount, bytes calldata data,
+  function tokensReceived(address /* operator */, address /* from */, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
     onlyWhenLiftingIsEnabled
     external
   {
-    if (from == priorInstance) return; // recovering funds so we don't lift here
-    if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
+    if (data.length == 0 && msg.sender == coreToken) return; // growth action so we don't lift here
     if (amount == 0) revert AmountCannotBeZero();
     if (to != address(this)) revert TokensMustBeSentToThisAddress();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777Token();
     if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
+    emit LogLifted(msg.sender, _checkT2PublicKey(data), amount);
   }
 
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
@@ -563,7 +562,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       assert(IERC20(token).transfer(t1Address, amount));
     }
 
-    emit LogLowered(token, t1Address, t2PublicKey, amount);
+    emit LogLowered(t2PublicKey);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root

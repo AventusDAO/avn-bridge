@@ -36,7 +36,7 @@ describe('AVNBridge lowering', async () => {
         const leaf = leaves[i].replace(ORIGINAL_TOKEN, helper.strip_0x(token20.address.toLowerCase()));
         const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
         if (incrementingAmount === true) amount = i + 2;
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered').withArgs(token20.address, T1_ADDRESS, T2_PUBLIC_KEY, amount);
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered').withArgs(T2_PUBLIC_KEY);
       }
     }
 
