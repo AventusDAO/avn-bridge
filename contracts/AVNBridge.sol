@@ -119,7 +119,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextValidatorId = 1;
-    quorum[0] = 2;
+    quorum[0] = 1;
     quorum[1] = 3;
     growthDelay = 7 days;
   }
@@ -487,8 +487,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
-    bytes memory txLeaf = leaf;
     if (!loweringIsEnabled) revert LoweringIsDisabled();
+    bytes memory txLeaf = leaf;
     bytes32 leafHash = keccak256(txLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
