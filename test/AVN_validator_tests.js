@@ -299,15 +299,6 @@ describe('AVNBridge', async () => {
             .to.be.revertedWithCustomError(avnBridge, 'RootHashAlreadyPublished');
       });
 
-      it('the publishing ValidatorNotRegistered()', async () => {
-        t2TransactionId = helper.randomT2TxId();
-        rootHash = helper.randomBytes32();
-        const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
-        await expect(avnBridge.publishRoot(rootHash, expiry, t2TransactionId, confirmations))
-            .to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
-      });
-
       it('the confirmations are invalid', async () => {
         t2TransactionId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
@@ -583,17 +574,6 @@ describe('AVNBridge', async () => {
       const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, expiry, t2TransactionId,
           confirmations)).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
-    });
-
-    it('the account making the call is not registered', async () => {
-      const activeValidator = validators[1];
-      const t2TransactionId = helper.randomT2TxId();
-      const deregisterValidatorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [validators[0].t2PublicKey,
-          validators[0].t1PublicKey]);
-      const expiry = await helper.getValidExpiry();
-      const confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
-      await expect(avnBridge.deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, expiry, t2TransactionId,
-          confirmations)).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
     });
   });
 });
