@@ -215,7 +215,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Set the proportion of active validators required to prove T2 validator consensus
   /// @param _quorum 2 element array of ratio's numerator followed by its denominator
   /// @dev Number of validators * quorum[0] / quorum[1] + 1 = confirmations required for a validator function to succeed
-  function setQuorum(uint256[2] memory _quorum)
+  function setQuorum(uint256[2] calldata _quorum)
     onlyOwner
     public
   {
@@ -334,7 +334,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -364,14 +364,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     isRegisteredValidator[id] = true;
 
-    bytes32 t1PublicKeyLHS;
-    bytes32 t1PublicKeyRHS;
-    assembly {
-      t1PublicKeyLHS := mload(add(t1PublicKey, 0x20))
-      t1PublicKeyRHS := mload(add(t1PublicKey, 0x40))
-    }
-
-    emit LogValidatorRegistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
+    emit LogValidatorRegistered(t1Address, t2PublicKey, t2TransactionId);
   }
 
   /// @notice Deregister and deactivate a validator, removing them from consensus
@@ -384,7 +377,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -405,14 +398,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, expiry, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
-    bytes32 t1PublicKeyLHS;
-    bytes32 t1PublicKeyRHS;
-    assembly {
-      t1PublicKeyLHS := mload(add(t1PublicKey, 0x20))
-      t1PublicKeyRHS := mload(add(t1PublicKey, 0x40))
-    }
-
-    emit LogValidatorDeregistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
+    emit LogValidatorDeregistered(idToT1Address[id], t2PublicKey, t2TransactionId);
   }
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
@@ -563,7 +549,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)
+  function confirmAvnTransaction(bytes32 leafHash, bytes32[] calldata merklePath)
     public
     view
     returns (bool)
@@ -711,7 +697,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
-  function _checkT2PublicKey(bytes memory t2PublicKey)
+  function _checkT2PublicKey(bytes calldata t2PublicKey)
     private
     pure
     returns (bytes32 checkedT2PublicKey)

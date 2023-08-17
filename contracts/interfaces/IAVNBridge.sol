@@ -10,10 +10,8 @@ interface IAVNBridge {
   event LogLoweringIsEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
 
-  event LogValidatorRegistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey,
-      uint256 indexed t2TransactionId);
-  event LogValidatorDeregistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey,
-      uint256 indexed t2TransactionId);
+  event LogValidatorRegistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId);
+  event LogValidatorDeregistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId);
   event LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PublicKey, uint256 amount);
