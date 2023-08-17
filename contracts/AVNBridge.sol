@@ -648,10 +648,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     do {
       assembly {
-        let offset := mul(i, SIGNATURE_LENGTH)
-        r := mload(add(confirmations, add(0x20, offset)))
-        s := mload(add(confirmations, add(0x40, offset)))
-        v := byte(0, mload(add(confirmations, add(0x60, offset))))
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 32))
+        s := mload(add(offset, 64))
+        v := byte(0, mload(add(offset, 96)))
       }
 
       if (v < 27) {
