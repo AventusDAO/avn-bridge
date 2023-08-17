@@ -484,11 +484,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
-  function lower(bytes memory leaf, bytes32[] calldata merklePath)
+  function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
+    bytes memory txLeaf = leaf;
     if (!loweringIsEnabled) revert LoweringIsDisabled();
-    bytes32 leafHash = keccak256(leaf);
+    bytes32 leafHash = keccak256(txLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
     uint256 numBytes;
@@ -501,17 +502,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     hasLowered[leafHash] = true;
 
     unchecked {
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
-      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
+      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the txLeaf length
+      if (uint8(txLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure txLeaf is a signed tx
       ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
-      ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
-      ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
+      ptr += txLeaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the tip
+      ptr += 32; // account for the first 32 EVM bytes holding the txLeaf's length
     }
 
     assembly {
-      callId := mload(add(leaf, ptr))
+      callId := mload(add(txLeaf, ptr))
     }
 
     numBytes = numBytesToLowerData[callId];
@@ -519,10 +520,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     unchecked { ptr += numBytes; }
 
     assembly {
-      t2PublicKey := mload(add(leaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
-      token := mload(add(add(leaf, 20), ptr)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
-      amount := mload(add(add(leaf, 36), ptr)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
-      t1Address := mload(add(add(leaf, 56), ptr)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
+      t2PublicKey := mload(add(txLeaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
+      token := mload(add(add(txLeaf, 20), ptr)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
+      amount := mload(add(add(txLeaf, 36), ptr)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
+      t1Address := mload(add(add(txLeaf, 56), ptr)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
     }
 
     // amount was encoded in little endian so we need to reverse to big endian:
