@@ -173,9 +173,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       isRegisteredValidator[nextValidatorId] = true;
       isActiveValidator[nextValidatorId] = true;
       unchecked {
-        numActiveValidators++;
-        nextValidatorId++;
-        i++;
+        ++numActiveValidators;
+        ++nextValidatorId;
+        ++i;
       }
     }
   }
@@ -357,7 +357,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1AddressToId[t1Address] = id;
       idToT2PublicKey[id] = t2PublicKey;
       t2PublicKeyToId[t2PublicKey] = id;
-      unchecked { nextValidatorId++; }
+      unchecked { ++nextValidatorId; }
     } else {
       if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2PublicKey(idToT2PublicKey[id]);
     }
@@ -579,7 +579,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       else
         rootHash = keccak256(abi.encode(node, rootHash));
 
-      unchecked { i++; }
+      unchecked { ++i; }
     }
 
     return isPublishedRootHash[rootHash];
@@ -672,7 +672,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        unchecked { i++; }
+        unchecked { ++i; }
         continue;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
@@ -682,8 +682,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
             unchecked {
-              numActiveValidators++;
-              validConfirmations++;
+              ++numActiveValidators;
+              ++validConfirmations;
             }
             // Update the number of required confirmations to account for the newly activated validator
             requiredConfirmations = _requiredConfirmations();
@@ -692,13 +692,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             confirmed[id] = true;
           }
         } else if (!confirmed[id]) {
-          unchecked { validConfirmations++; }
+          unchecked { ++validConfirmations; }
           if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
         }
       }
 
-      unchecked { i++; }
+      unchecked { ++i; }
     } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
