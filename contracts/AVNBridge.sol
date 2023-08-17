@@ -653,12 +653,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
+    uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
     bool[] memory confirmed = new bool[](nextValidatorId);
 
-    for (uint256 i; i < numConfirmations;) {
+    do {
       assembly {
         let offset := mul(i, SIGNATURE_LENGTH)
         r := mload(add(confirmations, add(0x20, offset)))
@@ -698,7 +699,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       unchecked { i++; }
-    }
+    } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
   }
