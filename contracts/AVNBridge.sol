@@ -412,9 +412,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
+    if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
     _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
-    if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TransactionId);
   }
