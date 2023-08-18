@@ -63,7 +63,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 public nextValidatorId;
   uint256 public growthDelay;
   address public coreToken;
-  address internal priorInstance;
+  address internal priorInstance; // No longer used
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
@@ -77,7 +77,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error AddressMismatch(address t1Address, bytes t1PublicKey);
   error SetCoreOwnerFailed();
   error InvalidQuorum();
-  error CannotReceiveETHUnlessLifting();
+  error CannotReceiveETHUnlessLifting(); // No longer used
   error AmountCannotBeZero();
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
@@ -104,14 +104,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidT2PublicKey();
   error WindowHasExpired();
 
-  function initialize(address _coreToken, address _priorInstance)
+  function initialize(address _coreToken)
     public
     initializer
   {
     if (_coreToken == address(0)) revert NoCoreTokenSupplied();
     __Ownable_init();
     coreToken = _coreToken;
-    priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
     numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
@@ -264,10 +263,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     numBytesToLowerData[callId] = numBytes;
     emit LogLowerCallUpdated(callId, numBytes);
-  }
-
-  receive() payable external {
-    if (msg.sender != priorInstance) revert CannotReceiveETHUnlessLifting();
   }
 
   /// @notice Initialise inflating the core token supply by the specified amount
@@ -477,7 +472,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    if (from == priorInstance) return; // recovering funds so we don't lift here
     if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
     if (amount == 0) revert AmountCannotBeZero();
     if (to != address(this)) revert TokensMustBeSentToThisAddress();

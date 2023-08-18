@@ -50,10 +50,9 @@ async function init(largeTree) {
   }
 }
 
-async function deployAVNBridge(coreToken, prior) {
-  priorInstance = prior || ZERO_ADDRESS;
+async function deployAVNBridge(coreToken) {
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
-  return await upgrades.deployProxy(AVNBridge, [coreToken, priorInstance], {kind: 'uups'});
+  return await upgrades.deployProxy(AVNBridge, [coreToken], {kind: 'uups'});
 }
 
 function getTxLeafMetadata() {
