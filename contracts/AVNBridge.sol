@@ -102,6 +102,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidConfirmations();
   error TransactionIdAlreadyUsed();
   error InvalidT2PublicKey();
+  error WindowHasExpired();
 
   function initialize(address _coreToken, address _priorInstance)
     public
@@ -131,6 +132,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   modifier onlyWhenValidatorFunctionsAreEnabled() {
     if (!validatorFunctionsAreEnabled) revert ValidatorFunctionsAreDisabled();
+    _;
+  }
+
+  modifier onlyWithinCallWindow(uint64 expiry) {
+    if (block.timestamp > expiry) revert WindowHasExpired();
     _;
   }
 
@@ -267,6 +273,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Initialise inflating the core token supply by the specified amount
   /// @param amount Amount of new tokens to mint for period
   /// @param period Unique growth period
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
@@ -275,8 +282,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
+    onlyWithinCallWindow(expiry)
     external
   {
     if (amount == 0) revert AmountCannotBeZero();
@@ -289,7 +297,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       _releaseGrowth(amount, period);
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
-      _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
+      _verifyConfirmations(_toConfirmationHash(growthHash, expiry, t2TransactionId), confirmations);
       _storeT2TransactionId(t2TransactionId);
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
@@ -321,6 +329,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Register a new validator, allowing them to participate in consensus
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
@@ -330,9 +339,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
+  function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
+    onlyWithinCallWindow(expiry)
     external
   {
     if (t1PublicKey.length != 64) revert InvalidT1PublicKey();
@@ -342,7 +352,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     // The order of the elements is the reverse of the deregisterValidatorHash
     bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
-    _verifyConfirmations(_toConfirmationHash(registerValidatorHash, t2TransactionId), confirmations);
+    _verifyConfirmations(_toConfirmationHash(registerValidatorHash, expiry, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
@@ -372,15 +382,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Deregister and deactivate a validator, removing them from consensus
   /// @param t1PublicKey 64 byte Ethereum public key of validator
   /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
+  function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
+    onlyWithinCallWindow(expiry)
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
@@ -395,7 +407,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
-    _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, t2TransactionId), confirmations);
+    _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, expiry, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
     bytes32 t1PublicKeyLHS;
@@ -410,14 +422,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
+  /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
-  function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations)
+  function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
+    onlyWithinCallWindow(expiry)
     external
   {
-    _verifyConfirmations(_toConfirmationHash(rootHash, t2TransactionId), confirmations);
+    _verifyConfirmations(_toConfirmationHash(rootHash, expiry, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
     if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
     isPublishedRootHash[rootHash] = true;
@@ -612,12 +626,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
-  function _toConfirmationHash(bytes32 data, uint256 t2TransactionId)
+  function _toConfirmationHash(bytes32 data, uint64 expiry, uint64 t2TransactionId)
     private
     view
     returns (bytes32)
   {
-    return keccak256(abi.encode(data, t2TransactionId, idToT2PublicKey[t1AddressToId[msg.sender]]));
+    return keccak256(abi.encode(data, expiry, t2TransactionId, idToT2PublicKey[t1AddressToId[msg.sender]]));
   }
 
   function _requiredConfirmations()

@@ -77,12 +77,12 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function getConfirmations(contract, data, t2TransactionId, adjustment, startPos) {
+async function getConfirmations(contract, data, expiry, t2TransactionId, adjustment, startPos) {
   startPos = startPos || 1;
   adjustment = adjustment || 0;
   const numConfirmations = await getNumRequiredConfirmations(contract) + adjustment;
   let concatenatedConfirmations = '0x';
-  const confirmationHash = toConfirmationHash(data, t2TransactionId, validators[0].t2PublicKey);
+  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId, validators[0].t2PublicKey);
   for (i = startPos; i <= numConfirmations; i++) {
     const confirmation = await validators[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
     concatenatedConfirmations += strip_0x(confirmation);
@@ -90,8 +90,8 @@ async function getConfirmations(contract, data, t2TransactionId, adjustment, sta
   return concatenatedConfirmations;
 }
 
-async function getSingleConfirmation(contract, data, t2TransactionId, validator) {
-  const confirmationHash = toConfirmationHash(data, t2TransactionId, validators[0].t2PublicKey);
+async function getSingleConfirmation(contract, data, expiry, t2TransactionId, validator) {
+  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId, validators[0].t2PublicKey);
   return await validator.account.signMessage(ethers.utils.arrayify(confirmationHash));
 }
 
@@ -123,9 +123,10 @@ async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyL
   const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPublicKey + token + amountBytes + t1Address;
   const leaves = [encodedLeaf].concat(additionalTx);
   const merkleTree = createMerkleTree(leaves);
-  const t2TransactionId = randomUint256();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, t2TransactionId, confirmations);
+  const expiry = await getValidExpiry();
+  const t2TransactionId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
+  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
@@ -139,18 +140,20 @@ async function createTreeAndPublishRootWithLoweree(contract, loweree, tokenAddre
   const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPublicKey + token + amountBytes + t1Address;
   const leaves = [encodedLeaf].concat(additionalTx);
   const merkleTree = createMerkleTree(leaves);
-  const t2TransactionId = randomUint256();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, t2TransactionId, confirmations);
+  const expiry = await getValidExpiry();
+  const t2TransactionId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
+  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
 async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
   const leaves = [testLeaf, randomBytes32()];
   const merkleTree = await createMerkleTree(leaves);
-  const t2TransactionId = randomUint256();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, t2TransactionId, confirmations);
+  const expiry = await getValidExpiry();
+  const t2TransactionId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
+  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
@@ -160,8 +163,9 @@ async function getNumRequiredConfirmations(contract) {
   return Math.floor(numValidators * quorum[0].toNumber() / quorum[1].toNumber()) + 1;
 }
 
-function toConfirmationHash(data, t2TransactionId, t2PublicKey) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'bytes32'], [data, t2TransactionId.toString(), t2PublicKey]);
+function toConfirmationHash(data, expiry, t2TransactionId, t2PublicKey) {
+  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint256', 'bytes32'],
+      [data, expiry, t2TransactionId.toString(), t2PublicKey]);
   return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
 }
 
@@ -174,8 +178,8 @@ function randomBytes32() {
   return randomHex(32);
 }
 
-function randomUint256() {
-  return ethers.BigNumber.from(randomBytes32());
+function randomT2TxId() {
+  return ethers.BigNumber.from(randomHex(8));
 }
 
 function strip_0x(bytes) {
@@ -201,6 +205,9 @@ async function getCurrentBlockTimestamp(){
   return block.timestamp;
 }
 
+async function getValidExpiry() {
+  return await getCurrentBlockTimestamp() + 60;
+}
 // Keep exports alphabetical.
 module.exports = {
   accounts: () => accounts,
@@ -213,6 +220,7 @@ module.exports = {
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
   getSingleConfirmation,
+  getValidExpiry,
   increaseBlockTimestamp,
   init,
   keccak256,
@@ -224,7 +232,7 @@ module.exports = {
   owner: () => owner,
   randomBytes32,
   randomHex,
-  randomUint256,
+  randomT2TxId,
   someT2PublicKey: () => someT2PublicKey,
   strip_0x,
   toConfirmationHash,
