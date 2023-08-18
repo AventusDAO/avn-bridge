@@ -25,7 +25,7 @@ interface IAVNBridge {
   function setCoreOwner() external;
   function denyGrowth(uint32 period) external;
   function setGrowthDelay(uint256 delaySeconds) external;
-  function setQuorum(uint256[2] memory quorum) external;
+  function setQuorum(uint256[2] calldata quorum) external;
   function toggleValidatorFunctions(bool state) external;
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
