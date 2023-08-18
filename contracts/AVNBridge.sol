@@ -198,7 +198,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    growthRelease[period] = 0;
+    delete growthRelease[period];
     emit LogGrowthDenied(period);
   }
 
@@ -317,7 +317,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 releaseTime = growthRelease[period];
     if (releaseTime == 0) revert GrowthUnavailableForPeriod();
     if (block.timestamp < releaseTime) revert ReleaseTimeNotPassed(releaseTime);
-    growthRelease[period] = 0;
+    delete growthRelease[period];
     _releaseGrowth(growthAmount[period], period);
   }
 
@@ -492,38 +492,37 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 leafHash = keccak256(txLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
-    uint256 numBytes;
+    hasLowered[leafHash] = true;
     uint256 ptr;
     bytes32 t2PublicKey;
     address token;
     address t1Address;
     uint128 amount;
     bytes2 callId;
-    hasLowered[leafHash] = true;
 
     unchecked {
-      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the txLeaf length
+      ptr += _getCompactIntegerByteSize(txLeaf[0]); // add number of bytes encoding the txLeaf length
       if (uint8(txLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure txLeaf is a signed tx
-      ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
-      ptr += txLeaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
+      // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes
+      ptr += txLeaf[ptr + 99] == 0x00 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
       ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the nonce
       ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the tip
-      ptr += 32; // account for the first 32 EVM bytes holding the txLeaf's length
     }
 
     assembly {
-      callId := mload(add(txLeaf, ptr))
+      ptr := add(txLeaf, add(ptr, 32)) // point to call ID postion in txLeaf, skipping first 32 bytes denoting the leaf's length
+      callId := mload(ptr) // load leftmost 2 bytes of next 32 bytes into 2 byte type starting at ptr
     }
 
-    numBytes = numBytesToLowerData[callId];
-    if (numBytes == 0) revert NotALowerTransaction();
-    unchecked { ptr += numBytes; }
+    uint256 numBytesToSkip = numBytesToLowerData[callId];
+    if (numBytesToSkip == 0) revert NotALowerTransaction();
 
     assembly {
-      t2PublicKey := mload(add(txLeaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
-      token := mload(add(add(txLeaf, 20), ptr)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
-      amount := mload(add(add(txLeaf, 36), ptr)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
-      t1Address := mload(add(add(txLeaf, 56), ptr)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
+      ptr := add(ptr, numBytesToSkip) // point to the start of T2 lower transaction arguments in the leaf
+      t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
+      token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
+      amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
+      t1Address := mload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
     }
 
     // amount was encoded in little endian so we need to reverse to big endian:
@@ -625,11 +624,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 numConfirmations;
-    uint256 requiredConfirmations;
     unchecked {
       numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     }
-    requiredConfirmations = _requiredConfirmations();
+    uint256 requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
     uint256 i;
