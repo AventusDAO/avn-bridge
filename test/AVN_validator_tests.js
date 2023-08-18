@@ -103,7 +103,7 @@ describe('AVNBridge', async () => {
         await expect(avnBridge.setQuorum([1,0])).to.be.revertedWithCustomError(avnBridge, 'InvalidQuorum');
       });
       it('not called by the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).setQuorum([2,3]))
+        await expect(avnBridge.connect(someOtherAccount).setQuorum([1,3]))
             .to.be.revertedWith('Ownable: caller is not the owner');
       });
     });

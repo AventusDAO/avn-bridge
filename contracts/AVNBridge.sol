@@ -119,7 +119,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextValidatorId = 1;
-    quorum[0] = 2;
+    quorum[0] = 1;
     quorum[1] = 3;
     growthDelay = 7 days;
   }
@@ -215,7 +215,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Set the proportion of active validators required to prove T2 validator consensus
   /// @param _quorum 2 element array of ratio's numerator followed by its denominator
   /// @dev Number of validators * quorum[0] / quorum[1] + 1 = confirmations required for a validator function to succeed
-  function setQuorum(uint256[2] memory _quorum)
+  function setQuorum(uint256[2] calldata _quorum)
     onlyOwner
     public
   {
