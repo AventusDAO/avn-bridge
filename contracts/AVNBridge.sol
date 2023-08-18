@@ -292,7 +292,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       _releaseGrowth(amount, period);
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
-      _verifyConfirmations(_toConfirmationHash(growthHash, expiry, t2TransactionId), confirmations);
+      _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TransactionId)), confirmations);
       _storeT2TransactionId(t2TransactionId);
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
@@ -347,7 +347,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     // The order of the elements is the reverse of the deregisterValidatorHash
     bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
-    _verifyConfirmations(_toConfirmationHash(registerValidatorHash, expiry, t2TransactionId), confirmations);
+    _verifyConfirmations(keccak256(abi.encode(registerValidatorHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
@@ -395,7 +395,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     // The order of the elements is the reverse of the registerValidatorHash
     bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
-    _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, expiry, t2TransactionId), confirmations);
+    _verifyConfirmations(keccak256(abi.encode(deregisterValidatorHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
     emit LogValidatorDeregistered(idToT1Address[id], t2PublicKey, t2TransactionId);
@@ -412,9 +412,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
-    _verifyConfirmations(_toConfirmationHash(rootHash, expiry, t2TransactionId), confirmations);
-    _storeT2TransactionId(t2TransactionId);
     if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
+    _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TransactionId)), confirmations);
+    _storeT2TransactionId(t2TransactionId);
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TransactionId);
   }
@@ -604,14 +604,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else {
       unchecked { byteLength = uint8(checkByte >> 2) + 5; } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
     }
-  }
-
-  function _toConfirmationHash(bytes32 data, uint64 expiry, uint64 t2TransactionId)
-    private
-    view
-    returns (bytes32)
-  {
-    return keccak256(abi.encode(data, expiry, t2TransactionId, idToT2PublicKey[t1AddressToId[msg.sender]]));
   }
 
   function _requiredConfirmations()
