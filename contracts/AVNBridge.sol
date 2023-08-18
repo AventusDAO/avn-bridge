@@ -577,13 +577,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     IERC20 erc20Token = IERC20(coreToken);
-    uint256 oldBalance = erc20Token.balanceOf(address(this));
-    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
-    unchecked { expectedBalance = oldBalance + amount; }
-    if (!success || expectedBalance != newBalance) revert CoreMintFailed();
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    unchecked { expectedBalance = erc20Token.balanceOf(address(this)) + amount; }
+    if (expectedBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
+    if (!success || expectedBalance != erc20Token.balanceOf(address(this))) revert CoreMintFailed();
     emit LogGrowth(amount, period);
   }
 
@@ -624,24 +622,24 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 numConfirmations;
-    uint256 requiredConfirmations;
     unchecked {
       numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     }
-    requiredConfirmations = _requiredConfirmations();
+    uint256 requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
+    uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
     bool[] memory confirmed = new bool[](nextValidatorId);
 
-    for (uint256 i; i < numConfirmations;) {
+    do {
       assembly {
-        let offset := mul(i, SIGNATURE_LENGTH)
-        r := mload(add(confirmations, add(0x20, offset)))
-        s := mload(add(confirmations, add(0x40, offset)))
-        v := byte(0, mload(add(confirmations, add(0x60, offset))))
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 32))
+        s := mload(add(offset, 64))
+        v := byte(0, mload(add(offset, 96)))
       }
 
       if (v < 27) {
@@ -649,7 +647,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        unchecked { i++; }
+        unchecked { ++i; }
         continue;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
@@ -659,8 +657,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
             unchecked {
-              numActiveValidators++;
-              validConfirmations++;
+              ++numActiveValidators;
+              ++validConfirmations;
             }
             // Update the number of required confirmations to account for the newly activated validator
             requiredConfirmations = _requiredConfirmations();
@@ -669,14 +667,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             confirmed[id] = true;
           }
         } else if (!confirmed[id]) {
-          unchecked { validConfirmations++; }
+          unchecked { ++validConfirmations; }
           if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
         }
       }
 
-      unchecked { i++; }
-    }
+      unchecked { ++i; }
+    } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
   }
