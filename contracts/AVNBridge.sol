@@ -318,7 +318,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -341,7 +341,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1AddressToId[t1Address] = id;
       idToT2PublicKey[id] = t2PublicKey;
       t2PublicKeyToId[t2PublicKey] = id;
-      unchecked { nextValidatorId++; }
+      unchecked { ++nextValidatorId; }
     } else {
       if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2PublicKey(idToT2PublicKey[id]);
     }
@@ -361,7 +361,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)

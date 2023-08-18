@@ -34,9 +34,9 @@ interface IAVNBridge {
       external;
 
   // Validators only
-  function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations) external;
-  function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
       bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations) external;
 
