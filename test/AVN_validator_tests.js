@@ -379,7 +379,7 @@ describe('AVNBridge', async () => {
       let confirmations = await helper.getConfirmations(avnBridge, registerValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).registerValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
           expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorRegistered')
-          .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
+          .withArgs(newValidator.t1Address, newValidator.t2PublicKey, t2TransactionId);
       expect(await avnBridge.idToT1Address(nextValidatorId)).to.equal(newValidator.t1Address);
 
       // The validator is registered but not active
@@ -503,7 +503,7 @@ describe('AVNBridge', async () => {
       confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
           expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
-          .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
+          .withArgs(newValidator.t1Address, newValidator.t2PublicKey, t2TransactionId);
 
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);
@@ -529,7 +529,7 @@ describe('AVNBridge', async () => {
       confirmations = await helper.getConfirmations(avnBridge, deregisterValidatorHash, expiry, t2TransactionId);
       await expect(avnBridge.connect(activeValidator).deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey,
           expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogValidatorDeregistered')
-          .withArgs(newValidator.t1PublicKeyLHS, newValidator.t1PublicKeyRHS, newValidator.t2PublicKey, t2TransactionId);
+          .withArgs(newValidator.t1Address, newValidator.t2PublicKey, t2TransactionId);
 
       expect(await avnBridge.nextValidatorId()).to.equal(nextValidatorId);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration);

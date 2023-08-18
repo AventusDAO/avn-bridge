@@ -369,14 +369,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     isRegisteredValidator[id] = true;
 
-    bytes32 t1PublicKeyLHS;
-    bytes32 t1PublicKeyRHS;
-    assembly {
-      t1PublicKeyLHS := mload(add(t1PublicKey, 0x20))
-      t1PublicKeyRHS := mload(add(t1PublicKey, 0x40))
-    }
-
-    emit LogValidatorRegistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
+    emit LogValidatorRegistered(t1Address, t2PublicKey, t2TransactionId);
   }
 
   /// @notice Deregister and deactivate a validator, removing them from consensus
@@ -410,14 +403,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _verifyConfirmations(_toConfirmationHash(deregisterValidatorHash, expiry, t2TransactionId), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
-    bytes32 t1PublicKeyLHS;
-    bytes32 t1PublicKeyRHS;
-    assembly {
-      t1PublicKeyLHS := mload(add(t1PublicKey, 0x20))
-      t1PublicKeyRHS := mload(add(t1PublicKey, 0x40))
-    }
-
-    emit LogValidatorDeregistered(t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey, t2TransactionId);
+    emit LogValidatorDeregistered(idToT1Address[id], t2PublicKey, t2TransactionId);
   }
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
@@ -458,7 +444,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
     uint256 newBalance = erc20Contract.balanceOf(address(this));
     if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(erc20Address, msg.sender, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
+    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
   }
 
 
@@ -474,7 +460,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (msg.value == 0) revert AmountCannotBeZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, msg.sender, _checkT2PublicKey(t2PublicKey), msg.value);
+    emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
   /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
@@ -497,7 +483,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (to != address(this)) revert TokensMustBeSentToThisAddress();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777Token();
     if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(msg.sender, from, _checkT2PublicKey(data), amount);
+    emit LogLifted(msg.sender, _checkT2PublicKey(data), amount);
   }
 
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
@@ -563,7 +549,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       assert(IERC20(token).transfer(t1Address, amount));
     }
 
-    emit LogLowered(token, t1Address, t2PublicKey, amount);
+    emit LogLowered(t2PublicKey);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root
