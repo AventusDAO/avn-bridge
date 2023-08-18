@@ -468,45 +468,45 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
-  function lower(bytes memory leaf, bytes32[] calldata merklePath)
+  function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
     if (!loweringIsEnabled) revert LoweringIsDisabled();
-    bytes32 leafHash = keccak256(leaf);
+    bytes memory txLeaf = leaf;
+    bytes32 leafHash = keccak256(txLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
-    uint256 numBytes;
+    hasLowered[leafHash] = true;
     uint256 ptr;
     bytes32 t2PublicKey;
     address token;
     address t1Address;
     uint128 amount;
     bytes2 callId;
-    hasLowered[leafHash] = true;
 
     unchecked {
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
-      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
-      ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
-      ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
-      ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
+      ptr += _getCompactIntegerByteSize(txLeaf[0]); // add number of bytes encoding the txLeaf length
+      if (uint8(txLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure txLeaf is a signed tx
+      // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes
+      ptr += txLeaf[ptr + 99] == 0x00 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the tip
     }
 
     assembly {
-      callId := mload(add(leaf, ptr))
+      ptr := add(txLeaf, add(ptr, 32)) // point to call ID postion in txLeaf, skipping first 32 bytes denoting the leaf's length
+      callId := mload(ptr) // load leftmost 2 bytes of next 32 bytes into 2 byte type starting at ptr
     }
 
-    numBytes = numBytesToLowerData[callId];
-    if (numBytes == 0) revert NotALowerTransaction();
-    unchecked { ptr += numBytes; }
+    uint256 numBytesToSkip = numBytesToLowerData[callId];
+    if (numBytesToSkip == 0) revert NotALowerTransaction();
 
     assembly {
-      t2PublicKey := mload(add(leaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
-      token := mload(add(add(leaf, 20), ptr)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
-      amount := mload(add(add(leaf, 36), ptr)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
-      t1Address := mload(add(add(leaf, 56), ptr)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
+      ptr := add(ptr, numBytesToSkip) // point to the start of T2 lower transaction arguments in the leaf
+      t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
+      token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
+      amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
+      t1Address := mload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
     }
 
     // amount was encoded in little endian so we need to reverse to big endian:
@@ -533,7 +533,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)
+  function confirmAvnTransaction(bytes32 leafHash, bytes32[] calldata merklePath)
     public
     view
     returns (bool)
@@ -549,7 +549,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       else
         rootHash = keccak256(abi.encode(node, rootHash));
 
-      unchecked { i++; }
+      unchecked { ++i; }
     }
 
     return isPublishedRootHash[rootHash];
