@@ -472,8 +472,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (!loweringIsEnabled) revert LoweringIsDisabled();
-    bytes memory txLeaf = leaf;
-    bytes32 leafHash = keccak256(txLeaf);
+    bytes memory memLeaf = leaf; // certain operations are cheaper using an in-memory copy of the leaf calldata
+    bytes32 leafHash = keccak256(memLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
     hasLowered[leafHash] = true;
@@ -485,35 +485,36 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes2 callId;
 
     unchecked {
-      ptr += _getCompactIntegerByteSize(txLeaf[0]); // add number of bytes encoding the txLeaf length
-      if (uint8(txLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure txLeaf is a signed tx
-      // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes
-      ptr += txLeaf[ptr + 99] == 0x00 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
-      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the nonce
-      ptr += _getCompactIntegerByteSize(txLeaf[ptr]); // add number of bytes encoding the tip
+      ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
+      if (uint8(memLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
+      // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes:
+      ptr += memLeaf[ptr + 99] == 0x00 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the tip
     }
 
     assembly {
-      ptr := add(txLeaf, add(ptr, 32)) // point to call ID postion in txLeaf, skipping first 32 bytes denoting the leaf's length
+      ptr := add(memLeaf, add(ptr, 32)) // point to call ID postion in leaf, skipping first 32 bytes denoting the leaf's length
       callId := mload(ptr) // load leftmost 2 bytes of next 32 bytes into 2 byte type starting at ptr
     }
 
-    uint256 numBytesToSkip = numBytesToLowerData[callId];
-    if (numBytesToSkip == 0) revert NotALowerTransaction();
+    uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
+    if (numBytesToSkip == 0) revert NotALowerTransaction(); // we don't recognise this call ID so revert
 
     assembly {
-      ptr := add(ptr, numBytesToSkip) // point to the start of T2 lower transaction arguments in the leaf
+      ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
+
       t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
       token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
       amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
       t1Address := mload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
-    }
 
-    // amount was encoded in little endian so we need to reverse to big endian:
-    amount = ((amount & 0xFF00FF00FF00FF00FF00FF00FF00FF00) >> 8) | ((amount & 0x00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-    amount = ((amount & 0xFFFF0000FFFF0000FFFF0000FFFF0000) >> 16) | ((amount & 0x0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-    amount = ((amount & 0xFFFFFFFF00000000FFFFFFFF00000000) >> 32) | ((amount & 0x00000000FFFFFFFF00000000FFFFFFFF) << 32);
-    amount = (amount >> 64) | (amount << 64);
+      // the amount was encoded in little endian so we need to reverse to big endian:
+      amount := or(shr(8,and(amount, 0xFF00FF00FF00FF00FF00FF00FF00FF00)), shl(8, and(amount, 0x00FF00FF00FF00FF00FF00FF00FF00FF)))
+      amount := or(shr(16,and(amount, 0xFFFF0000FFFF0000FFFF0000FFFF0000)), shl(16, and(amount, 0x0000FFFF0000FFFF0000FFFF0000FFFF)))
+      amount := or(shr(32,and(amount, 0xFFFFFFFF00000000FFFFFFFF00000000)), shl(32, and(amount, 0x00000000FFFFFFFF00000000FFFFFFFF)))
+      amount := or(shr(64, amount), shl(64, amount))
+    }
 
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
@@ -572,21 +573,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
-  function _getCompactIntegerByteSize(bytes1 checkByte)
+  function _getCompactIntegerByteSize(uint8 checkByte)
     private
     pure
     returns (uint256 byteLength)
   {
-    uint8 mode = uint8(checkByte) & 3; // the 2 least significant bits encode the byte mode so we do a bitwise AND on them
-
-    if (mode == 0) { // single-byte mode
-      byteLength = 1;
-    } else if (mode == 1) { // two-byte mode
-      byteLength = 2;
-    } else if (mode == 2) { // four-byte mode
-      byteLength = 4;
-    } else {
-      unchecked { byteLength = uint8(checkByte >> 2) + 5; } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
+    assembly {
+      let mode := and(checkByte, 3) // the 2 least significant bits encode the byte mode so we bitwise AND them
+      switch mode
+      case 0 { byteLength := 1 } // single-byte mode
+      case 1 { byteLength := 2 } // two-byte mode
+      case 2 { byteLength := 4 } // four-byte mode
+      default { byteLength := add(shr(2, checkByte), 5) } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
     }
   }
 
