@@ -419,11 +419,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
     IERC20 erc20Contract = IERC20(erc20Address);
-    uint256 currentBalance = erc20Contract.balanceOf(address(this));
     assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
-    uint256 newBalance = erc20Contract.balanceOf(address(this));
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
+    if (erc20Contract.balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
 
 
@@ -663,7 +661,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
-  function _checkT2PublicKey(bytes memory t2PublicKey)
+  function _checkT2PublicKey(bytes calldata t2PublicKey)
     private
     pure
     returns (bytes32 checkedT2PublicKey)
