@@ -486,9 +486,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     unchecked {
       ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
-      if (uint8(memLeaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
+      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
       // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes:
-      ptr += memLeaf[ptr + 99] == 0x00 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
+      ptr += uint8(leaf[ptr + 99]) == 0 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
       ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the nonce
       ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the tip
     }
