@@ -424,7 +424,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
 
-
   /// @notice Lift all ETH sent to the specified T2 recipient
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
