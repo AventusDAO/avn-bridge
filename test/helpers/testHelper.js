@@ -158,8 +158,7 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
 
 async function getNumRequiredConfirmations(contract) {
   const numValidators = (await contract.numActiveValidators()).toNumber();
-  quorum = [await contract.quorum(0), await contract.quorum(1)];
-  return Math.floor(numValidators * quorum[0].toNumber() / quorum[1].toNumber()) + 1;
+  return numValidators - Math.floor(numValidators * 2 / 3);
 }
 
 function toConfirmationHash(data, expiry, t2TransactionId) {

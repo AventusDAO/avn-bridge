@@ -58,7 +58,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
-  uint256[2] public quorum;
+  uint256[2] public quorum; // No longer used
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
   uint256 public growthDelay;
@@ -76,7 +76,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error T2PublicKeyAlreadyInUse(bytes32 t2PublicKey);
   error AddressMismatch(address t1Address, bytes t1PublicKey);
   error SetCoreOwnerFailed();
-  error InvalidQuorum();
   error AmountCannotBeZero();
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
@@ -118,8 +117,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextValidatorId = 1;
-    quorum[0] = 1;
-    quorum[1] = 3;
     growthDelay = 7 days;
   }
 
@@ -209,18 +206,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     emit LogGrowthDelayUpdated(growthDelay, delaySeconds);
     growthDelay = delaySeconds;
-  }
-
-  /// @notice Set the proportion of active validators required to prove T2 validator consensus
-  /// @param _quorum 2 element array of ratio's numerator followed by its denominator
-  /// @dev Number of validators * quorum[0] / quorum[1] + 1 = confirmations required for a validator function to succeed
-  function setQuorum(uint256[2] calldata _quorum)
-    onlyOwner
-    public
-  {
-    if (_quorum[0] == 0 || _quorum[0] > _quorum[1]) revert InvalidQuorum();
-    quorum = _quorum;
-    emit LogQuorumUpdated(quorum);
   }
 
   /// @notice Switch all validator functions on or off
@@ -612,9 +597,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     uint256 active = numActiveValidators;
     unchecked {
-      required = active * quorum[0] / quorum[1];
-      // ensure the quorum cannot go over 100%:
-      required = required == active ? required : required + 1;
+      required = active - (active * 2 / 3);
     }
   }
 

@@ -4,7 +4,6 @@ pragma solidity 0.8.21;
 interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
-  event LogQuorumUpdated(uint256[2] quorum);
   event LogValidatorFunctionsAreEnabled(bool state);
   event LogLiftingIsEnabled(bool state);
   event LogLoweringIsEnabled(bool state);
@@ -25,7 +24,6 @@ interface IAVNBridge {
   function setCoreOwner() external;
   function denyGrowth(uint32 period) external;
   function setGrowthDelay(uint256 delaySeconds) external;
-  function setQuorum(uint256[2] calldata quorum) external;
   function toggleValidatorFunctions(bool state) external;
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
