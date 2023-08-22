@@ -77,7 +77,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error AddressMismatch(address t1Address, bytes t1PublicKey);
   error SetCoreOwnerFailed();
   error InvalidQuorum();
-  error CannotReceiveETHUnlessLifting(); // No longer used
   error AmountCannotBeZero();
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
