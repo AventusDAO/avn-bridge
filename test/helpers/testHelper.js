@@ -177,7 +177,7 @@ function randomBytes32() {
 }
 
 function randomT2TxId() {
-  return ethers.BigNumber.from(randomHex(8));
+  return ethers.BigNumber.from(randomHex(4));
 }
 
 function strip_0x(bytes) {
