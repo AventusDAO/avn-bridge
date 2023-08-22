@@ -374,7 +374,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     if (isActiveValidator[id]) {
       isActiveValidator[id] = false;
-      unchecked { numActiveValidators--; }
+      unchecked { --numActiveValidators; }
     }
 
     // The order of the elements is the reverse of the registerValidatorHash
