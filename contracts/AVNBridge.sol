@@ -595,10 +595,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (uint256 required)
   {
-    uint256 active = numActiveValidators;
-    unchecked {
-      required = active - (active * 2 / 3);
-    }
+    required = numActiveValidators;
+    unchecked { required -= required * 2 / 3; }
   }
 
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
