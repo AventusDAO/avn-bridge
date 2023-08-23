@@ -418,9 +418,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
-    IERC20 erc20Contract = IERC20(erc20Address);
-    assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
-    if (erc20Contract.balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
+    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
     emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
 
