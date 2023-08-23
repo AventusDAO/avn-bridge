@@ -579,8 +579,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     returns (uint256 byteLength)
   {
     assembly {
-      let mode := and(checkByte, 3) // the 2 least significant bits encode the byte mode so we bitwise AND them
-      switch mode
+      switch and(checkByte, 3) // the 2 least significant bits encode the byte mode so we bitwise AND them to detemine the mode
       case 0 { byteLength := 1 } // single-byte mode
       case 1 { byteLength := 2 } // two-byte mode
       case 2 { byteLength := 4 } // four-byte mode
