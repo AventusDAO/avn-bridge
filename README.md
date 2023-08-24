@@ -52,6 +52,8 @@ If the above upgrade command fails with: `Error: Deployment at address 0x... is 
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
 
+#### Format the code (JS files only)
+`npm run format`
 
 ### Interaction via Etherscan
 
