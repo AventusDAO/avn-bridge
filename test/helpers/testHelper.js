@@ -79,7 +79,7 @@ function createMerkleTree(dataLeaves) {
 }
 
 async function getConfirmations(contract, data, expiry, t2TransactionId, adjustment, startPos) {
-  startPos = startPos || 1;
+  startPos = startPos || 2; // Start from Validator 2 as Validator 1 always sends the tx
   adjustment = adjustment || 0;
   const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
   let concatenatedConfirmations = '0x';

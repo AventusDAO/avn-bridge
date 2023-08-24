@@ -596,11 +596,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 numConfirmations;
     unchecked {
-      numConfirmations = confirmations.length / SIGNATURE_LENGTH;
+      numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; // The sender's confirmation is implicit
     }
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
-    uint256 id;
+    uint256 id = t1AddressToId[msg.sender];
     uint256 i;
     bytes32 r;
     bytes32 s;
@@ -608,6 +608,25 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bool[] memory confirmed = new bool[](nextValidatorId);
 
     do {
+      if (!isActiveValidator[id]) {
+        if (isRegisteredValidator[id]) {
+          // Here we activate any previously registered but as yet unactivated validators
+          isActiveValidator[id] = true;
+          unchecked {
+            ++numActiveValidators;
+            ++validConfirmations;
+          }
+          // Update the number of required confirmations to account for the newly activated validator
+          requiredConfirmations = _requiredConfirmations();
+          if (validConfirmations == requiredConfirmations) break;
+          confirmed[id] = true;
+        }
+      } else if (!confirmed[id]) {
+        unchecked { ++validConfirmations; }
+        if (validConfirmations == requiredConfirmations) break;
+        confirmed[id] = true;
+      }
+
       assembly {
         let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
         r := mload(add(offset, 32))
@@ -620,30 +639,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        unchecked { ++i; }
-        continue;
+        id = 0;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
-
-        if (!isActiveValidator[id]) {
-          if (isRegisteredValidator[id]) {
-            // Here we activate any previously registered but as yet unactivated validators
-            isActiveValidator[id] = true;
-            unchecked {
-              ++numActiveValidators;
-              ++validConfirmations;
-            }
-            // Update the number of required confirmations to account for the newly activated validator
-            requiredConfirmations = _requiredConfirmations();
-
-            if (validConfirmations == requiredConfirmations) break;
-            confirmed[id] = true;
-          }
-        } else if (!confirmed[id]) {
-          unchecked { ++validConfirmations; }
-          if (validConfirmations == requiredConfirmations) break;
-          confirmed[id] = true;
-        }
       }
 
       unchecked { ++i; }
