@@ -130,7 +130,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWithinCallWindow(uint64 expiry) {
+  modifier onlyWithinCallWindow(uint256 expiry) {
     if (block.timestamp > expiry) revert WindowHasExpired();
     _;
   }
@@ -261,7 +261,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -318,7 +318,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -361,7 +361,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -391,7 +391,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
-  function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
