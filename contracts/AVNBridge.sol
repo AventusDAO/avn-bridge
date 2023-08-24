@@ -278,14 +278,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       bytes32 growthHash = keccak256(abi.encode(amount, period));
       _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TransactionId)), confirmations);
       _storeT2TransactionId(t2TransactionId);
+      uint256 releaseTime = block.timestamp;
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
       } else {
-        uint256 releaseTime;
-        unchecked { releaseTime = block.timestamp + growthDelay; }
+        unchecked { releaseTime += growthDelay; }
         growthRelease[period] = releaseTime;
-        emit LogGrowthTriggered(amount, period, releaseTime, t2TransactionId);
       }
+      emit LogGrowthTriggered(amount, period, releaseTime, t2TransactionId);
     }
   }
 
