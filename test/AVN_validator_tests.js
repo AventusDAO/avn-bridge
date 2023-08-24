@@ -203,8 +203,10 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
 
       await avnBridge.setGrowthDelay(0);
-
-      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations)).to.emit(avnBridge, 'LogGrowth').withArgs(growthAmount, period);
+      const nextBlockTimestamp = await helper.getCurrentBlockTimestamp() + 1;
+      await expect(avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations))
+          .to.emit(avnBridge, 'LogGrowthTriggered').withArgs(growthAmount, period, nextBlockTimestamp, t2TransactionId)
+          .to.emit(avnBridge, 'LogGrowth').withArgs(growthAmount, period);
 
       expect(avnBalanceBefore.add(growthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(avtSupplyBefore.add(growthAmount)).to.equal(await token20.totalSupply());
