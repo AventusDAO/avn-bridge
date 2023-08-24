@@ -9,13 +9,13 @@ interface IAVNBridge {
   event LogLoweringIsEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
 
-  event LogValidatorRegistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId);
-  event LogValidatorDeregistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint256 indexed t2TransactionId);
-  event LogRootPublished(bytes32 indexed rootHash, uint256 indexed t2TransactionId);
+  event LogValidatorRegistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint32 indexed t2TransactionId);
+  event LogValidatorDeregistered(address indexed t1Address, bytes32 indexed t2PublicKey, uint32 indexed t2TransactionId);
+  event LogRootPublished(bytes32 indexed rootHash, uint32 indexed t2TransactionId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowered(bytes32 indexed t2PublicKey);
-  event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint256 indexed releaseTime, uint256 indexed t2TransactionId);
+  event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint256 indexed releaseTime, uint32 indexed t2TransactionId);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
@@ -30,15 +30,15 @@ interface IAVNBridge {
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
 
   // Owner or validators only
-  function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
       external;
 
   // Validators only
-  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations) external;
-  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations) external;
-  function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations) external;
+  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations) external;
 
   // Public
   function releaseGrowth(uint32 period) external;

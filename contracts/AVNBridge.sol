@@ -130,7 +130,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWithinCallWindow(uint64 expiry) {
+  modifier onlyWithinCallWindow(uint256 expiry) {
     if (block.timestamp > expiry) revert WindowHasExpired();
     _;
   }
@@ -261,7 +261,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -318,7 +318,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -361,7 +361,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -391,7 +391,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
-  function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -418,14 +418,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
-    IERC20 erc20Contract = IERC20(erc20Address);
-    uint256 currentBalance = erc20Contract.balanceOf(address(this));
-    assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
-    uint256 newBalance = erc20Contract.balanceOf(address(this));
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
+    assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
+    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
-
 
   /// @notice Lift all ETH sent to the specified T2 recipient
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
@@ -562,13 +558,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     IERC20 erc20Token = IERC20(coreToken);
-    uint256 oldBalance = erc20Token.balanceOf(address(this));
-    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
-    unchecked { expectedBalance = oldBalance + amount; }
-    if (!success || expectedBalance != newBalance) revert CoreMintFailed();
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    unchecked { expectedBalance = erc20Token.balanceOf(address(this)) + amount; }
+    if (expectedBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
+    if (!success || expectedBalance != erc20Token.balanceOf(address(this))) revert CoreMintFailed();
     emit LogGrowth(amount, period);
   }
 
@@ -601,24 +595,24 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 numConfirmations;
-    uint256 requiredConfirmations;
     unchecked {
       numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     }
-    requiredConfirmations = _requiredConfirmations();
+    uint256 requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
+    uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
     bool[] memory confirmed = new bool[](nextValidatorId);
 
-    for (uint256 i; i < numConfirmations;) {
+    do {
       assembly {
-        let offset := mul(i, SIGNATURE_LENGTH)
-        r := mload(add(confirmations, add(0x20, offset)))
-        s := mload(add(confirmations, add(0x40, offset)))
-        v := byte(0, mload(add(confirmations, add(0x60, offset))))
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 32))
+        s := mload(add(offset, 64))
+        v := byte(0, mload(add(offset, 96)))
       }
 
       if (v < 27) {
@@ -626,7 +620,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        unchecked { i++; }
+        unchecked { ++i; }
         continue;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
@@ -636,8 +630,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
             unchecked {
-              numActiveValidators++;
-              validConfirmations++;
+              ++numActiveValidators;
+              ++validConfirmations;
             }
             // Update the number of required confirmations to account for the newly activated validator
             requiredConfirmations = _requiredConfirmations();
@@ -646,14 +640,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             confirmed[id] = true;
           }
         } else if (!confirmed[id]) {
-          unchecked { validConfirmations++; }
+          unchecked { ++validConfirmations; }
           if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
         }
       }
 
-      unchecked { i++; }
-    }
+      unchecked { ++i; }
+    } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
   }
@@ -665,7 +659,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
-  function _checkT2PublicKey(bytes memory t2PublicKey)
+  function _checkT2PublicKey(bytes calldata t2PublicKey)
     private
     pure
     returns (bytes32 checkedT2PublicKey)
