@@ -8,7 +8,6 @@ const T2_PUBLIC_KEY = '0x50368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a
 let avnBridge, token20;
 
 describe('AVNBridge lowering', async () => {
-
   before(async () => {
     await helper.init();
     const Token20 = await ethers.getContractFactory('Token20');
@@ -25,13 +24,12 @@ describe('AVNBridge lowering', async () => {
     await helper.loadValidators(avnBridge, validators, 10);
   });
 
- // Using the sets from: https://docs.google.com/spreadsheets/d/10AwBVX60VwQyw0tK_A2ND4qOf-XILvQzVJ1hXwontWk/edit#gid=0
+  // Using the sets from: https://docs.google.com/spreadsheets/d/10AwBVX60VwQyw0tK_A2ND4qOf-XILvQzVJ1hXwontWk/edit#gid=0
   context('lower with real data', async () => {
-
     async function checkLower(leaves, incrementingAmount) {
       let amount = 1;
 
-      for (let i=0; i < leaves.length; i++) {
+      for (let i = 0; i < leaves.length; i++) {
         // replace the token address from the real leaf data with the local mock token so lowering will pass
         const leaf = leaves[i].replace(ORIGINAL_TOKEN, helper.strip_0x(token20.address.toLowerCase()));
         const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
@@ -105,9 +103,13 @@ describe('AVNBridge lowering', async () => {
     });
 
     it('fails with unsigned tx', async () => {
-      const leaf = '0x1d02042b00174301007a707b3b193c0a81e39b486ab9bca005b5e053ffaf71f70157b7ccad2cbfac057ef238cd7a02453b2518873172e6ed5bf19989ba5921997dd7c3d4d71c1b38010842caa7e9abc2fe2a60b434aeea105e56c4947980e254d8e2d9a5a58a2aa66fd7b49cc8800f0911e61ee7af8b13f0a067f33e2e8f3717b00fdac3352fbda883';
+      const leaf =
+        '0x1d02042b00174301007a707b3b193c0a81e39b486ab9bca005b5e053ffaf71f70157b7ccad2cbfac057ef238cd7a02453b2518873172e6ed5bf19989ba5921997dd7c3d4d71c1b38010842caa7e9abc2fe2a60b434aeea105e56c4947980e254d8e2d9a5a58a2aa66fd7b49cc8800f0911e61ee7af8b13f0a067f33e2e8f3717b00fdac3352fbda883';
       const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
-      await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'UnsignedTransaction');
+      await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+        avnBridge,
+        'UnsignedTransaction'
+      );
     });
   });
 });

@@ -1,8 +1,8 @@
 require('@nomicfoundation/hardhat-toolbox');
 require('@nomicfoundation/hardhat-chai-matchers');
-require("@nomiclabs/hardhat-etherscan");
+require('@nomiclabs/hardhat-etherscan');
 require('@nomiclabs/hardhat-ethers');
-require("@openzeppelin/hardhat-upgrades");
+require('@openzeppelin/hardhat-upgrades');
 require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('hardhat-erc1820');
@@ -13,10 +13,13 @@ const fs = require('fs');
 task('loadValidators', 'initialise a new avn-bridge contract with a set of validators')
   .addParam('contract', 'avn-bridge contract address')
   .addParam('validators', 'path to validators file')
-  .setAction(async (args) => {
+  .setAction(async args => {
     console.log(`\nLoading validators from ${args.validators} into avn-bridge @ ${args.contract}`);
     const validators = require(args.validators);
-    const t1Address = [], t1PublicKeyLHS = [], t1PublicKeyRHS = [], t2PublicKey = [];
+    const t1Address = [],
+      t1PublicKeyLHS = [],
+      t1PublicKeyRHS = [],
+      t2PublicKey = [];
 
     validators.forEach(validator => {
       t1Address.push(validator.ethAddress);
@@ -47,11 +50,14 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
 
       const balanceBefore = await deployer.getBalance();
       const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token, '0x0000000000000000000000000000000000000000'], { kind: 'uups' });
+      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token, '0x0000000000000000000000000000000000000000'], {
+        kind: 'uups'
+      });
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
-      if (args.validators) { // run optional loadValidators task
+      if (args.validators) {
+        // run optional loadValidators task
         await hre.run('loadValidators', { contract: avnBridge.address, validators: args.validators });
       }
 
@@ -61,22 +67,24 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       addresses[hre.network.name]['avn'] = avnBridge.address;
       fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
-      await new Promise((r) => setTimeout(r, 20000));
+      await new Promise(r => setTimeout(r, 20000));
       try {
         await hre.run('verify', { address: implementationAddress });
         await hre.run('verify', { address: avnBridge.address });
-      } catch (e) {};
+      } catch (e) {}
       console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
       console.log(`\nContract: ${avnBridge.address}`);
-
     }
   });
 
-  task('lift', 'lift a token to the chain')
+task('lift', 'lift a token to the chain')
   .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
   .addParam('bridge', 'avn-bridge contract address')
   .addParam('amount', 'amount to be lifted')
-  .addOptionalParam('token', 'The contract address of the token to be lifted. If "chain" is passed, it will use the ethereum chain native token. If "core" is passed it will pass the bridge core token')
+  .addOptionalParam(
+    'token',
+    'The contract address of the token to be lifted. If "chain" is passed, it will use the ethereum chain native token. If "core" is passed it will pass the bridge core token'
+  )
   .setAction(async (args, hre) => {
     const bridge = args.bridge;
     const amount = args.amount;
@@ -85,16 +93,14 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', bridge);
 
       // Handle the case of the chain native token
-      if (args.token === "chain") {
+      if (args.token === 'chain') {
         const liftTx = await avnBridge.liftETH(recipient, { value: amount });
         await liftTx.wait();
         console.log(`Successfully lifted ${amount} of Ether for avn-bridge ${bridge} - lift tx: ${liftTx.hash}`);
         return;
       }
 
-      const token = args.token === undefined || args.token === 'core'
-        ? await avnBridge.coreToken()
-        : args.token;
+      const token = args.token === undefined || args.token === 'core' ? await avnBridge.coreToken() : args.token;
 
       console.log(`\nLifting token ${token} into avn-bridge @ ${bridge}`);
       const tokenContract = await hre.ethers.getContractAt(`ERC20`, token);
@@ -111,29 +117,28 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
     }
   });
 
-task('publishToken', 'deploy a new erc20 test token and publish it')
-  .setAction(async (args, hre) => {
-    await hre.run('compile');
+task('publishToken', 'deploy a new erc20 test token and publish it').setAction(async (args, hre) => {
+  await hre.run('compile');
 
-    if (hre.network.name === 'mainnet') {
-      console.log('Requires manual setup for mainnet deployment');
-      process.exit(1);
-    } else {
-      const [deployer] = await hre.ethers.getSigners();
-      console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
-      const supply = 100000;
-      const Token20 = await hre.ethers.getContractFactory('Token20');
-      const token20 = await Token20.deploy(supply);
-      await token20.deployed();
-      await new Promise((r) => setTimeout(r, 10000));
-      await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
+  if (hre.network.name === 'mainnet') {
+    console.log('Requires manual setup for mainnet deployment');
+    process.exit(1);
+  } else {
+    const [deployer] = await hre.ethers.getSigners();
+    console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
+    const supply = 100000;
+    const Token20 = await hre.ethers.getContractFactory('Token20');
+    const token20 = await Token20.deploy(supply);
+    await token20.deployed();
+    await new Promise(r => setTimeout(r, 10000));
+    await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
 
-      const outFile = './addresses.json';
-      const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-      addresses[hre.network.name]['erc20token'] = token20.address;
-      fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
-    }
-  });
+    const outFile = './addresses.json';
+    const addresses = fs.existsSync(outFile) ? require(outFile) : {};
+    addresses[hre.network.name]['erc20token'] = token20.address;
+    fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
+  }
+});
 
 task('upgrade', 'upgrade existing avn-bridge contract')
   .addParam('proxy', 'existing AVN Bridge proxy address')
@@ -145,29 +150,28 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     const AVNBridge = await ethers.getContractFactory('AVNBridge');
     await upgrades.upgradeProxy(args.proxy, AVNBridge);
     console.log(`\nCost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await upgrader.getBalance()))} ETH`);
-    await new Promise((r) => setTimeout(r, 30000));
+    await new Promise(r => setTimeout(r, 30000));
     try {
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.proxy);
       await hre.run('verify', { address: implementationAddress });
-    } catch (e) {};
+    } catch (e) {}
   });
 
-  task('prepare-upgrade', 'prepare the openzeppelin mainfest (if required)')
-    .addParam('proxy', 'existing AVN Bridge proxy address')
-    .setAction(async (args, hre) => {
-      if (hre.network.name !== 'goerli') return;
-      await hre.run('compile');
-      const AVNBridge = await ethers.getContractFactory('AVNBridge');
-      await upgrades.forceImport(args.proxy, AVNBridge);
-      console.log('Done');
-    });
+task('prepare-upgrade', 'prepare the openzeppelin mainfest (if required)')
+  .addParam('proxy', 'existing AVN Bridge proxy address')
+  .setAction(async (args, hre) => {
+    if (hre.network.name !== 'goerli') return;
+    await hre.run('compile');
+    const AVNBridge = await ethers.getContractFactory('AVNBridge');
+    await upgrades.forceImport(args.proxy, AVNBridge);
+    console.log('Done');
+  });
 
 function getWeb3Url(networkName) {
   if (!process.env.WEB3_URL_OVERRIDE) {
     return `https://${networkName}.infura.io/v3/${process.env.INFURA_API_KEY || INFURA_API_KEY}`;
-  }
-  else {
-    return process.env.WEB3_URL_OVERRIDE
+  } else {
+    return process.env.WEB3_URL_OVERRIDE;
   }
 }
 module.exports = {
@@ -186,7 +190,7 @@ module.exports = {
           }
         }
       }
-    ],
+    ]
   },
   networks: {
     goerli: {
@@ -201,13 +205,17 @@ module.exports = {
     },
     mainnet: {
       url: getWeb3Url(`mainnet`),
-      accounts: [process.env.MAINNET_PRIVATE_KEY || MAINNET_PRIVATE_KEY || "0000000000000000000000000000000000000000000000000000000000000000"]
+      accounts: [
+        process.env.MAINNET_PRIVATE_KEY ||
+          MAINNET_PRIVATE_KEY ||
+          '0000000000000000000000000000000000000000000000000000000000000000'
+      ]
     }
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY || ETHERSCAN_API_KEY
   },
   gasReporter: {
-   enabled: true,
- }
+    enabled: true
+  }
 };
