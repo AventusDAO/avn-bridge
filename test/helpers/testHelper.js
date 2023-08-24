@@ -15,9 +15,8 @@ let validators = [];
 let owner;
 const someT2PublicKey = randomBytes32();
 
-
 async function init(largeTree) {
-  [ owner ]  = await ethers.provider.listAccounts();
+  [owner] = await ethers.provider.listAccounts();
   const ownerSigner = ethers.provider.getSigner(owner);
 
   for (i = 0; i < 30; i++) {
@@ -31,9 +30,9 @@ async function init(largeTree) {
     validators.push({
       account: account,
       t1Address: account.address,
-      t1PublicKey: '0x' + account.publicKey.slice(4,132),
-      t1PublicKeyLHS: '0x' + account.publicKey.slice(4,68),
-      t1PublicKeyRHS: '0x' + account.publicKey.slice(68,132),
+      t1PublicKey: '0x' + account.publicKey.slice(4, 132),
+      t1PublicKeyLHS: '0x' + account.publicKey.slice(4, 68),
+      t1PublicKeyRHS: '0x' + account.publicKey.slice(68, 132),
       t2PublicKey: randomBytes32(),
       registered: false,
       active: false
@@ -52,23 +51,26 @@ async function init(largeTree) {
 
 async function deployAVNBridge(coreToken) {
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
-  return await upgrades.deployProxy(AVNBridge, [coreToken], {kind: 'uups'});
+  return await upgrades.deployProxy(AVNBridge, [coreToken], { kind: 'uups' });
 }
 
 function getTxLeafMetadata() {
   // change part of what would be the ignored signature chunk to keep the leaves unique
-  return '0x1505840050368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a19a7f3122010edfa77444027c551df2f3'
-    + strip_0x(randomBytes32()) + 'a6e6eaeff13956b192c9899a9993c16faea458458e35023800';
+  return (
+    '0x1505840050368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a19a7f3122010edfa77444027c551df2f3' +
+    strip_0x(randomBytes32()) +
+    'a6e6eaeff13956b192c9899a9993c16faea458458e35023800'
+  );
 }
 
 function createMerkleTree(dataLeaves) {
   const dataLeaf = dataLeaves[0];
   dataLeaves[0] = keccak256(dataLeaves[0]);
   dataLeaves = Array.isArray(dataLeaves) ? dataLeaves : [dataLeaves];
-  const tree = new MerkleTree(dataLeaves, keccak256, {hashLeaves: false, sortPairs: true});
+  const tree = new MerkleTree(dataLeaves, keccak256, { hashLeaves: false, sortPairs: true });
   return {
     leafData: dataLeaf,
-    leafHash: '0x'+tree.leaves[0].toString('hex'),
+    leafHash: '0x' + tree.leaves[0].toString('hex'),
     merklePath: tree.getHexProof(tree.leaves[0]),
     rootHash: tree.getHexRoot(),
     leaves: tree.getLeaves(),
@@ -79,7 +81,7 @@ function createMerkleTree(dataLeaves) {
 async function getConfirmations(contract, data, expiry, t2TransactionId, adjustment, startPos) {
   startPos = startPos || 1;
   adjustment = adjustment || 0;
-  const numConfirmations = await getNumRequiredConfirmations(contract) + adjustment;
+  const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
   let concatenatedConfirmations = '0x';
   const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
   for (i = startPos; i <= numConfirmations; i++) {
@@ -158,7 +160,7 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
 
 async function getNumRequiredConfirmations(contract) {
   const numValidators = (await contract.numActiveValidators()).toNumber();
-  return numValidators - Math.floor(numValidators * 2 / 3);
+  return numValidators - Math.floor((numValidators * 2) / 3);
 }
 
 function toConfirmationHash(data, expiry, t2TransactionId) {
@@ -185,8 +187,12 @@ function strip_0x(bytes) {
 
 function toLittleEndianBytesStr(amount) {
   let result = strip_0x(ethers.utils.hexlify(amount));
-  result = (result.length % 2 == 0) ? result : '0' + result;
-  return result.match(/.{1,2}/g).reverse().join('').padEnd(32, '0');
+  result = result.length % 2 == 0 ? result : '0' + result;
+  return result
+    .match(/.{1,2}/g)
+    .reverse()
+    .join('')
+    .padEnd(32, '0');
 }
 
 async function increaseBlockTimestamp(seconds) {
@@ -196,14 +202,14 @@ async function increaseBlockTimestamp(seconds) {
   await time.increaseTo(currentBlockTimestamp + seconds);
 }
 
-async function getCurrentBlockTimestamp(){
+async function getCurrentBlockTimestamp() {
   const blockNum = await ethers.provider.getBlockNumber();
   const block = await ethers.provider.getBlock(blockNum);
   return block.timestamp;
 }
 
 async function getValidExpiry() {
-  return await getCurrentBlockTimestamp() + 60;
+  return (await getCurrentBlockTimestamp()) + 60;
 }
 // Keep exports alphabetical.
 module.exports = {
