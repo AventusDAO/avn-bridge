@@ -50,9 +50,7 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
 
       const balanceBefore = await deployer.getBalance();
       const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token, '0x0000000000000000000000000000000000000000'], {
-        kind: 'uups'
-      });
+      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token], { kind: 'uups' });
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
