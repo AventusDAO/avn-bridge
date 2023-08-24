@@ -158,13 +158,11 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
 
 async function getNumRequiredConfirmations(contract) {
   const numValidators = (await contract.numActiveValidators()).toNumber();
-  quorum = [await contract.quorum(0), await contract.quorum(1)];
-  return Math.floor(numValidators * quorum[0].toNumber() / quorum[1].toNumber()) + 1;
+  return numValidators - Math.floor(numValidators * 2 / 3);
 }
 
 function toConfirmationHash(data, expiry, t2TransactionId) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint256'],
-      [data, expiry, t2TransactionId.toString()]);
+  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TransactionId]);
   return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
 }
 
@@ -178,7 +176,7 @@ function randomBytes32() {
 }
 
 function randomT2TxId() {
-  return ethers.BigNumber.from(randomHex(8));
+  return ethers.BigNumber.from(randomHex(4));
 }
 
 function strip_0x(bytes) {

@@ -76,39 +76,6 @@ describe('AVNBridge', async () => {
     });
   });
 
-  context('setQuorum()', async () => {
-    let quorum;
-
-    before(async () => {
-      quorum = [await avnBridge.quorum(0), await avnBridge.quorum(1)];
-    });
-
-    after(async () => {
-      await avnBridge.setQuorum(quorum);
-    });
-
-    it('can set a new quorum', async () => {
-      const newQuorum = [3,4];
-      await expect(avnBridge.setQuorum(newQuorum)).to.emit(avnBridge, 'LogQuorumUpdated').withArgs(newQuorum);
-    });
-
-    context('fails when', async () => {
-      it('numerator is greater than denominator', async () => {
-        await expect(avnBridge.setQuorum([2,1])).to.be.revertedWithCustomError(avnBridge, 'InvalidQuorum');
-      });
-      it('numerator is zero', async () => {
-        await expect(avnBridge.setQuorum([0,1])).to.be.revertedWithCustomError(avnBridge, 'InvalidQuorum');
-      });
-      it('denominator is zero', async () => {
-        await expect(avnBridge.setQuorum([1,0])).to.be.revertedWithCustomError(avnBridge, 'InvalidQuorum');
-      });
-      it('not called by the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).setQuorum([2,3]))
-            .to.be.revertedWith('Ownable: caller is not the owner');
-      });
-    });
-  });
-
   context('Growth', async () => {
     const growthAmount = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(3));
 
@@ -383,7 +350,7 @@ describe('AVNBridge', async () => {
       t2TransactionId = helper.randomT2TxId();
       confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
       newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TransactionId, newValidator);
-      const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
+      const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(2);
       await avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmationsIncludingNewValidator);
 
       expect(numActiveValidatorsBefore.add(ethers.BigNumber.from(1))).to.equal(await avnBridge.numActiveValidators());
@@ -484,7 +451,7 @@ describe('AVNBridge', async () => {
       const rootHash = helper.randomBytes32();
       confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId);
       const newValidatorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TransactionId, newValidator);
-      const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(132);
+      const confirmationsIncludingNewValidator = newValidatorConfirmation + confirmations.substring(2);
       await avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmationsIncludingNewValidator);
       expect(await avnBridge.numActiveValidators()).to.equal(numActiveValidatorsBeforeRegistration.add(1));
 
