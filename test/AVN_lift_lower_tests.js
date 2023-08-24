@@ -112,14 +112,14 @@ describe('AVNBridge', async () => {
     it('can lift ERC777 tokens', async () => {
       const liftAmount = ethers.BigNumber.from(100)
       await expect(token777.send(avnBridge.address, liftAmount, someT2PublicKey)).to.emit(avnBridge, 'LogLifted')
-          .withArgs(token777.address, owner, someT2PublicKey, liftAmount);
+          .withArgs(token777.address, someT2PublicKey, liftAmount);
     });
 
     it('can lift ERC777 tokens via operatorSend', async () => {
       const liftAmount = ethers.BigNumber.from(100)
       const otherOperatorData = '0x1234';
       await expect(token777.operatorSend(owner, avnBridge.address, liftAmount, someT2PublicKey, otherOperatorData))
-          .to.emit(avnBridge, 'LogLifted').withArgs(token777.address, owner, someT2PublicKey, liftAmount);
+          .to.emit(avnBridge, 'LogLifted').withArgs(token777.address, someT2PublicKey, liftAmount);
 
     });
 
@@ -128,7 +128,7 @@ describe('AVNBridge', async () => {
       const liftAmount = ethers.BigNumber.from(200);
       await token20.approve(avnBridge.address, liftAmount);
       await expect(avnBridge.lift(token20.address, someT2PublicKey, liftAmount)).to.emit(avnBridge, 'LogLifted')
-          .withArgs(token20.address, owner, someT2PublicKey, liftAmount);
+          .withArgs(token20.address, someT2PublicKey, liftAmount);
       expect(avnBalanceBefore.add(liftAmount), (await token20.balanceOf(avnBridge.address)));
     });
 
@@ -309,7 +309,7 @@ describe('AVNBridge', async () => {
       expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
       expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-      await avnBridge.filters.LogLowered(helper.PSEUDO_ETH_ADDRESS, owner, someT2PublicKey);
+      await avnBridge.filters.LogLowered(someT2PublicKey);
     });
 
     it('proxy lower ETH succeeds [ @skip-on-coverage ]', async () => {
@@ -330,7 +330,7 @@ describe('AVNBridge', async () => {
       expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
       expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-      await avnBridge.filters.LogLowered(helper.PSEUDO_ETH_ADDRESS, owner, someT2PublicKey);
+      await avnBridge.filters.LogLowered(someT2PublicKey);
     });
 
     it('lift and lower ETH for coverage', async () => {
@@ -357,7 +357,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered')
-          .withArgs(token20.address, owner, someT2PublicKey, lowerAmount);
+          .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
     });
@@ -374,7 +374,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLowered').withArgs(token20.address, owner, someT2PublicKey, lowerAmount);
+          .to.emit(avnBridge, 'LogLowered').withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
     });
@@ -390,7 +390,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered')
-          .withArgs(token777.address, owner, someT2PublicKey, lowerAmount);
+          .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
     });
@@ -406,7 +406,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath)).to.emit(avnBridge, 'LogLowered')
-          .withArgs(token777.address, owner, someT2PublicKey, lowerAmount);
+          .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
     });
