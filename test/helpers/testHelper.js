@@ -162,8 +162,7 @@ async function getNumRequiredConfirmations(contract) {
 }
 
 function toConfirmationHash(data, expiry, t2TransactionId) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint256'],
-      [data, expiry, t2TransactionId.toString()]);
+  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TransactionId]);
   return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
 }
 
@@ -177,7 +176,7 @@ function randomBytes32() {
 }
 
 function randomT2TxId() {
-  return ethers.BigNumber.from(randomHex(8));
+  return ethers.BigNumber.from(randomHex(4));
 }
 
 function strip_0x(bytes) {
