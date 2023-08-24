@@ -130,7 +130,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWithinCallWindow(uint64 expiry) {
+  modifier onlyWithinCallWindow(uint256 expiry) {
     if (block.timestamp > expiry) revert WindowHasExpired();
     _;
   }
@@ -261,7 +261,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -318,7 +318,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
     Emits a validator registration event to be read by T2.
   */
-  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -361,7 +361,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Validator details are retained.
     Emits a validator deregistration event to be read by T2.
   */
-  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint64 expiry, uint64 t2TransactionId,
+  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
@@ -391,7 +391,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
-  function publishRoot(bytes32 rootHash, uint64 expiry, uint64 t2TransactionId, bytes calldata confirmations)
+  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -418,14 +418,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
-    IERC20 erc20Contract = IERC20(erc20Address);
-    uint256 currentBalance = erc20Contract.balanceOf(address(this));
-    assert(erc20Contract.transferFrom(msg.sender, address(this), amount));
-    uint256 newBalance = erc20Contract.balanceOf(address(this));
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
-    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), newBalance - currentBalance);
+    assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
+    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
-
 
   /// @notice Lift all ETH sent to the specified T2 recipient
   /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
@@ -468,52 +464,53 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
-  function lower(bytes memory leaf, bytes32[] calldata merklePath)
+  function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
     if (!loweringIsEnabled) revert LoweringIsDisabled();
-    bytes32 leafHash = keccak256(leaf);
+    bytes memory memLeaf = leaf; // certain operations are cheaper using an in-memory copy of the leaf calldata
+    bytes32 leafHash = keccak256(memLeaf);
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
     if (hasLowered[leafHash]) revert LowerAlreadyUsed();
-    uint256 numBytes;
+    hasLowered[leafHash] = true;
     uint256 ptr;
     bytes32 t2PublicKey;
     address token;
     address t1Address;
     uint128 amount;
     bytes2 callId;
-    hasLowered[leafHash] = true;
 
     unchecked {
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the leaf length
+      ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
       if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
-      ptr += 99; // version(1 byte) + multiAddress type(1 byte) + sender(32 bytes) + curve type(1 byte) + signature(64 bytes)
-      ptr += leaf[ptr] == 0x00 ? 1 : 2; // add number of era bytes (immortal is 1, otherwise 2)
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
-      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
-      ptr += 32; // account for the first 32 EVM bytes holding the leaf's length
+      // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes:
+      ptr += uint8(leaf[ptr + 99]) == 0 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the tip
     }
 
     assembly {
-      callId := mload(add(leaf, ptr))
+      ptr := add(memLeaf, add(ptr, 32)) // point to call ID postion in leaf, skipping first 32 bytes denoting the leaf's length
+      callId := mload(ptr) // load leftmost 2 bytes of next 32 bytes into 2 byte type starting at ptr
     }
 
-    numBytes = numBytesToLowerData[callId];
-    if (numBytes == 0) revert NotALowerTransaction();
-    unchecked { ptr += numBytes; }
+    uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
+    if (numBytesToSkip == 0) revert NotALowerTransaction(); // we don't recognise this call ID so revert
 
     assembly {
-      t2PublicKey := mload(add(leaf, ptr)) // load next 32 bytes into 32 byte type starting at ptr
-      token := mload(add(add(leaf, 20), ptr)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
-      amount := mload(add(add(leaf, 36), ptr)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
-      t1Address := mload(add(add(leaf, 56), ptr)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
-    }
+      ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
 
-    // amount was encoded in little endian so we need to reverse to big endian:
-    amount = ((amount & 0xFF00FF00FF00FF00FF00FF00FF00FF00) >> 8) | ((amount & 0x00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-    amount = ((amount & 0xFFFF0000FFFF0000FFFF0000FFFF0000) >> 16) | ((amount & 0x0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-    amount = ((amount & 0xFFFFFFFF00000000FFFFFFFF00000000) >> 32) | ((amount & 0x00000000FFFFFFFF00000000FFFFFFFF) << 32);
-    amount = (amount >> 64) | (amount << 64);
+      t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
+      token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
+      amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
+      t1Address := mload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
+
+      // the amount was encoded in little endian so we need to reverse to big endian:
+      amount := or(shr(8,and(amount, 0xFF00FF00FF00FF00FF00FF00FF00FF00)), shl(8, and(amount, 0x00FF00FF00FF00FF00FF00FF00FF00FF)))
+      amount := or(shr(16,and(amount, 0xFFFF0000FFFF0000FFFF0000FFFF0000)), shl(16, and(amount, 0x0000FFFF0000FFFF0000FFFF0000FFFF)))
+      amount := or(shr(32,and(amount, 0xFFFFFFFF00000000FFFFFFFF00000000)), shl(32, and(amount, 0x00000000FFFFFFFF00000000FFFFFFFF)))
+      amount := or(shr(64, amount), shl(64, amount))
+    }
 
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
@@ -533,7 +530,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  function confirmAvnTransaction(bytes32 leafHash, bytes32[] memory merklePath)
+  function confirmAvnTransaction(bytes32 leafHash, bytes32[] calldata merklePath)
     public
     view
     returns (bool)
@@ -549,7 +546,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       else
         rootHash = keccak256(abi.encode(node, rootHash));
 
-      unchecked { i++; }
+      unchecked { ++i; }
     }
 
     return isPublishedRootHash[rootHash];
@@ -561,32 +558,26 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     IERC20 erc20Token = IERC20(coreToken);
-    uint256 oldBalance = erc20Token.balanceOf(address(this));
-    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
-    uint256 newBalance = erc20Token.balanceOf(address(this));
     uint256 expectedBalance;
-    unchecked { expectedBalance = oldBalance + amount; }
-    if (!success || expectedBalance != newBalance) revert CoreMintFailed();
-    if (newBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    unchecked { expectedBalance = erc20Token.balanceOf(address(this)) + amount; }
+    if (expectedBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
+    if (!success || expectedBalance != erc20Token.balanceOf(address(this))) revert CoreMintFailed();
     emit LogGrowth(amount, period);
   }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
-  function _getCompactIntegerByteSize(bytes1 checkByte)
+  function _getCompactIntegerByteSize(uint8 checkByte)
     private
     pure
     returns (uint256 byteLength)
   {
-    uint8 mode = uint8(checkByte) & 3; // the 2 least significant bits encode the byte mode so we do a bitwise AND on them
-
-    if (mode == 0) { // single-byte mode
-      byteLength = 1;
-    } else if (mode == 1) { // two-byte mode
-      byteLength = 2;
-    } else if (mode == 2) { // four-byte mode
-      byteLength = 4;
-    } else {
-      unchecked { byteLength = uint8(checkByte >> 2) + 5; } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
+    assembly {
+      switch and(checkByte, 3) // the 2 least significant bits encode the byte mode so we bitwise AND them to detemine the mode
+      case 0 { byteLength := 1 } // single-byte mode
+      case 1 { byteLength := 2 } // two-byte mode
+      case 2 { byteLength := 4 } // four-byte mode
+      default { byteLength := add(shr(2, checkByte), 5) } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
     }
   }
 
@@ -604,24 +595,24 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 numConfirmations;
-    uint256 requiredConfirmations;
     unchecked {
       numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     }
-    requiredConfirmations = _requiredConfirmations();
+    uint256 requiredConfirmations = _requiredConfirmations();
     uint256 validConfirmations;
     uint256 id;
+    uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
     bool[] memory confirmed = new bool[](nextValidatorId);
 
-    for (uint256 i; i < numConfirmations;) {
+    do {
       assembly {
-        let offset := mul(i, SIGNATURE_LENGTH)
-        r := mload(add(confirmations, add(0x20, offset)))
-        s := mload(add(confirmations, add(0x40, offset)))
-        v := byte(0, mload(add(confirmations, add(0x60, offset))))
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 32))
+        s := mload(add(offset, 64))
+        v := byte(0, mload(add(offset, 96)))
       }
 
       if (v < 27) {
@@ -629,7 +620,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        unchecked { i++; }
+        unchecked { ++i; }
         continue;
       } else {
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
@@ -639,8 +630,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             // Here we activate any previously registered but as yet unactivated validators
             isActiveValidator[id] = true;
             unchecked {
-              numActiveValidators++;
-              validConfirmations++;
+              ++numActiveValidators;
+              ++validConfirmations;
             }
             // Update the number of required confirmations to account for the newly activated validator
             requiredConfirmations = _requiredConfirmations();
@@ -649,14 +640,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
             confirmed[id] = true;
           }
         } else if (!confirmed[id]) {
-          unchecked { validConfirmations++; }
+          unchecked { ++validConfirmations; }
           if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = true;
         }
       }
 
-      unchecked { i++; }
-    }
+      unchecked { ++i; }
+    } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
   }
@@ -668,7 +659,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
-  function _checkT2PublicKey(bytes memory t2PublicKey)
+  function _checkT2PublicKey(bytes calldata t2PublicKey)
     private
     pure
     returns (bytes32 checkedT2PublicKey)
