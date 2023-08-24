@@ -81,7 +81,7 @@ async function getConfirmations(contract, data, expiry, t2TransactionId, adjustm
   adjustment = adjustment || 0;
   const numConfirmations = await getNumRequiredConfirmations(contract) + adjustment;
   let concatenatedConfirmations = '0x';
-  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId, validators[0].t2PublicKey);
+  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
   for (i = startPos; i <= numConfirmations; i++) {
     const confirmation = await validators[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
     concatenatedConfirmations += strip_0x(confirmation);
@@ -90,7 +90,7 @@ async function getConfirmations(contract, data, expiry, t2TransactionId, adjustm
 }
 
 async function getSingleConfirmation(contract, data, expiry, t2TransactionId, validator) {
-  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId, validators[0].t2PublicKey);
+  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
   return await validator.account.signMessage(ethers.utils.arrayify(confirmationHash));
 }
 
@@ -158,13 +158,11 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
 
 async function getNumRequiredConfirmations(contract) {
   const numValidators = (await contract.numActiveValidators()).toNumber();
-  quorum = [await contract.quorum(0), await contract.quorum(1)];
-  return Math.floor(numValidators * quorum[0].toNumber() / quorum[1].toNumber()) + 1;
+  return numValidators - Math.floor(numValidators * 2 / 3);
 }
 
-function toConfirmationHash(data, expiry, t2TransactionId, t2PublicKey) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint256', 'bytes32'],
-      [data, expiry, t2TransactionId.toString(), t2PublicKey]);
+function toConfirmationHash(data, expiry, t2TransactionId) {
+  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TransactionId]);
   return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
 }
 
@@ -178,7 +176,7 @@ function randomBytes32() {
 }
 
 function randomT2TxId() {
-  return ethers.BigNumber.from(randomHex(8));
+  return ethers.BigNumber.from(randomHex(4));
 }
 
 function strip_0x(bytes) {
