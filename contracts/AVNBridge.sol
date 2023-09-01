@@ -58,12 +58,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
-  uint256[2] public quorum; // No longer used
+  uint256[2] public quorum; // No longer used but must not be deleted
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
   uint256 public growthDelay;
   address public coreToken;
-  address internal priorInstance; // No longer used
+  address internal priorInstance; // No longer used but must not be deleted
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
@@ -86,7 +86,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
   error ValidatorNotRegistered();
   error RootHashAlreadyPublished();
-  error ERC20LiftingOnly();
   error LiftLimitExceeded();
   error TokensMustBeSentToThisAddress();
   error InvalidERC777Token();
@@ -416,7 +415,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    if (ERC1820_REGISTRY.getInterfaceImplementer(erc20Address, ERC777_TOKEN_HASH) != address(0)) revert ERC20LiftingOnly();
     if (amount == 0) revert AmountCannotBeZero();
     assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
     if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
@@ -447,11 +445,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
     Emits a corresponding lift event to be read by T2.
   */
-  function tokensReceived(address /* operator */, address from, address to, uint256 amount, bytes calldata data,
+  function tokensReceived(address operator, address from, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
     onlyWhenLiftingIsEnabled
     external
   {
+    if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
     if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
     if (amount == 0) revert AmountCannotBeZero();
     if (to != address(this)) revert TokensMustBeSentToThisAddress();
@@ -499,7 +498,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
-
       t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
       token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
       amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
@@ -515,13 +513,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(t1Address).call{value: amount}("");
       if (!success) revert PaymentFailed();
-    } else if (ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH) == token) {
+    } else {
       try IERC777(token).send(t1Address, amount, "") {
       } catch {
         assert(IERC20(token).transfer(t1Address, amount));
       }
-    } else {
-      assert(IERC20(token).transfer(t1Address, amount));
     }
 
     emit LogLowered(t2PublicKey);
@@ -605,7 +601,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 r;
     bytes32 s;
     uint8 v;
-    bool[] memory confirmed = new bool[](nextValidatorId);
+    uint256[] memory confirmed = new uint256[](nextValidatorId);
 
     do {
       if (!isActiveValidator[id]) {
@@ -619,12 +615,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
           // Update the number of required confirmations to account for the newly activated validator
           requiredConfirmations = _requiredConfirmations();
           if (validConfirmations == requiredConfirmations) break;
-          confirmed[id] = true;
+          confirmed[id] = 1;
         }
-      } else if (!confirmed[id]) {
+      } else if (confirmed[id] == 0) {
         unchecked { ++validConfirmations; }
         if (validConfirmations == requiredConfirmations) break;
-        confirmed[id] = true;
+        confirmed[id] = 1;
       }
 
       assembly {
