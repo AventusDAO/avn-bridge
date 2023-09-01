@@ -58,12 +58,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
-  uint256[2] public quorum; // No longer used
+  uint256[2] public quorum; // No longer used but must not be deleted
   uint256 public numActiveValidators;
   uint256 public nextValidatorId;
   uint256 public growthDelay;
   address public coreToken;
-  address internal priorInstance; // No longer used
+  address internal priorInstance; // No longer used but must not be deleted
   bool public validatorFunctionsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
@@ -498,7 +498,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
-
       t2PublicKey := mload(ptr) // load next 32 bytes into 32 byte type starting at ptr
       token := mload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
       amount := mload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
@@ -602,7 +601,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 r;
     bytes32 s;
     uint8 v;
-    bool[] memory confirmed = new bool[](nextValidatorId);
+    uint256[] memory confirmed = new uint256[](nextValidatorId);
 
     do {
       if (!isActiveValidator[id]) {
@@ -616,12 +615,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
           // Update the number of required confirmations to account for the newly activated validator
           requiredConfirmations = _requiredConfirmations();
           if (validConfirmations == requiredConfirmations) break;
-          confirmed[id] = true;
+          confirmed[id] = 1;
         }
-      } else if (!confirmed[id]) {
+      } else if (confirmed[id] == 0) {
         unchecked { ++validConfirmations; }
         if (validConfirmations == requiredConfirmations) break;
-        confirmed[id] = true;
+        confirmed[id] = 1;
       }
 
       assembly {
