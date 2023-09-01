@@ -287,7 +287,7 @@ describe('AVNBridge', async () => {
         await avnBridge.lift(token20.address, someT2PublicKey, 1);
       });
 
-      it('attempting to lift ERC777 tokens using ERC20 backwards compatability without setting approval', async () => {
+      it('attempting to lift ERC777 tokens using ERC20 backwards compatibility without setting approval', async () => {
         const amount = ethers.BigNumber.from(2);
         await expect(avnBridge.lift(token777.address, someT2PublicKey, amount)).to.be.revertedWith(
           'ERC777: insufficient allowance'
