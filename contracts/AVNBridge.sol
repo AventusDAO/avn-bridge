@@ -68,44 +68,44 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
-  error NoCoreTokenSupplied();
-  error LiftingIsDisabled();
-  error ValidatorFunctionsAreDisabled();
-  error MissingValidatorKeys();
-  error AddressAlreadyInUse(address t1Address);
-  error T2PublicKeyAlreadyInUse(bytes32 t2PublicKey);
+  error NoCoreToken();
+  error LiftDisabled();
+  error ValidatorsDisabled();
+  error MissingKeys();
+  error AddressInUse(address t1Address);
+  error T2KeyInUse(bytes32 t2PublicKey);
   error AddressMismatch(address t1Address, bytes t1PublicKey);
   error SetCoreOwnerFailed();
-  error AmountCannotBeZero();
-  error GrowthPeriodAlreadyUsed();
+  error AmountIsZero();
+  error PeriodIsUsed();
   error OwnerOnly();
-  error GrowthUnavailableForPeriod();
-  error ReleaseTimeNotPassed(uint256 releaseTime);
-  error InvalidT1PublicKey();
-  error ValidatorAlreadyRegistered();
-  error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
-  error ValidatorNotRegistered();
-  error RootHashAlreadyPublished();
-  error LiftLimitExceeded();
-  error TokensMustBeSentToThisAddress();
-  error InvalidERC777Token();
-  error LoweringIsDisabled();
-  error InvalidLowerData();
-  error LowerAlreadyUsed();
-  error UnsignedTransaction();
-  error NotALowerTransaction();
+  error GrowthUnavailable();
+  error NotReady(uint256 releaseTime);
+  error InvalidT1Key();
+  error AlreadyRegistered();
+  error CannotChangeT2Key(bytes32 existingT2PublicKey);
+  error IsNotRegistered();
+  error RootHashIsUsed();
+  error LiftLimitHit();
+  error InvalidRecipient();
+  error InvalidERC777();
+  error LowerDisabled();
+  error InvalidTxData();
+  error LowerIsUsed();
+  error UnsignedTx();
+  error NotALowerTx();
   error PaymentFailed();
   error CoreMintFailed();
-  error InvalidConfirmations();
-  error TransactionIdAlreadyUsed();
-  error InvalidT2PublicKey();
-  error WindowHasExpired();
+  error BadConfirmations();
+  error TxIdIsUsed();
+  error InvalidT2Key();
+  error WindowExpired();
 
   function initialize(address _coreToken)
     public
     initializer
   {
-    if (_coreToken == address(0)) revert NoCoreTokenSupplied();
+    if (_coreToken == address(0)) revert NoCoreToken();
     __Ownable_init();
     coreToken = _coreToken;
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
@@ -120,17 +120,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   modifier onlyWhenLiftingIsEnabled() {
-    if (!liftingIsEnabled) revert LiftingIsDisabled();
+    if (!liftingIsEnabled) revert LiftDisabled();
     _;
   }
 
   modifier onlyWhenValidatorFunctionsAreEnabled() {
-    if (!validatorFunctionsAreEnabled) revert ValidatorFunctionsAreDisabled();
+    if (!validatorFunctionsAreEnabled) revert ValidatorsDisabled();
     _;
   }
 
   modifier onlyWithinCallWindow(uint256 expiry) {
-    if (block.timestamp > expiry) revert WindowHasExpired();
+    if (block.timestamp > expiry) revert WindowExpired();
     _;
   }
 
@@ -151,14 +151,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes memory t1PublicKey;
 
     if (t1PublicKeyLHS.length != numToLoad && t1PublicKeyRHS.length != numToLoad && t2PublicKey.length != numToLoad) {
-      revert MissingValidatorKeys();
+      revert MissingKeys();
     }
 
     for (uint256 i; i < numToLoad;) {
       _t1Address = t1Address[i];
       _t2PublicKey = t2PublicKey[i];
-      if (t1AddressToId[_t1Address] != 0) revert AddressAlreadyInUse(_t1Address);
-      if (t2PublicKeyToId[_t2PublicKey] != 0) revert T2PublicKeyAlreadyInUse(_t2PublicKey);
+      if (t1AddressToId[_t1Address] != 0) revert AddressInUse(_t1Address);
+      if (t2PublicKeyToId[_t2PublicKey] != 0) revert T2KeyInUse(_t2PublicKey);
       t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
       if (address(uint160(uint256(keccak256(t1PublicKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PublicKey);
       idToT1Address[nextValidatorId] = _t1Address;
@@ -168,9 +168,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       isRegisteredValidator[nextValidatorId] = true;
       isActiveValidator[nextValidatorId] = true;
       unchecked {
-        numActiveValidators++;
-        nextValidatorId++;
-        i++;
+        ++numActiveValidators;
+        ++nextValidatorId;
+        ++i;
       }
     }
   }
@@ -265,8 +265,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
-    if (amount == 0) revert AmountCannotBeZero();
-    if (growthAmount[period] != 0) revert GrowthPeriodAlreadyUsed();
+    if (amount == 0) revert AmountIsZero();
+    if (growthAmount[period] != 0) revert PeriodIsUsed();
 
     growthAmount[period] = amount;
 
@@ -298,8 +298,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 releaseTime = growthRelease[period];
-    if (releaseTime == 0) revert GrowthUnavailableForPeriod();
-    if (block.timestamp < releaseTime) revert ReleaseTimeNotPassed(releaseTime);
+    if (releaseTime == 0) revert GrowthUnavailable();
+    if (block.timestamp < releaseTime) revert NotReady(releaseTime);
     growthRelease[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
@@ -323,10 +323,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
-    if (t1PublicKey.length != 64) revert InvalidT1PublicKey();
+    if (t1PublicKey.length != 64) revert InvalidT1Key();
     address t1Address = address(uint160(uint256(keccak256(t1PublicKey))));
     uint256 id = t1AddressToId[t1Address];
-    if (isRegisteredValidator[id]) revert ValidatorAlreadyRegistered();
+    if (isRegisteredValidator[id]) revert AlreadyRegistered();
 
     // The order of the elements is the reverse of the deregisterValidatorHash
     bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
@@ -334,7 +334,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
-      if (t2PublicKeyToId[t2PublicKey] != 0) revert T2PublicKeyAlreadyInUse(t2PublicKey);
+      if (t2PublicKeyToId[t2PublicKey] != 0) revert T2KeyInUse(t2PublicKey);
       id = nextValidatorId;
       idToT1Address[id] = t1Address;
       t1AddressToId[t1Address] = id;
@@ -342,7 +342,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t2PublicKeyToId[t2PublicKey] = id;
       unchecked { ++nextValidatorId; }
     } else {
-      if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2PublicKey(idToT2PublicKey[id]);
+      if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2Key(idToT2PublicKey[id]);
     }
 
     isRegisteredValidator[id] = true;
@@ -367,7 +367,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
-    if (!isRegisteredValidator[id]) revert ValidatorNotRegistered();
+    if (!isRegisteredValidator[id]) revert IsNotRegistered();
 
     isRegisteredValidator[id] = false;
 
@@ -395,7 +395,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
-    if (isPublishedRootHash[rootHash]) revert RootHashAlreadyPublished();
+    if (isPublishedRootHash[rootHash]) revert RootHashIsUsed();
     _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
     isPublishedRootHash[rootHash] = true;
@@ -415,9 +415,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    if (amount == 0) revert AmountCannotBeZero();
+    if (amount == 0) revert AmountIsZero();
     assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
-    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
     emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
   }
 
@@ -432,7 +432,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingIsEnabled
     external
   {
-    if (msg.value == 0) revert AmountCannotBeZero();
+    if (msg.value == 0) revert AmountIsZero();
     emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
@@ -452,10 +452,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
     if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
-    if (amount == 0) revert AmountCannotBeZero();
-    if (to != address(this)) revert TokensMustBeSentToThisAddress();
-    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777Token();
-    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitExceeded();
+    if (amount == 0) revert AmountIsZero();
+    if (to != address(this)) revert InvalidRecipient();
+    if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
+    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
     emit LogLifted(msg.sender, _checkT2PublicKey(data), amount);
   }
 
@@ -466,11 +466,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
-    if (!loweringIsEnabled) revert LoweringIsDisabled();
+    if (!loweringIsEnabled) revert LowerDisabled();
     bytes memory memLeaf = leaf; // certain operations are cheaper using an in-memory copy of the leaf calldata
     bytes32 leafHash = keccak256(memLeaf);
-    if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidLowerData();
-    if (hasLowered[leafHash]) revert LowerAlreadyUsed();
+    if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidTxData();
+    if (hasLowered[leafHash]) revert LowerIsUsed();
     hasLowered[leafHash] = true;
     uint256 ptr;
     bytes32 t2PublicKey;
@@ -481,7 +481,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     unchecked {
       ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
-      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTransaction(); // bitwise version check to ensure leaf is a signed tx
+      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTx(); // bitwise version check to ensure leaf is a signed tx
       // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes:
       ptr += uint8(leaf[ptr + 99]) == 0 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
       ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the nonce
@@ -494,7 +494,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
-    if (numBytesToSkip == 0) revert NotALowerTransaction(); // we don't recognise this call ID so revert
+    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID so revert
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
@@ -555,7 +555,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     uint256 expectedBalance;
     unchecked { expectedBalance = IERC20(coreToken).balanceOf(address(this)) + amount; }
-    if (expectedBalance > LIFT_LIMIT) revert LiftLimitExceeded();
+    if (expectedBalance > LIFT_LIMIT) revert LiftLimitHit();
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
     if (!success) revert CoreMintFailed();
     emit LogGrowth(amount, period);
@@ -642,13 +642,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       unchecked { ++i; }
     } while (i < numConfirmations);
 
-    if (validConfirmations != requiredConfirmations) revert InvalidConfirmations();
+    if (validConfirmations != requiredConfirmations) revert BadConfirmations();
   }
 
   function _storeT2TransactionId(uint256 t2TransactionId)
     private
   {
-    if (isUsedT2TransactionId[t2TransactionId]) revert TransactionIdAlreadyUsed();
+    if (isUsedT2TransactionId[t2TransactionId]) revert TxIdIsUsed();
     isUsedT2TransactionId[t2TransactionId] = true;
   }
 
@@ -657,7 +657,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     pure
     returns (bytes32 checkedT2PublicKey)
   {
-    if (t2PublicKey.length != 32) revert InvalidT2PublicKey();
+    if (t2PublicKey.length != 32) revert InvalidT2Key();
     checkedT2PublicKey = bytes32(t2PublicKey);
   }
 }

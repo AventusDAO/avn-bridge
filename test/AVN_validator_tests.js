@@ -92,7 +92,7 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(zeroAmount, period, expiry, t2TransactionId);
       await expect(
         avnBridge.connect(activeValidator).triggerGrowth(zeroAmount, period, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
+      ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
     });
 
     it('succeeds in triggering growth via validators', async () => {
@@ -114,7 +114,7 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
       await expect(
         avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'TransactionIdAlreadyUsed');
+      ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
     });
 
     it('fails to trigger growth with an expiry that has passed', async () => {
@@ -124,10 +124,10 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
       await expect(
         avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+      ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
     });
 
-    it('fails to trigger growth with InvalidConfirmations', async () => {
+    it('fails to trigger growth with BadConfirmations', async () => {
       const period = 2;
       const expiry = await helper.getValidExpiry();
       const t2TransactionId = helper.randomT2TxId();
@@ -135,7 +135,7 @@ describe('AVNBridge', async () => {
 
       await expect(
         avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+      ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
     });
 
     it('succeeds in releasing growth', async () => {
@@ -155,7 +155,7 @@ describe('AVNBridge', async () => {
     it('fails to release growth that has already been released', async () => {
       const period = 1;
       await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailableForPeriod');
+      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
     });
 
     it('fails to release growth that has since been denied by the owner', async () => {
@@ -176,7 +176,7 @@ describe('AVNBridge', async () => {
       await avnBridge.denyGrowth(period);
 
       await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailableForPeriod');
+      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
 
       expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
       expect(avtSupplyBefore).to.equal(await token20.totalSupply());
@@ -192,7 +192,7 @@ describe('AVNBridge', async () => {
       const confirmations = await getGrowthConfirmations(growthAmount, period, expiry, t2TransactionId);
 
       await avnBridge.connect(activeValidator).triggerGrowth(growthAmount, period, expiry, t2TransactionId, confirmations);
-      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'ReleaseTimeNotPassed');
+      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'NotReady');
       expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
       expect(avtSupplyBefore).to.equal(await token20.totalSupply());
 
@@ -255,7 +255,7 @@ describe('AVNBridge', async () => {
         const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newT2TransactionId);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, newT2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
+        ).to.be.revertedWithCustomError(avnBridge, 'ValidatorsDisabled');
         await expect(avnBridge.toggleValidatorFunctions(true))
           .to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
           .withArgs(true);
@@ -268,7 +268,7 @@ describe('AVNBridge', async () => {
         const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newT2TransactionId);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, newT2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+        ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
       });
 
       it('the t2 transaction ID is not unique', async () => {
@@ -277,7 +277,7 @@ describe('AVNBridge', async () => {
         const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, t2TransactionId);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(newRootHash, expiry, t2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'TransactionIdAlreadyUsed');
+        ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
       });
 
       it('the root has already been published', async () => {
@@ -286,7 +286,7 @@ describe('AVNBridge', async () => {
         const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, newT2TransactionId);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, newT2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'RootHashAlreadyPublished');
+        ).to.be.revertedWithCustomError(avnBridge, 'RootHashIsUsed');
       });
 
       it('the confirmations are invalid', async () => {
@@ -297,7 +297,7 @@ describe('AVNBridge', async () => {
           '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId));
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('there are no confirmations', async () => {
@@ -305,7 +305,7 @@ describe('AVNBridge', async () => {
         const expiry = await helper.getValidExpiry();
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, '0x')
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('there are not enough confirmations', async () => {
@@ -316,7 +316,7 @@ describe('AVNBridge', async () => {
         const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TransactionId, -1);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('the confirmations are corrupted', async () => {
@@ -327,7 +327,7 @@ describe('AVNBridge', async () => {
         confirmations = confirmations.replace(/1/g, '2');
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('the confirmations are not signed by registered validators', async () => {
@@ -345,7 +345,7 @@ describe('AVNBridge', async () => {
         );
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('the confirmations are not unique', async () => {
@@ -357,7 +357,7 @@ describe('AVNBridge', async () => {
         const duplicateConfirmations = confirmations + helper.strip_0x(confirmations);
         await expect(
           avnBridge.connect(activeValidator).publishRoot(rootHash, expiry, t2TransactionId, duplicateConfirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidConfirmations');
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
     });
   });
@@ -418,7 +418,7 @@ describe('AVNBridge', async () => {
         avnBridge
           .connect(activeValidator)
           .registerValidator(emptyKey, prospectValidator.t2PublicKey, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1PublicKey');
+      ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1Key');
     });
 
     it('a validator cannot be registered if the expiry time has passed', async () => {
@@ -440,7 +440,7 @@ describe('AVNBridge', async () => {
             t2TransactionId,
             confirmations
           )
-      ).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+      ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
     });
 
     it('an existing active validator cannot be re-registered', async () => {
@@ -459,7 +459,7 @@ describe('AVNBridge', async () => {
             t2TransactionId,
             confirmations
           )
-      ).to.be.revertedWithCustomError(avnBridge, 'ValidatorAlreadyRegistered');
+      ).to.be.revertedWithCustomError(avnBridge, 'AlreadyRegistered');
     });
 
     it('an existing deregistered validator cannot be re-registered with a different public key', async () => {
@@ -494,7 +494,7 @@ describe('AVNBridge', async () => {
         avnBridge
           .connect(activeValidator)
           .registerValidator(existingValidator.t1PublicKey, newValidator.t2PublicKey, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2PublicKey');
+      ).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2Key');
 
       t2TransactionId = helper.randomT2TxId();
       registerValidatorHash = ethers.utils.solidityKeccak256(
@@ -533,7 +533,7 @@ describe('AVNBridge', async () => {
             t2TransactionId,
             confirmations
           )
-      ).to.be.revertedWithCustomError(avnBridge, 'T2PublicKeyAlreadyInUse');
+      ).to.be.revertedWithCustomError(avnBridge, 'T2KeyInUse');
     });
   });
 
@@ -665,7 +665,7 @@ describe('AVNBridge', async () => {
         avnBridge
           .connect(activeValidator)
           .deregisterValidator(newValidator.t1PublicKey, newValidator.t2PublicKey, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'ValidatorNotRegistered');
+      ).to.be.revertedWithCustomError(avnBridge, 'IsNotRegistered');
     });
 
     it('validator functions are disabled', async () => {
@@ -683,7 +683,7 @@ describe('AVNBridge', async () => {
         avnBridge
           .connect(activeValidator)
           .deregisterValidator(validators[0].t1PublicKey, validators[0].t2PublicKey, expiry, t2TransactionId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'ValidatorFunctionsAreDisabled');
+      ).to.be.revertedWithCustomError(avnBridge, 'ValidatorsDisabled');
       await expect(avnBridge.toggleValidatorFunctions(true))
         .to.emit(avnBridge, 'LogValidatorFunctionsAreEnabled')
         .withArgs(true);
@@ -705,7 +705,7 @@ describe('AVNBridge', async () => {
           t2TransactionId,
           confirmations
         )
-      ).to.be.revertedWithCustomError(avnBridge, 'WindowHasExpired');
+      ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
     });
   });
 });
