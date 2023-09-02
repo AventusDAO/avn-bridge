@@ -626,16 +626,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         i := add(i, 1)
       }
 
-      if (v < 27) {
-        unchecked { v += 27; }
-      }
-
-      if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        id = 0;
-      } else {
-        id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
-      }
-
+      if (v < 27) { unchecked { v += 27; } }
+      id = (v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)] : 0;
     } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert BadConfirmations();
