@@ -627,6 +627,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         r := mload(add(offset, 32))
         s := mload(add(offset, 64))
         v := byte(0, mload(add(offset, 96)))
+        i := add(i, 1)
       }
 
       if (v < 27) {
@@ -639,7 +640,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
       }
 
-      unchecked { ++i; }
     } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert BadConfirmations();
