@@ -588,39 +588,33 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
-    uint256 numConfirmations;
-    unchecked {
-      numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; // The sender's confirmation is implicit
-    }
-    uint256 requiredConfirmations = _requiredConfirmations();
     uint256[] memory confirmed = new uint256[](nextValidatorId);
-    uint256 validConfirmations;
+    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
+    uint256 requiredConfirmations = _requiredConfirmations();
     uint256 id = t1AddressToId[msg.sender];
+    uint256 numConfirmations;
+    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; }// The sender's confirmation is implicit
+    uint256 validConfirmations;
     uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
 
-
     do {
       if (!isActiveValidator[id]) {
-        if (isRegisteredValidator[id]) {
-          // Here we activate any previously registered but as yet unactivated validators
+        if (isRegisteredValidator[id]) { // Here we activate any previously registered but as yet unactivated validators
           isActiveValidator[id] = true;
           unchecked {
             ++numActiveValidators;
             ++validConfirmations;
           }
-          // Update the number of required confirmations to account for the newly activated validator
           requiredConfirmations = _requiredConfirmations();
           if (validConfirmations == requiredConfirmations) return;
           confirmed[id] = 1;
         }
       } else if (confirmed[id] == 0) {
-        unchecked {
-          if (++validConfirmations == requiredConfirmations) return;
-        }
+        unchecked { ++validConfirmations; }
+        if (validConfirmations == requiredConfirmations) return;
         confirmed[id] = 1;
       }
 
