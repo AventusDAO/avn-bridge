@@ -609,16 +609,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
           isActiveValidator[id] = true;
           unchecked {
             ++numActiveValidators;
-            ++validConfirmations;
+            // Update the number of required confirmations to account for the newly activated validator
+            requiredConfirmations = _requiredConfirmations();
+            if (++validConfirmations == requiredConfirmations) break;
           }
-          // Update the number of required confirmations to account for the newly activated validator
-          requiredConfirmations = _requiredConfirmations();
-          if (validConfirmations == requiredConfirmations) break;
           confirmed[id] = 1;
         }
       } else if (confirmed[id] == 0) {
-        unchecked { ++validConfirmations; }
-        if (validConfirmations == requiredConfirmations) break;
+        unchecked {
+          if (++validConfirmations == requiredConfirmations) break;
+        }
         confirmed[id] = 1;
       }
 
