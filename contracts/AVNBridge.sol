@@ -594,13 +594,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; // The sender's confirmation is implicit
     }
     uint256 requiredConfirmations = _requiredConfirmations();
+    uint256[] memory confirmed = new uint256[](nextValidatorId);
     uint256 validConfirmations;
     uint256 id = t1AddressToId[msg.sender];
     uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
-    uint256[] memory confirmed = new uint256[](nextValidatorId);
+
 
     do {
       if (!isActiveValidator[id]) {
@@ -609,15 +610,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
           isActiveValidator[id] = true;
           unchecked {
             ++numActiveValidators;
-            // Update the number of required confirmations to account for the newly activated validator
-            requiredConfirmations = _requiredConfirmations();
-            if (++validConfirmations == requiredConfirmations) break;
+            ++validConfirmations;
           }
+          // Update the number of required confirmations to account for the newly activated validator
+          requiredConfirmations = _requiredConfirmations();
+          if (validConfirmations == requiredConfirmations) return;
           confirmed[id] = 1;
         }
       } else if (confirmed[id] == 0) {
         unchecked {
-          if (++validConfirmations == requiredConfirmations) break;
+          if (++validConfirmations == requiredConfirmations) return;
         }
         confirmed[id] = 1;
       }
