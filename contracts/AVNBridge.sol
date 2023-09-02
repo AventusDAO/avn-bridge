@@ -531,21 +531,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (bool)
   {
-    bytes32 rootHash = leafHash;
     uint256 pathLength = merklePath.length;
+    uint256 i;
     bytes32 node;
 
-    for (uint256 i; i < pathLength;) {
+    do {
       node = merklePath[i];
-      if (rootHash < node)
-        rootHash = keccak256(abi.encode(rootHash, node));
-      else
-        rootHash = keccak256(abi.encode(node, rootHash));
-
+      leafHash = (leafHash < node) ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
       unchecked { ++i; }
-    }
+    } while (i < pathLength);
 
-    return isPublishedRootHash[rootHash];
+    return isPublishedRootHash[leafHash];
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
