@@ -494,7 +494,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
-    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID so revert
+    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID as a lower so revert
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
@@ -589,7 +589,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 id = t1AddressToId[msg.sender];
     uint256 numConfirmations;
-    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; }// The sender's confirmation is implicit
+    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; } // The sender's confirmation is implicit
     uint256 validConfirmations;
     uint256 i;
     bytes32 r;
