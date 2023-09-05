@@ -537,7 +537,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     do {
       node = merklePath[i];
-      leafHash = (leafHash < node) ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
+      leafHash = leafHash < node ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
       unchecked { ++i; }
     } while (i < pathLength);
 
@@ -624,7 +624,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
       if (v < 27) { unchecked { v += 27; } }
 
-      id = (v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0)
+      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
         ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
         : 0;
 
