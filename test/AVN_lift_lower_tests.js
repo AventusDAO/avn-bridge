@@ -166,24 +166,24 @@ describe('AVNBridge', async () => {
       });
 
       it('attempting to lift 0 ETH', async () => {
-        await expect(avnBridge.liftETH(someT2PublicKey)).to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
+        await expect(avnBridge.liftETH(someT2PublicKey)).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
       });
 
       it('attempting to lift ETH without supplying a public key', async () => {
-        await expect(avnBridge.liftETH('0x', { value: 100 })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2PublicKey');
+        await expect(avnBridge.liftETH('0x', { value: 100 })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
       });
 
       it('attempting to lift ETH with an incorrect T2 public key (too short)', async () => {
         await expect(avnBridge.liftETH(helper.randomHex(16), { value: 100 })).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
       it('attempting to lift ETH with an incorrect T2 public key(too long)', async () => {
         await expect(avnBridge.liftETH(helper.randomHex(48), { value: 100 })).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
@@ -191,20 +191,20 @@ describe('AVNBridge', async () => {
         await token20.approve(avnBridge.address, 0);
         await expect(avnBridge.lift(token20.address, someT2PublicKey, 0)).to.be.revertedWithCustomError(
           avnBridge,
-          'AmountCannotBeZero'
+          'AmountIsZero'
         );
       });
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
         await token20.approve(avnBridge.address, 1);
-        await expect(avnBridge.lift(token20.address, '0x', 1)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2PublicKey');
+        await expect(avnBridge.lift(token20.address, '0x', 1)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
       });
 
       it('attempting to lift ERC-20 tokens with an incorrect T2 public key (too short)', async () => {
         await token20.approve(avnBridge.address, 1);
         await expect(avnBridge.lift(token20.address, helper.randomHex(16), 1)).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
@@ -212,39 +212,39 @@ describe('AVNBridge', async () => {
         await token20.approve(avnBridge.address, 1);
         await expect(avnBridge.lift(token20.address, helper.randomHex(48), 1)).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
       it('attempting to lift 0 ERC777 tokens', async () => {
         await expect(token777.send(avnBridge.address, 0, someT2PublicKey)).to.be.revertedWithCustomError(
           avnBridge,
-          'AmountCannotBeZero'
+          'AmountIsZero'
         );
       });
 
       it('attempting to lift ERC777 tokens without supplying a T2 public key', async () => {
-        await expect(token777.send(avnBridge.address, 1, '0x')).to.be.revertedWithCustomError(avnBridge, 'InvalidT2PublicKey');
+        await expect(token777.send(avnBridge.address, 1, '0x')).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
       });
 
       it('attempting to lift ERC777 tokens with an incorrect T2 public key (too short)', async () => {
         await expect(token777.send(avnBridge.address, 1, helper.randomHex(16))).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
       it('attempting to lift ERC777 tokens with an incorrect T2 public key(too long)', async () => {
         await expect(token777.send(avnBridge.address, 1, helper.randomHex(48))).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidT2PublicKey'
+          'InvalidT2Key'
         );
       });
 
       it('attempting to lift more ERC777 tokens to T2 than its supported limit', async () => {
         await expect(massiveERC777.send(avnBridge.address, 1, someT2PublicKey)).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftLimitExceeded'
+          'LiftLimitHit'
         );
       });
 
@@ -252,7 +252,7 @@ describe('AVNBridge', async () => {
         await massiveERC20.approve(avnBridge.address, 1);
         await expect(avnBridge.lift(massiveERC20.address, someT2PublicKey, 1)).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftLimitExceeded'
+          'LiftLimitHit'
         );
       });
 
@@ -260,7 +260,7 @@ describe('AVNBridge', async () => {
         await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingIsEnabled').withArgs(false);
         await expect(avnBridge.liftETH(someT2PublicKey, { value: 100 })).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftingIsDisabled'
+          'LiftDisabled'
         );
         await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingIsEnabled').withArgs(true);
         await avnBridge.liftETH(someT2PublicKey, { value: 100 });
@@ -270,7 +270,7 @@ describe('AVNBridge', async () => {
         await avnBridge.toggleLifting(false);
         await expect(token777.send(avnBridge.address, 1, someT2PublicKey)).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftingIsDisabled'
+          'LiftDisabled'
         );
         await avnBridge.toggleLifting(true);
         await token777.send(avnBridge.address, 1, someT2PublicKey);
@@ -281,7 +281,7 @@ describe('AVNBridge', async () => {
         await token20.approve(avnBridge.address, 1);
         await expect(avnBridge.lift(token20.address, someT2PublicKey, 1)).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftingIsDisabled'
+          'LiftDisabled'
         );
         await avnBridge.toggleLifting(true);
         await avnBridge.lift(token20.address, someT2PublicKey, 1);
@@ -298,7 +298,7 @@ describe('AVNBridge', async () => {
         await avnBridge.toggleLifting(false);
         await expect(token777.send(avnBridge.address, 1, someT2PublicKey)).to.be.revertedWithCustomError(
           avnBridge,
-          'LiftingIsDisabled'
+          'LiftDisabled'
         );
         await avnBridge.toggleLifting(true);
         await token777.send(avnBridge.address, 1, someT2PublicKey);
@@ -329,13 +329,13 @@ describe('AVNBridge', async () => {
       it('calling FTSM tokensReceived hook directly with tokens not destined for the FTSM', async () => {
         await expect(
           avnBridge.tokensReceived(owner, owner, someOtherAccount.address, 100, someT2PublicKey, '0x')
-        ).to.be.revertedWithCustomError(avnBridge, 'TokensMustBeSentToThisAddress');
+        ).to.be.revertedWithCustomError(avnBridge, 'InvalidRecipient');
       });
 
       it('calling FTSM tokensReceived hook directly and not a registered contract', async () => {
         await expect(
           avnBridge.tokensReceived(owner, owner, avnBridge.address, 100, someT2PublicKey, '0x')
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidERC777Token');
+        ).to.be.revertedWithCustomError(avnBridge, 'InvalidERC777');
       });
     });
   });
@@ -498,7 +498,7 @@ describe('AVNBridge', async () => {
         await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringIsEnabled').withArgs(false);
         await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,
-          'LoweringIsDisabled'
+          'LowerDisabled'
         );
         await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringIsEnabled').withArgs(true);
         await avnBridge.lower(tree.leafData, tree.merklePath);
@@ -508,21 +508,21 @@ describe('AVNBridge', async () => {
         await avnBridge.lower(tree.leafData, tree.merklePath);
         await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,
-          'LowerAlreadyUsed'
+          'LowerIsUsed'
         );
       });
 
       it('leaf is invalid', async () => {
         await expect(avnBridge.lower(helper.randomBytes32(), tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidLowerData'
+          'InvalidTxData'
         );
       });
 
       it('path is invalid', async () => {
         await expect(avnBridge.lower(tree.leafData, [helper.randomBytes32()])).to.be.revertedWithCustomError(
           avnBridge,
-          'InvalidLowerData'
+          'InvalidTxData'
         );
       });
 
@@ -531,7 +531,7 @@ describe('AVNBridge', async () => {
         tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true, badId);
         await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,
-          'NotALowerTransaction'
+          'NotALowerTx'
         );
       });
 
@@ -564,7 +564,7 @@ describe('AVNBridge', async () => {
       const expiry = await helper.getValidExpiry();
       await expect(avnBridge.triggerGrowth(0, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
         avnBridge,
-        'AmountCannotBeZero'
+        'AmountIsZero'
       );
     });
 
@@ -601,7 +601,7 @@ describe('AVNBridge', async () => {
       const expiry = await helper.getValidExpiry();
       await expect(avnBridge.triggerGrowth(growthAmount, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
         avnBridge,
-        'GrowthPeriodAlreadyUsed'
+        'PeriodIsUsed'
       );
     });
   });

@@ -108,7 +108,7 @@ describe('AVNBridge lowering', async () => {
       const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
       await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
         avnBridge,
-        'UnsignedTransaction'
+        'UnsignedTx'
       );
     });
   });
