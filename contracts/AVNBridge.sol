@@ -494,7 +494,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
-    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID so revert
+    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID as a lower so revert
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
@@ -531,21 +531,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (bool)
   {
-    bytes32 rootHash = leafHash;
     uint256 pathLength = merklePath.length;
+    uint256 i;
     bytes32 node;
 
-    for (uint256 i; i < pathLength;) {
+    do {
       node = merklePath[i];
-      if (rootHash < node)
-        rootHash = keccak256(abi.encode(rootHash, node));
-      else
-        rootHash = keccak256(abi.encode(node, rootHash));
-
+      leafHash = leafHash < node ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
       unchecked { ++i; }
-    }
+    } while (i < pathLength);
 
-    return isPublishedRootHash[rootHash];
+    return isPublishedRootHash[leafHash];
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -593,7 +589,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 id = t1AddressToId[msg.sender];
     uint256 numConfirmations;
-    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; }// The sender's confirmation is implicit
+    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; } // The sender's confirmation is implicit
     uint256 validConfirmations;
     uint256 i;
     bytes32 r;
@@ -628,7 +624,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
       if (v < 27) { unchecked { v += 27; } }
 
-      id = (v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0)
+      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
         ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
         : 0;
 
