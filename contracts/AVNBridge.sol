@@ -494,7 +494,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
-    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID so revert
+    if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID as a lower so revert
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
@@ -531,21 +531,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (bool)
   {
-    bytes32 rootHash = leafHash;
     uint256 pathLength = merklePath.length;
+    uint256 i;
     bytes32 node;
 
-    for (uint256 i; i < pathLength;) {
+    do {
       node = merklePath[i];
-      if (rootHash < node)
-        rootHash = keccak256(abi.encode(rootHash, node));
-      else
-        rootHash = keccak256(abi.encode(node, rootHash));
-
+      leafHash = leafHash < node ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
       unchecked { ++i; }
-    }
+    } while (i < pathLength);
 
-    return isPublishedRootHash[rootHash];
+    return isPublishedRootHash[leafHash];
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -588,37 +584,33 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
+    uint256[] memory confirmed = new uint256[](nextValidatorId);
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
-    uint256 numConfirmations;
-    unchecked {
-      numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; // The sender's confirmation is implicit
-    }
     uint256 requiredConfirmations = _requiredConfirmations();
-    uint256 validConfirmations;
     uint256 id = t1AddressToId[msg.sender];
+    uint256 numConfirmations;
+    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; } // The sender's confirmation is implicit
+    uint256 validConfirmations;
     uint256 i;
     bytes32 r;
     bytes32 s;
     uint8 v;
-    uint256[] memory confirmed = new uint256[](nextValidatorId);
 
     do {
       if (!isActiveValidator[id]) {
-        if (isRegisteredValidator[id]) {
-          // Here we activate any previously registered but as yet unactivated validators
+        if (isRegisteredValidator[id]) { // Here we activate any previously registered but as yet unactivated validators
           isActiveValidator[id] = true;
           unchecked {
             ++numActiveValidators;
             ++validConfirmations;
           }
-          // Update the number of required confirmations to account for the newly activated validator
           requiredConfirmations = _requiredConfirmations();
-          if (validConfirmations == requiredConfirmations) break;
+          if (validConfirmations == requiredConfirmations) return;
           confirmed[id] = 1;
         }
       } else if (confirmed[id] == 0) {
         unchecked { ++validConfirmations; }
-        if (validConfirmations == requiredConfirmations) break;
+        if (validConfirmations == requiredConfirmations) return;
         confirmed[id] = 1;
       }
 
@@ -627,19 +619,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         r := mload(add(offset, 32))
         s := mload(add(offset, 64))
         v := byte(0, mload(add(offset, 96)))
+        i := add(i, 1)
       }
 
-      if (v < 27) {
-        unchecked { v += 27; }
-      }
+      if (v < 27) { unchecked { v += 27; } }
 
-      if (v != 27 && v != 28 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-        id = 0;
-      } else {
-        id = t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)];
-      }
+      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+        ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+        : 0;
 
-      unchecked { ++i; }
     } while (i < numConfirmations);
 
     if (validConfirmations != requiredConfirmations) revert BadConfirmations();
