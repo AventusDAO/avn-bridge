@@ -11,7 +11,7 @@ const LOWER_ID = '0x5702';
 
 let additionalTx = [];
 let accounts = [];
-let validators = [];
+let authors = [];
 let owner;
 const someT2PublicKey = randomBytes32();
 
@@ -27,7 +27,7 @@ async function init(largeTree) {
 
     accounts.push(account);
 
-    validators.push({
+    authors.push({
       account: account,
       t1Address: account.address,
       t1PublicKey: '0x' + account.publicKey.slice(4, 132),
@@ -79,39 +79,39 @@ function createMerkleTree(dataLeaves) {
 }
 
 async function getConfirmations(contract, data, expiry, t2TransactionId, adjustment, startPos) {
-  startPos = startPos || 2; // Start from Validator 2 as Validator 1 always sends the tx
+  startPos = startPos || 2; // Start from Author 2 as Author 1 always sends the tx
   adjustment = adjustment || 0;
   const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
   let concatenatedConfirmations = '0x';
   const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
   for (i = startPos; i <= numConfirmations; i++) {
-    const confirmation = await validators[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
+    const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
     concatenatedConfirmations += strip_0x(confirmation);
   }
   return concatenatedConfirmations;
 }
 
-async function getSingleConfirmation(contract, data, expiry, t2TransactionId, validator) {
+async function getSingleConfirmation(contract, data, expiry, t2TransactionId, author) {
   const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
-  return await validator.account.signMessage(ethers.utils.arrayify(confirmationHash));
+  return await author.account.signMessage(ethers.utils.arrayify(confirmationHash));
 }
 
-async function loadValidators(avnBridge, validators, numValidators) {
+async function loadAuthors(avnBridge, authors, numAuthors) {
   let t1AddressArray = [];
   let t1PublicKeyLHSArray = [];
   let t1PublicKeyRHSArray = [];
   let t2PublicKeyArray = [];
 
-  for (i = 0; i < numValidators; i++) {
-    t1AddressArray.push(validators[i].t1Address);
-    t1PublicKeyLHSArray.push(validators[i].t1PublicKeyLHS);
-    t1PublicKeyRHSArray.push(validators[i].t1PublicKeyRHS);
-    t2PublicKeyArray.push(validators[i].t2PublicKey);
-    validators[i].registered = true;
-    validators[i].active = true;
+  for (i = 0; i < numAuthors; i++) {
+    t1AddressArray.push(authors[i].t1Address);
+    t1PublicKeyLHSArray.push(authors[i].t1PublicKeyLHS);
+    t1PublicKeyRHSArray.push(authors[i].t1PublicKeyRHS);
+    t2PublicKeyArray.push(authors[i].t2PublicKey);
+    authors[i].registered = true;
+    authors[i].active = true;
   }
 
-  await avnBridge.loadValidators(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
+  await avnBridge.loadAuthors(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
 }
 
 async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyLower, id) {
@@ -127,7 +127,7 @@ async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyL
   const expiry = await getValidExpiry();
   const t2TransactionId = randomT2TxId();
   const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
@@ -144,7 +144,7 @@ async function createTreeAndPublishRootWithLoweree(contract, loweree, tokenAddre
   const expiry = await getValidExpiry();
   const t2TransactionId = randomT2TxId();
   const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
@@ -154,13 +154,13 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
   const expiry = await getValidExpiry();
   const t2TransactionId = randomT2TxId();
   const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(validators[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
   return merkleTree;
 }
 
 async function getNumRequiredConfirmations(contract) {
-  const numValidators = (await contract.numActiveValidators()).toNumber();
-  return numValidators - Math.floor((numValidators * 2) / 3);
+  const numAuthors = (await contract.numActiveAuthors()).toNumber();
+  return numAuthors - Math.floor((numAuthors * 2) / 3);
 }
 
 function toConfirmationHash(data, expiry, t2TransactionId) {
@@ -227,7 +227,7 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
-  loadValidators,
+  loadAuthors,
   LOWER_ID,
   PROXY_LOWER_ID,
   PSEUDO_ETH_ADDRESS,
@@ -239,6 +239,6 @@ module.exports = {
   someT2PublicKey: () => someT2PublicKey,
   strip_0x,
   toConfirmationHash,
-  validators: () => validators,
+  authors: () => authors,
   ZERO_ADDRESS
 };

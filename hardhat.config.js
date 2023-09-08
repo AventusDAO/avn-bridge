@@ -10,31 +10,31 @@ require('hardhat-erc1820');
 const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
 const fs = require('fs');
 
-task('loadValidators', 'initialise a new avn-bridge contract with a set of validators')
+task('loadAuthors', 'initialise a new avn-bridge contract with a set of authors')
   .addParam('contract', 'avn-bridge contract address')
-  .addParam('validators', 'path to validators file')
+  .addParam('authors', 'path to authors file')
   .setAction(async args => {
-    console.log(`\nLoading validators from ${args.validators} into avn-bridge @ ${args.contract}`);
-    const validators = require(args.validators);
+    console.log(`\nLoading authors from ${args.authors} into avn-bridge @ ${args.contract}`);
+    const authors = require(args.authors);
     const t1Address = [],
       t1PublicKeyLHS = [],
       t1PublicKeyRHS = [],
       t2PublicKey = [];
 
-    validators.forEach(validator => {
+    authors.forEach(author => {
       t1Address.push(validator.ethAddress);
       t1PublicKeyLHS.push('0x' + validator.ethUncompressedPublicKey.slice(4, 68));
       t1PublicKeyRHS.push('0x' + validator.ethUncompressedPublicKey.slice(68, 132));
-      t2PublicKey.push(validator.validator.tier2PublicKeyHex);
+      t2PublicKey.push(author.validator.tier2PublicKeyHex);
     });
 
     const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', args.contract);
-    await avnBridge.loadValidators(t1Address, t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey);
+    await avnBridge.loadAuthors(t1Address, t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey);
   });
 
-task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise with validators')
+task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise with authors')
   .addOptionalParam('token', 'optional core token address (eg: AVT contract)', '0xe0A9E4f2591be648f18001e21dB16dDAB114fEF9')
-  .addOptionalParam('validators', 'optional path to file containing any validators to be loaded')
+  .addOptionalParam('authors', 'optional path to file containing any authors to be loaded')
   .setAction(async (args, hre) => {
     await hre.run('compile');
 
@@ -54,9 +54,9 @@ task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise wit
       await avnBridge.deployed();
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
-      if (args.validators) {
-        // run optional loadValidators task
-        await hre.run('loadValidators', { contract: avnBridge.address, validators: args.validators });
+      if (args.authors) {
+        // run optional loadAuthors task
+        await hre.run('loadAuthors', { contract: avnBridge.address, authors: args.authors });
       }
 
       // output new contract address to file

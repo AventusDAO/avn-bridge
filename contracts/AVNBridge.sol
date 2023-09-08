@@ -4,8 +4,8 @@ pragma solidity 0.8.21;
 /// @title Bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains
 /// @author Aventus Network Services
 /** @notice
-  Enables POS validators to periodically publish the transactional state of T2 to this contract.
-  Enables validators to be added and removed from participating in consensus.
+  Enables POS authors to periodically publish the transactional state of T2 to this contract.
+  Enables authors to be added and removed from participating in consensus.
   Enables triggering periodic growth of the core token according to the reward calculation mechanisms of T2.
   Enables the "lifting" of any ETH, ERC20, or ERC777 tokens received, locking them in the contract to be recreated on T2.
   Enables the "lowering" of ETH, ERC20, and ERC777 tokens, unlocking them from the contract via proof of their destruction on T2.
@@ -32,17 +32,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-  /// @notice Query a validator's current registration status by their internal ID
-  mapping (uint256 => bool) public isRegisteredValidator;
-  /// @notice Query a validator's current activation status by their internal ID
-  mapping (uint256 => bool) public isActiveValidator;
-  /// @notice Query a validator's persistent internal validator ID by their Ethereum address
+  /// @notice Query an author's current status by their internal ID
+  mapping (uint256 => bool) public isAuthor;
+  /// @notice Query an author's current activation status by their internal ID
+  mapping (uint256 => bool) public authorIsActive;
+  /// @notice Query an author's persistent internal author ID by their Ethereum address
   mapping (address => uint256) public t1AddressToId;
-  /// @notice Query a validator's persistent internal validator ID by their T2 public key
+  /// @notice Query an author's persistent internal author ID by their T2 public key
   mapping (bytes32 => uint256) public t2PublicKeyToId;
-  /// @notice Query a validator's persistent Ethereum address by their internal validator ID
+  /// @notice Query an author's persistent Ethereum address by their internal author ID
   mapping (uint256 => address) public idToT1Address;
-  /// @notice Query a validator's persistent T2 public key by their internal validator ID
+  /// @notice Query an author's persistent T2 public key by their internal author ID
   mapping (uint256 => bytes32) public idToT2PublicKey;
   /// @notice Mapping of T2 extrinsic IDs to the number of bytes that require traversing in a leaf before reaching lower data
   mapping (bytes2 => uint256) public numBytesToLowerData;
@@ -59,18 +59,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   mapping (uint32 => uint128) public growthAmount;
 
   uint256[2] public quorum; // No longer used but must not be deleted
-  uint256 public numActiveValidators;
-  uint256 public nextValidatorId;
+  uint256 public numActiveAuthors;
+  uint256 public nextAuthorId;
   uint256 public growthDelay;
   address public coreToken;
   address internal priorInstance; // No longer used but must not be deleted
-  bool public validatorFunctionsAreEnabled;
+  bool public authorsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
   error NoCoreToken();
   error LiftDisabled();
-  error ValidatorsDisabled();
+  error AuthorsDisabled();
   error MissingKeys();
   error AddressInUse(address t1Address);
   error T2KeyInUse(bytes32 t2PublicKey);
@@ -82,9 +82,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error GrowthUnavailable();
   error NotReady(uint256 releaseTime);
   error InvalidT1Key();
-  error AlreadyRegistered();
+  error AlreadyAdded();
   error CannotChangeT2Key(bytes32 existingT2PublicKey);
-  error IsNotRegistered();
+  error NotAnAuthor();
   error RootHashIsUsed();
   error LiftLimitHit();
   error InvalidRecipient();
@@ -112,10 +112,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5702] = 2;   // callID (2 bytes)
-    validatorFunctionsAreEnabled = true;
+    authorsAreEnabled = true;
     liftingIsEnabled = true;
     loweringIsEnabled = true;
-    nextValidatorId = 1;
+    nextAuthorId = 1;
     growthDelay = 7 days;
   }
 
@@ -124,8 +124,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWhenValidatorFunctionsAreEnabled() {
-    if (!validatorFunctionsAreEnabled) revert ValidatorsDisabled();
+  modifier onlyWhenAuthorsAreEnabled() {
+    if (!authorsAreEnabled) revert AuthorsDisabled();
     _;
   }
 
@@ -134,13 +134,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  /// @notice Bulk initialise a set of validators
+  /// @notice Bulk initialise a set of authors
   /// @param t1Address Array of Ethereum addresses
   /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
   /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
   /// @param t2PublicKey Array of 32 byte sr25519 public key values
-  /// @dev This is useful for seting up existing networks, after which registerValidator should be used instead
-  function loadValidators(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
+  /// @dev This is useful for seting up existing networks, after which addAuthor should be used instead
+  function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
     onlyOwner
     external
@@ -161,15 +161,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       if (t2PublicKeyToId[_t2PublicKey] != 0) revert T2KeyInUse(_t2PublicKey);
       t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
       if (address(uint160(uint256(keccak256(t1PublicKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PublicKey);
-      idToT1Address[nextValidatorId] = _t1Address;
-      idToT2PublicKey[nextValidatorId] = _t2PublicKey;
-      t1AddressToId[_t1Address] = nextValidatorId;
-      t2PublicKeyToId[_t2PublicKey] = nextValidatorId;
-      isRegisteredValidator[nextValidatorId] = true;
-      isActiveValidator[nextValidatorId] = true;
+      idToT1Address[nextAuthorId] = _t1Address;
+      idToT2PublicKey[nextAuthorId] = _t2PublicKey;
+      t1AddressToId[_t1Address] = nextAuthorId;
+      t2PublicKeyToId[_t2PublicKey] = nextAuthorId;
+      isAuthor[nextAuthorId] = true;
+      authorIsActive[nextAuthorId] = true;
       unchecked {
-        ++numActiveValidators;
-        ++nextValidatorId;
+        ++numActiveAuthors;
+        ++nextAuthorId;
         ++i;
       }
     }
@@ -207,14 +207,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     growthDelay = delaySeconds;
   }
 
-  /// @notice Switch all validator functions on or off
+  /// @notice Switch all author functions on or off
   /// @param state true = functions on, false = functions off
-  function toggleValidatorFunctions(bool state)
+  function toggleAuthors(bool state)
     onlyOwner
     external
   {
-    validatorFunctionsAreEnabled = state;
-    emit LogValidatorFunctionsAreEnabled(state);
+    authorsAreEnabled = state;
+    emit LogAuthorsAreEnabled(state);
   }
 
   /// @notice Switch all lifting functions on or off
@@ -253,15 +253,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param period Unique growth period
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
+  /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
     Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
-    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero.
+    Immediate growth release occurs when called by the authors, IFF the current growthDelay is set to zero.
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
   function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
-    onlyWhenValidatorFunctionsAreEnabled
+    onlyWhenAuthorsAreEnabled
     onlyWithinCallWindow(expiry)
     external
   {
@@ -304,94 +304,94 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _releaseGrowth(growthAmount[period], period);
   }
 
-  /// @notice Register a new validator, allowing them to participate in consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of validator
-  /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @notice Add a new author, allowing them to participate in consensus
+  /// @param t1PublicKey 64 byte Ethereum public key of author
+  /// @param t2PublicKey 32 byte sr25519 public key of author
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
+  /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
-    This permanently associates the validator's T1 Ethereum address with their T2 public key.
-    May also be used to re-register a previously deregistered validator, providing their associated accounts do not change.
-    Does not immediately activate the validator.
-    Activation instead occurs upon receiving the first set of confirmations which include the newly registered validator.
-    Emits a validator registration event to be read by T2.
+    This permanently associates the author's T1 Ethereum address with their T2 public key.
+    May also be used to re-add a previously removed author, providing their associated accounts do not change.
+    Does not immediately activate the author.
+    Activation instead occurs upon receiving the first set of confirmations which include the newly added author.
+    Emits an author added event to be read by T2.
   */
-  function registerValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
+  function addAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
-    onlyWhenValidatorFunctionsAreEnabled
+    onlyWhenAuthorsAreEnabled
     onlyWithinCallWindow(expiry)
     external
   {
     if (t1PublicKey.length != 64) revert InvalidT1Key();
     address t1Address = address(uint160(uint256(keccak256(t1PublicKey))));
     uint256 id = t1AddressToId[t1Address];
-    if (isRegisteredValidator[id]) revert AlreadyRegistered();
+    if (isAuthor[id]) revert AlreadyAdded();
 
-    // The order of the elements is the reverse of the deregisterValidatorHash
-    bytes32 registerValidatorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
-    _verifyConfirmations(keccak256(abi.encode(registerValidatorHash, expiry, t2TransactionId)), confirmations);
+    // The order of the elements is the reverse of the removeAuthorHash
+    bytes32 addAuthorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
+    _verifyConfirmations(keccak256(abi.encode(addAuthorHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
     if (id == 0) {
       if (t2PublicKeyToId[t2PublicKey] != 0) revert T2KeyInUse(t2PublicKey);
-      id = nextValidatorId;
+      id = nextAuthorId;
       idToT1Address[id] = t1Address;
       t1AddressToId[t1Address] = id;
       idToT2PublicKey[id] = t2PublicKey;
       t2PublicKeyToId[t2PublicKey] = id;
-      unchecked { ++nextValidatorId; }
+      unchecked { ++nextAuthorId; }
     } else {
       if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2Key(idToT2PublicKey[id]);
     }
 
-    isRegisteredValidator[id] = true;
+    isAuthor[id] = true;
 
-    emit LogValidatorRegistered(t1Address, t2PublicKey, t2TransactionId);
+    emit LogAuthorAdded(t1Address, t2PublicKey, t2TransactionId);
   }
 
-  /// @notice Deregister and deactivate a validator, removing them from consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of validator
-  /// @param t2PublicKey 32 byte sr25519 public key of validator
+  /// @notice Remove and deactivate an author, excluding them from consensus
+  /// @param t1PublicKey 64 byte Ethereum public key of author
+  /// @param t2PublicKey 32 byte sr25519 public key of author
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
+  /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
-    Validator details are retained.
-    Emits a validator deregistration event to be read by T2.
+    Author details are retained.
+    Emits an author removal event to be read by T2.
   */
-  function deregisterValidator(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
+  function removeAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
-    onlyWhenValidatorFunctionsAreEnabled
+    onlyWhenAuthorsAreEnabled
     onlyWithinCallWindow(expiry)
     external
   {
     uint256 id = t2PublicKeyToId[t2PublicKey];
-    if (!isRegisteredValidator[id]) revert IsNotRegistered();
+    if (!isAuthor[id]) revert NotAnAuthor();
 
-    isRegisteredValidator[id] = false;
+    isAuthor[id] = false;
 
-    if (isActiveValidator[id]) {
-      isActiveValidator[id] = false;
-      unchecked { --numActiveValidators; }
+    if (authorIsActive[id]) {
+      authorIsActive[id] = false;
+      unchecked { --numActiveAuthors; }
     }
 
-    // The order of the elements is the reverse of the registerValidatorHash
-    bytes32 deregisterValidatorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
-    _verifyConfirmations(keccak256(abi.encode(deregisterValidatorHash, expiry, t2TransactionId)), confirmations);
+    // The order of the elements is the reverse of the addAuthorHash
+    bytes32 removeAuthorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
+    _verifyConfirmations(keccak256(abi.encode(removeAuthorHash, expiry, t2TransactionId)), confirmations);
     _storeT2TransactionId(t2TransactionId);
 
-    emit LogValidatorDeregistered(idToT1Address[id], t2PublicKey, t2TransactionId);
+    emit LogAuthorRemoved(idToT1Address[id], t2PublicKey, t2TransactionId);
   }
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TransactionId Unique transaction ID
-  /// @param confirmations Concatenated validator-signed confirmations of the transaction details
+  /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
-    onlyWhenValidatorFunctionsAreEnabled
+    onlyWhenAuthorsAreEnabled
     onlyWithinCallWindow(expiry)
     external
   {
@@ -520,7 +520,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
     }
 
-    emit LogLowered(t2PublicKey);
+    emit LogLoweredFrom(t2PublicKey);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root
@@ -577,14 +577,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (uint256 required)
   {
-    required = numActiveValidators;
+    required = numActiveAuthors;
     unchecked { required -= required * 2 / 3; }
   }
 
   function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
-    uint256[] memory confirmed = new uint256[](nextValidatorId);
+    uint256[] memory confirmed = new uint256[](nextAuthorId);
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 id = t1AddressToId[msg.sender];
@@ -597,11 +597,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint8 v;
 
     do {
-      if (!isActiveValidator[id]) {
-        if (isRegisteredValidator[id]) { // Here we activate any previously registered but as yet unactivated validators
-          isActiveValidator[id] = true;
+      if (!authorIsActive[id]) {
+        if (isAuthor[id]) { // Here we activate any previously added but as yet unactivated authors
+          authorIsActive[id] = true;
           unchecked {
-            ++numActiveValidators;
+            ++numActiveAuthors;
             ++validConfirmations;
           }
           requiredConfirmations = _requiredConfirmations();

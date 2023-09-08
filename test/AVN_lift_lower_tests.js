@@ -6,7 +6,7 @@ const DIRECT_LOWER_NUM_BYTES = 2;
 const PROXY_LOWER_NUM_BYTES = 133;
 
 let avnBridge, token777, token20;
-let accounts, validators;
+let accounts, authors;
 let owner, someOtherAccount, someT2PublicKey;
 
 describe('AVNBridge', async () => {
@@ -21,8 +21,8 @@ describe('AVNBridge', async () => {
     owner = helper.owner();
     someOtherAccount = accounts[1];
     someT2PublicKey = helper.someT2PublicKey();
-    validators = helper.validators();
-    await helper.loadValidators(avnBridge, validators, 10);
+    authors = helper.authors();
+    await helper.loadAuthors(avnBridge, authors, 10);
     await token20.transferOwnership(avnBridge.address);
   });
 
@@ -362,7 +362,7 @@ describe('AVNBridge', async () => {
       expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
       expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-      await avnBridge.filters.LogLowered(someT2PublicKey);
+      await avnBridge.filters.LogLoweredFrom(someT2PublicKey);
     });
 
     it('proxy lower ETH succeeds [ @skip-on-coverage ]', async () => {
@@ -383,7 +383,7 @@ describe('AVNBridge', async () => {
       expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
       expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-      await avnBridge.filters.LogLowered(someT2PublicKey);
+      await avnBridge.filters.LogLoweredFrom(someT2PublicKey);
     });
 
     it('lift and lower ETH for coverage', async () => {
@@ -410,7 +410,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-        .to.emit(avnBridge, 'LogLowered')
+        .to.emit(avnBridge, 'LogLoweredFrom')
         .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
@@ -428,7 +428,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-        .to.emit(avnBridge, 'LogLowered')
+        .to.emit(avnBridge, 'LogLoweredFrom')
         .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
@@ -445,7 +445,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-        .to.emit(avnBridge, 'LogLowered')
+        .to.emit(avnBridge, 'LogLoweredFrom')
         .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
@@ -462,9 +462,9 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-        .to.emit(avnBridge, 'LogLowered')
+        .to.emit(avnBridge, 'LogLoweredFrom')
         .withArgs(someT2PublicKey)
-        .to.not.emit(avnBridge, 'LogLifted')
+        .to.not.emit(avnBridge, 'LogLifted');
       expect(avnBalanceBefore).to.equal(await token777.balanceOf(avnBridge.address));
       expect(senderBalBefore).to.equal(await token777.balanceOf(owner));
     });
@@ -480,7 +480,7 @@ describe('AVNBridge', async () => {
 
       // lower and confirm values
       await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-        .to.emit(avnBridge, 'LogLowered')
+        .to.emit(avnBridge, 'LogLoweredFrom')
         .withArgs(someT2PublicKey);
       expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
       expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
@@ -496,20 +496,14 @@ describe('AVNBridge', async () => {
 
       it('lowering is disabled', async () => {
         await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringIsEnabled').withArgs(false);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
-          avnBridge,
-          'LowerDisabled'
-        );
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
         await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringIsEnabled').withArgs(true);
         await avnBridge.lower(tree.leafData, tree.merklePath);
       });
 
       it('the leaf has already been used for a lower', async () => {
         await avnBridge.lower(tree.leafData, tree.merklePath);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
-          avnBridge,
-          'LowerIsUsed'
-        );
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
       });
 
       it('leaf is invalid', async () => {
@@ -529,10 +523,7 @@ describe('AVNBridge', async () => {
       it('leaf is not recognised as a lower leaf', async () => {
         const badId = '0xaaaa';
         tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true, badId);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
-          avnBridge,
-          'NotALowerTx'
-        );
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'NotALowerTx');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
@@ -562,13 +553,10 @@ describe('AVNBridge', async () => {
 
     it('fails to trigger zero growth', async () => {
       const expiry = await helper.getValidExpiry();
-      await expect(avnBridge.triggerGrowth(0, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
-        avnBridge,
-        'AmountIsZero'
-      );
+      await expect(avnBridge.triggerGrowth(0, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
     });
 
-    it('fails to trigger growth if called without validator confirmations by someone other than the owner', async () => {
+    it('fails to trigger growth if called without author confirmations by someone other than the owner', async () => {
       const expiry = await helper.getValidExpiry();
       await expect(
         avnBridge.connect(someOtherAccount).triggerGrowth(growthAmount, 1, expiry, 0, '0x')
