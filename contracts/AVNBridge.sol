@@ -58,12 +58,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
-  uint256[2] public quorum; // No longer used but must not be deleted
+  uint256[2] public _unused1_; // Storage slot no longer used but must not be removed
   uint256 public numActiveAuthors;
   uint256 public nextAuthorId;
   uint256 public growthDelay;
   address public coreToken;
-  address internal priorInstance; // No longer used but must not be deleted
+  address internal _unused2_; // Storage slot no longer used but must not be removed
   bool public authorsAreEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
