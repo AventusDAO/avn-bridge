@@ -8,11 +8,11 @@ The system is underwritten by its constructor-specified core token (in the case 
 
 #### The AVN Bridge has 4 main responsibilities:
 
-1. Management of *validators* - POS transaction processors existing as actors within the AVN whose token deposits are locked in T2.
+1. Management of *Authors* - AvN nodes responsible for block creation on T2 and the publishing of their proofs to T1.
 
-2. The periodic checkpointing (*publishing*) of Merkle tree roots encoding all transactions that have occurred on T2.
+2. The periodic checkpointing (*publishing*) by authors of Merkle roots encoding all transactions that have occurred on T2.
 
-3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between T1 Ethereum mainnet and the T2 AVN sidechain by the following processes:
+3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between T1 Ethereum and the T2 AVN sidechain by the following processes:
 - *Lifting* - locking tokens received by T1 and recreating the equivalent amount in the specified T2 recipient account
 - *Lowering* - destroying tokens on T2 and unlocking and transferring the equivalent amount to the specified T1 recipient account
 
@@ -34,11 +34,11 @@ The values in config.json can also be set as environment variables.
 #### Deploy
 `npx hardhat --network <network> deploy --token [optional core token address]`
 
-#### Load a set of validators
-`npx hardhat --network <network> loadValidators --contract <target contract address> --validators <path to validators json file>`
+#### Load a set of authors
+`npx hardhat --network <network> loadAuthors --contract <target contract address> --authors <path to authors json file>`
 
-#### Deploy AND load a set of validators
-`npx hardhat --network <network> deploy --token [optional core token address] --validators <path to validators json file>`
+#### Deploy AND load a set of authors
+`npx hardhat --network <network> deploy --token [optional core token address] --authors <path to authors json file>`
 
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`

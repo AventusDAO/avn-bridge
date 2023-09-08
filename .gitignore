@@ -7,4 +7,5 @@ allFiredEvents
 .openzeppelin/unknown-1337.json
 cache/
 artifacts
+authors.json
 validators.json
