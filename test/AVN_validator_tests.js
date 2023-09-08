@@ -95,7 +95,7 @@ describe('AVNBridge', async () => {
       ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
     });
 
-    it('succeeds in triggering growth vian authors', async () => {
+    it('succeeds in triggering growth via authors', async () => {
       const period = 1;
       const expiry = await helper.getValidExpiry();
       const t2TransactionId = 1;
