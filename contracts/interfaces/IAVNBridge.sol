@@ -4,7 +4,7 @@ pragma solidity 0.8.21;
 interface IAVNBridge {
   event LogGrowthDenied(uint32 period);
   event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
-  event LogAuthorsAreEnabled(bool state);
+  event LogAuthorsEnabled(bool state);
   event LogLiftingIsEnabled(bool state);
   event LogLoweringIsEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);

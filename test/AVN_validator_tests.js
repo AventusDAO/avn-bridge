@@ -240,7 +240,7 @@ describe('AVNBridge', async () => {
 
     context('fails when', async () => {
       it('author functions are disabled', async () => {
-        await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsAreEnabled').withArgs(false);
+        await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
         const newT2TransactionId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
@@ -248,7 +248,7 @@ describe('AVNBridge', async () => {
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newT2TransactionId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
-        await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsAreEnabled').withArgs(true);
+        await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
       });
 
       it('the expiry time has passed', async () => {
@@ -611,7 +611,7 @@ describe('AVNBridge', async () => {
     });
 
     it('authors are disabled', async () => {
-      await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsAreEnabled').withArgs(false);
+      await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
       const t2TransactionId = helper.randomT2TxId();
       const removeAuthorHash = ethers.utils.solidityKeccak256(
         ['bytes32', 'bytes'],
@@ -624,7 +624,7 @@ describe('AVNBridge', async () => {
           .connect(activeAuthor)
           .removeAuthor(authors[0].t1PublicKey, authors[0].t2PublicKey, expiry, t2TransactionId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
-      await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsAreEnabled').withArgs(true);
+      await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
     });
 
     it('the expiry time for the call has passed', async () => {

@@ -64,7 +64,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 public growthDelay;
   address public coreToken;
   address internal _unused2_; // Storage slot no longer used but must not be removed
-  bool public authorsAreEnabled;
+  bool public authorsEnabled;
   bool public liftingIsEnabled;
   bool public loweringIsEnabled;
 
@@ -112,7 +112,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5702] = 2;   // callID (2 bytes)
-    authorsAreEnabled = true;
+    authorsEnabled = true;
     liftingIsEnabled = true;
     loweringIsEnabled = true;
     nextAuthorId = 1;
@@ -124,8 +124,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  modifier onlyWhenAuthorsAreEnabled() {
-    if (!authorsAreEnabled) revert AuthorsDisabled();
+  modifier onlyWhenAuthorsEnabled() {
+    if (!authorsEnabled) revert AuthorsDisabled();
     _;
   }
 
@@ -213,8 +213,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    authorsAreEnabled = state;
-    emit LogAuthorsAreEnabled(state);
+    authorsEnabled = state;
+    emit LogAuthorsEnabled(state);
   }
 
   /// @notice Switch all lifting functions on or off
@@ -261,7 +261,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
   function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
-    onlyWhenAuthorsAreEnabled
+    onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
@@ -319,7 +319,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   */
   function addAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
-    onlyWhenAuthorsAreEnabled
+    onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
@@ -362,7 +362,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   */
   function removeAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
       bytes calldata confirmations)
-    onlyWhenAuthorsAreEnabled
+    onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
@@ -391,7 +391,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
-    onlyWhenAuthorsAreEnabled
+    onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
