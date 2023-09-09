@@ -472,12 +472,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidTxData();
     if (hasLowered[leafHash]) revert LowerIsUsed();
     hasLowered[leafHash] = true;
+
     uint256 ptr;
-    bytes32 t2PublicKey;
-    address token;
-    address t1Address;
-    uint128 amount;
-    bytes2 callId;
 
     unchecked {
       ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
@@ -488,6 +484,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the tip
     }
 
+    bytes2 callId;
+
     assembly {
       ptr := add(memLeaf, add(ptr, 32)) // point to call ID postion in leaf, skipping first 32 bytes denoting the leaf's length
       callId := mload(ptr) // load leftmost 2 bytes of next 32 bytes into 2 byte type starting at ptr
@@ -495,6 +493,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
     if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this call ID as a lower so revert
+
+    bytes32 t2PublicKey;
+    address token;
+    uint128 amount;
+    address t1Address;
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // point to the start of lower transaction arguments in the leaf
@@ -504,9 +507,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1Address := mload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
 
       // the amount was encoded in little endian so we need to reverse to big endian:
-      amount := or(shr(8,and(amount, 0xFF00FF00FF00FF00FF00FF00FF00FF00)), shl(8, and(amount, 0x00FF00FF00FF00FF00FF00FF00FF00FF)))
-      amount := or(shr(16,and(amount, 0xFFFF0000FFFF0000FFFF0000FFFF0000)), shl(16, and(amount, 0x0000FFFF0000FFFF0000FFFF0000FFFF)))
-      amount := or(shr(32,and(amount, 0xFFFFFFFF00000000FFFFFFFF00000000)), shl(32, and(amount, 0x00000000FFFFFFFF00000000FFFFFFFF)))
+      amount := or(shr(8, and(amount, 0xFF00FF00FF00FF00FF00FF00FF00FF00)), shl(8, and(amount, 0x00FF00FF00FF00FF00FF00FF00FF00FF)))
+      amount := or(shr(16, and(amount, 0xFFFF0000FFFF0000FFFF0000FFFF0000)), shl(16, and(amount, 0x0000FFFF0000FFFF0000FFFF0000FFFF)))
+      amount := or(shr(32, and(amount, 0xFFFFFFFF00000000FFFFFFFF00000000)), shl(32, and(amount, 0x00000000FFFFFFFF00000000FFFFFFFF)))
       amount := or(shr(64, amount), shl(64, amount))
     }
 
@@ -531,15 +534,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (bool)
   {
-    uint256 pathLength = merklePath.length;
-    uint256 i;
     bytes32 node;
+    uint256 i;
 
     do {
       node = merklePath[i];
       leafHash = leafHash < node ? keccak256(abi.encode(leafHash, node)) : keccak256(abi.encode(node, leafHash));
       unchecked { ++i; }
-    } while (i < pathLength);
+    } while (i < merklePath.length);
 
     return isPublishedRootHash[leafHash];
   }
