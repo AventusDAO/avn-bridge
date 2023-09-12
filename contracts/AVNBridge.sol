@@ -53,7 +53,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
   /// @notice Query the release time of a unique growth period
-  /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or cancelled
+  /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or canceled
   mapping (uint32 => uint256) public growthRelease;
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
@@ -139,7 +139,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
   /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
   /// @param t2PublicKey Array of 32 byte sr25519 public key values
-  /// @dev This is useful for seting up existing networks, after which addAuthor should be used instead
+  /// @dev This is useful for setting up existing networks, after which addAuthor should be used instead
   function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
       bytes32[] calldata t2PublicKey)
     onlyOwner
@@ -436,7 +436,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PublicKey(t2PublicKey), msg.value);
   }
 
-  /// @notice Lifts all ERC777 tokens received to the T2 recipient specifed in the data payload
+  /// @notice Lifts all ERC777 tokens received to the T2 recipient specified in the data payload
   /// @param data 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
     This function is not called directly by users.
@@ -476,12 +476,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     // Determine the position of the Call ID in the leaf:
     unchecked {
-      ptr += _getCompactIntegerByteSize(uint8(leaf[0])); // add number of bytes encoding the leaf length
-      if (uint8(leaf[ptr]) & 128 == 0) revert UnsignedTx(); // bitwise version check to ensure leaf is a signed tx
+      ptr += _getCompactIntegerByteSize(leaf[0]); // add number of bytes encoding the leaf length
+      if (leaf[ptr] & 0x80 == 0x0) revert UnsignedTx(); // bitwise version check to ensure leaf is a signed tx
       // add version(1) + multiAddress type(1) + sender(32) + curve type(1) + signature(64) = 99 bytes to check era bytes:
-      ptr += uint8(leaf[ptr + 99]) == 0 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
-      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the nonce
-      ptr += _getCompactIntegerByteSize(uint8(leaf[ptr])); // add number of bytes encoding the tip
+      ptr += leaf[ptr + 99] == 0x0 ? 100 : 101; // add 99 + number of era bytes (immortal is 1, otherwise 2)
+      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the nonce
+      ptr += _getCompactIntegerByteSize(leaf[ptr]); // add number of bytes encoding the tip
     }
 
     bytes2 callId;
@@ -561,17 +561,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
-  function _getCompactIntegerByteSize(uint8 checkByte)
+  function _getCompactIntegerByteSize(bytes1 checkByte)
     private
     pure
-    returns (uint256 byteLength)
+    returns (uint8 result)
   {
+    result = uint8(checkByte);
     assembly {
-      switch and(checkByte, 3) // the 2 least significant bits encode the byte mode so we bitwise AND them to detemine the mode
-      case 0 { byteLength := 1 } // single-byte mode
-      case 1 { byteLength := 2 } // two-byte mode
-      case 2 { byteLength := 4 } // four-byte mode
-      default { byteLength := add(shr(2, checkByte), 5) } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
+      switch and(result, 3)
+      case 0 { result := 1 } // single-byte mode
+      case 1 { result := 2 } // two-byte mode
+      case 2 { result := 4 } // four-byte mode
+      default { result := add(shr(2, result), 5) } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
     }
   }
 
