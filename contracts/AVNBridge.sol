@@ -585,7 +585,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     unchecked { required -= required * 2 / 3; }
   }
 
-  function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
+  function _verifyConfirmations(bytes32 msgHash, bytes calldata confirmations)
     private
   {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
@@ -619,10 +619,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       assembly {
-        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
-        r := mload(add(offset, 32))
-        s := mload(add(offset, 64))
-        v := byte(0, mload(add(offset, 96)))
+        let sig := add(confirmations.offset, mul(i, SIGNATURE_LENGTH))
+        r := calldataload(sig)
+        s := calldataload(add(sig, 32))
+        v := byte(0, calldataload(add(sig, 64)))
         i := add(i, 1)
       }
 
