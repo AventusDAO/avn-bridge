@@ -444,7 +444,7 @@ describe('AVNBridge', async () => {
       let confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await avnBridge
         .connect(activeAuthor)
-        .removeAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations);
+        .removeAuthor(existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId, confirmations);
       numActiveAuthors--;
 
       const newAuthor = authors[nextAuthorId];
@@ -529,7 +529,7 @@ describe('AVNBridge', async () => {
       await expect(
         avnBridge
           .connect(activeAuthor)
-          .removeAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       )
         .to.emit(avnBridge, 'LogAuthorRemoved')
         .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
@@ -566,7 +566,7 @@ describe('AVNBridge', async () => {
       await expect(
         avnBridge
           .connect(activeAuthor)
-          .removeAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       )
         .to.emit(avnBridge, 'LogAuthorRemoved')
         .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
@@ -597,7 +597,7 @@ describe('AVNBridge', async () => {
       confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await avnBridge
         .connect(activeAuthor)
-        .removeAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+        .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
       numActiveAuthors--;
       t2TxId = helper.randomT2TxId();
       expiry = await helper.getValidExpiry();
@@ -606,7 +606,7 @@ describe('AVNBridge', async () => {
       await expect(
         avnBridge
           .connect(activeAuthor)
-          .removeAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'NotAnAuthor');
     });
 
@@ -622,7 +622,7 @@ describe('AVNBridge', async () => {
       await expect(
         avnBridge
           .connect(activeAuthor)
-          .removeAuthor(authors[0].t1PubKey, authors[0].t2PubKey, expiry, t2TxId, confirmations)
+          .removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
       await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
     });
@@ -636,7 +636,7 @@ describe('AVNBridge', async () => {
       );
       const confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await expect(
-        avnBridge.removeAuthor(authors[0].t1PubKey, authors[0].t2PubKey, expiry, t2TxId, confirmations)
+        avnBridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
     });
   });

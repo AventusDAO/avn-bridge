@@ -350,8 +350,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Remove and deactivate an author, excluding them from consensus
-  /// @param t1PubKey 64 byte Ethereum public key of author
   /// @param t2PubKey 32 byte sr25519 public key of author
+  /// @param t1PubKey 64 byte Ethereum public key of author
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
@@ -359,7 +359,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Author details are retained.
     Emits an author removal event to be read by T2.
   */
-  function removeAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
+  function removeAuthor(bytes32 t2PubKey, bytes calldata t1PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
