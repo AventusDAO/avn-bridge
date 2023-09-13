@@ -49,7 +49,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query whether a particular Merkle tree root hash of T2 state has been published
   mapping (bytes32 => bool) public isPublishedRootHash;
   /// @notice Query whether a unique T2 transaction ID has been used
-  mapping (uint256 => bool) public isUsedt2TxId;
+  mapping (uint256 => bool) public isUsedT2TxId;
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
   /// @notice Query the release time of a unique growth period
@@ -276,7 +276,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
       _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TxId)), confirmations);
-      _storet2TxId(t2TxId);
+      _storeT2TxId(t2TxId);
       uint256 releaseTime = block.timestamp;
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
@@ -317,8 +317,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly added author.
     Emits an author added event to be read by T2.
   */
-  function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId,
-      bytes calldata confirmations)
+  function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -331,7 +330,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     // The order of the elements is the reverse of the removeAuthorHash
     bytes32 addAuthorHash = keccak256(abi.encodePacked(t1PubKey, t2PubKey));
     _verifyConfirmations(keccak256(abi.encode(addAuthorHash, expiry, t2TxId)), confirmations);
-    _storet2TxId(t2TxId);
+    _storeT2TxId(t2TxId);
 
     if (id == 0) {
       if (t2PubKeyToId[t2PubKey] != 0) revert T2KeyInUse(t2PubKey);
@@ -360,8 +359,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Author details are retained.
     Emits an author removal event to be read by T2.
   */
-  function removeAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId,
-      bytes calldata confirmations)
+  function removeAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -379,7 +377,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     // The order of the elements is the reverse of the addAuthorHash
     bytes32 removeAuthorHash = keccak256(abi.encodePacked(t2PubKey, t1PubKey));
     _verifyConfirmations(keccak256(abi.encode(removeAuthorHash, expiry, t2TxId)), confirmations);
-    _storet2TxId(t2TxId);
+    _storeT2TxId(t2TxId);
 
     emit LogAuthorRemoved(idToT1Address[id], t2PubKey, t2TxId);
   }
@@ -397,7 +395,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (isPublishedRootHash[rootHash]) revert RootHashIsUsed();
     _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TxId)), confirmations);
-    _storet2TxId(t2TxId);
+    _storeT2TxId(t2TxId);
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TxId);
   }
@@ -637,11 +635,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (validConfirmations != requiredConfirmations) revert BadConfirmations();
   }
 
-  function _storet2TxId(uint256 t2TxId)
+  function _storeT2TxId(uint256 t2TxId)
     private
   {
-    if (isUsedt2TxId[t2TxId]) revert TxIdIsUsed();
-    isUsedt2TxId[t2TxId] = true;
+    if (isUsedT2TxId[t2TxId]) revert TxIdIsUsed();
+    isUsedT2TxId[t2TxId] = true;
   }
 
   function _checkT2PubKey(bytes calldata t2PubKey)
