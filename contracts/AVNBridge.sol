@@ -39,17 +39,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query an author's persistent internal author ID by their Ethereum address
   mapping (address => uint256) public t1AddressToId;
   /// @notice Query an author's persistent internal author ID by their T2 public key
-  mapping (bytes32 => uint256) public t2PublicKeyToId;
+  mapping (bytes32 => uint256) public t2PubKeyToId;
   /// @notice Query an author's persistent Ethereum address by their internal author ID
   mapping (uint256 => address) public idToT1Address;
   /// @notice Query an author's persistent T2 public key by their internal author ID
-  mapping (uint256 => bytes32) public idToT2PublicKey;
+  mapping (uint256 => bytes32) public idToT2PubKey;
   /// @notice Mapping of T2 extrinsic IDs to the number of bytes that require traversing in a leaf before reaching lower data
   mapping (bytes2 => uint256) public numBytesToLowerData;
   /// @notice Query whether a particular Merkle tree root hash of T2 state has been published
   mapping (bytes32 => bool) public isPublishedRootHash;
   /// @notice Query whether a unique T2 transaction ID has been used
-  mapping (uint256 => bool) public isUsedT2TransactionId;
+  mapping (uint256 => bool) public isUsedt2TxId;
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
   /// @notice Query the release time of a unique growth period
@@ -65,16 +65,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public coreToken;
   address internal _unused2_; // Storage slot no longer used but must not be removed
   bool public authorsEnabled;
-  bool public liftingIsEnabled;
-  bool public loweringIsEnabled;
+  bool public liftingEnabled;
+  bool public loweringEnabled;
 
   error NoCoreToken();
   error LiftDisabled();
   error AuthorsDisabled();
   error MissingKeys();
   error AddressInUse(address t1Address);
-  error T2KeyInUse(bytes32 t2PublicKey);
-  error AddressMismatch(address t1Address, bytes t1PublicKey);
+  error T2KeyInUse(bytes32 t2PubKey);
+  error AddressMismatch(address t1Address, bytes t1PubKey);
   error SetCoreOwnerFailed();
   error AmountIsZero();
   error PeriodIsUsed();
@@ -83,7 +83,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error NotReady(uint256 releaseTime);
   error InvalidT1Key();
   error AlreadyAdded();
-  error CannotChangeT2Key(bytes32 existingT2PublicKey);
+  error CannotChangeT2Key(bytes32 existingT2PubKey);
   error NotAnAuthor();
   error RootHashIsUsed();
   error LiftLimitHit();
@@ -113,14 +113,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     numBytesToLowerData[0x5700] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
     numBytesToLowerData[0x5702] = 2;   // callID (2 bytes)
     authorsEnabled = true;
-    liftingIsEnabled = true;
-    loweringIsEnabled = true;
+    liftingEnabled = true;
+    loweringEnabled = true;
     nextAuthorId = 1;
     growthDelay = 7 days;
   }
 
-  modifier onlyWhenLiftingIsEnabled() {
-    if (!liftingIsEnabled) revert LiftDisabled();
+  modifier onlyWhenLiftingEnabled() {
+    if (!liftingEnabled) revert LiftDisabled();
     _;
   }
 
@@ -136,35 +136,35 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /// @notice Bulk initialise a set of authors
   /// @param t1Address Array of Ethereum addresses
-  /// @param t1PublicKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
-  /// @param t1PublicKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
-  /// @param t2PublicKey Array of 32 byte sr25519 public key values
+  /// @param t1PubKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
+  /// @param t1PubKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
+  /// @param t2PubKey Array of 32 byte sr25519 public key values
   /// @dev This is useful for setting up existing networks, after which addAuthor should be used instead
-  function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PublicKeyLHS, bytes32[] calldata t1PublicKeyRHS,
-      bytes32[] calldata t2PublicKey)
+  function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
+      bytes32[] calldata t2PubKey)
     onlyOwner
     external
   {
     uint256 numToLoad = t1Address.length;
-    bytes32 _t2PublicKey;
+    bytes32 _t2PubKey;
     address _t1Address;
-    bytes memory t1PublicKey;
+    bytes memory t1PubKey;
 
-    if (t1PublicKeyLHS.length != numToLoad && t1PublicKeyRHS.length != numToLoad && t2PublicKey.length != numToLoad) {
+    if (t1PubKeyLHS.length != numToLoad && t1PubKeyRHS.length != numToLoad && t2PubKey.length != numToLoad) {
       revert MissingKeys();
     }
 
     for (uint256 i; i < numToLoad;) {
       _t1Address = t1Address[i];
-      _t2PublicKey = t2PublicKey[i];
+      _t2PubKey = t2PubKey[i];
       if (t1AddressToId[_t1Address] != 0) revert AddressInUse(_t1Address);
-      if (t2PublicKeyToId[_t2PublicKey] != 0) revert T2KeyInUse(_t2PublicKey);
-      t1PublicKey = abi.encodePacked(t1PublicKeyLHS[i], t1PublicKeyRHS[i]);
-      if (address(uint160(uint256(keccak256(t1PublicKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PublicKey);
+      if (t2PubKeyToId[_t2PubKey] != 0) revert T2KeyInUse(_t2PubKey);
+      t1PubKey = abi.encodePacked(t1PubKeyLHS[i], t1PubKeyRHS[i]);
+      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PubKey);
       idToT1Address[nextAuthorId] = _t1Address;
-      idToT2PublicKey[nextAuthorId] = _t2PublicKey;
+      idToT2PubKey[nextAuthorId] = _t2PubKey;
       t1AddressToId[_t1Address] = nextAuthorId;
-      t2PublicKeyToId[_t2PublicKey] = nextAuthorId;
+      t2PubKeyToId[_t2PubKey] = nextAuthorId;
       isAuthor[nextAuthorId] = true;
       authorIsActive[nextAuthorId] = true;
       unchecked {
@@ -223,8 +223,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    liftingIsEnabled = state;
-    emit LogLiftingIsEnabled(state);
+    liftingEnabled = state;
+    emit LogLiftingEnabled(state);
   }
 
   /// @notice Switch the lower function on or off
@@ -233,8 +233,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    loweringIsEnabled = state;
-    emit LogLoweringIsEnabled(state);
+    loweringEnabled = state;
+    emit LogLoweringEnabled(state);
   }
 
   /// @notice Add or update T2 lower methods
@@ -252,15 +252,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param amount Amount of new tokens to mint for period
   /// @param period Unique growth period
   /// @param expiry Timestamp by which the function must be called
-  /// @param t2TransactionId Unique transaction ID
+  /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
-    Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
+    Immediate growth release occurs when called by the owner (passing zero for t2TxId and empty confirmations bytes).
     Immediate growth release occurs when called by the authors, IFF the current growthDelay is set to zero.
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -275,8 +275,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       _releaseGrowth(amount, period);
     } else {
       bytes32 growthHash = keccak256(abi.encode(amount, period));
-      _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TransactionId)), confirmations);
-      _storeT2TransactionId(t2TransactionId);
+      _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TxId)), confirmations);
+      _storet2TxId(t2TxId);
       uint256 releaseTime = block.timestamp;
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
@@ -284,7 +284,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         unchecked { releaseTime += growthDelay; }
         growthRelease[period] = releaseTime;
       }
-      emit LogGrowthTriggered(amount, period, releaseTime, t2TransactionId);
+      emit LogGrowthTriggered(amount, period, releaseTime, t2TxId);
     }
   }
 
@@ -305,10 +305,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Add a new author, allowing them to participate in consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of author
-  /// @param t2PublicKey 32 byte sr25519 public key of author
+  /// @param t1PubKey 64 byte Ethereum public key of author
+  /// @param t2PubKey 32 byte sr25519 public key of author
   /// @param expiry Timestamp by which the function must be called
-  /// @param t2TransactionId Unique transaction ID
+  /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
     This permanently associates the author's T1 Ethereum address with their T2 public key.
@@ -317,56 +317,56 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Activation instead occurs upon receiving the first set of confirmations which include the newly added author.
     Emits an author added event to be read by T2.
   */
-  function addAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
+  function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId,
       bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
-    if (t1PublicKey.length != 64) revert InvalidT1Key();
-    address t1Address = address(uint160(uint256(keccak256(t1PublicKey))));
+    if (t1PubKey.length != 64) revert InvalidT1Key();
+    address t1Address = address(uint160(uint256(keccak256(t1PubKey))));
     uint256 id = t1AddressToId[t1Address];
     if (isAuthor[id]) revert AlreadyAdded();
 
     // The order of the elements is the reverse of the removeAuthorHash
-    bytes32 addAuthorHash = keccak256(abi.encodePacked(t1PublicKey, t2PublicKey));
-    _verifyConfirmations(keccak256(abi.encode(addAuthorHash, expiry, t2TransactionId)), confirmations);
-    _storeT2TransactionId(t2TransactionId);
+    bytes32 addAuthorHash = keccak256(abi.encodePacked(t1PubKey, t2PubKey));
+    _verifyConfirmations(keccak256(abi.encode(addAuthorHash, expiry, t2TxId)), confirmations);
+    _storet2TxId(t2TxId);
 
     if (id == 0) {
-      if (t2PublicKeyToId[t2PublicKey] != 0) revert T2KeyInUse(t2PublicKey);
+      if (t2PubKeyToId[t2PubKey] != 0) revert T2KeyInUse(t2PubKey);
       id = nextAuthorId;
       idToT1Address[id] = t1Address;
       t1AddressToId[t1Address] = id;
-      idToT2PublicKey[id] = t2PublicKey;
-      t2PublicKeyToId[t2PublicKey] = id;
+      idToT2PubKey[id] = t2PubKey;
+      t2PubKeyToId[t2PubKey] = id;
       unchecked { ++nextAuthorId; }
     } else {
-      if (t2PublicKey != idToT2PublicKey[id]) revert CannotChangeT2Key(idToT2PublicKey[id]);
+      if (t2PubKey != idToT2PubKey[id]) revert CannotChangeT2Key(idToT2PubKey[id]);
     }
 
     isAuthor[id] = true;
 
-    emit LogAuthorAdded(t1Address, t2PublicKey, t2TransactionId);
+    emit LogAuthorAdded(t1Address, t2PubKey, t2TxId);
   }
 
   /// @notice Remove and deactivate an author, excluding them from consensus
-  /// @param t1PublicKey 64 byte Ethereum public key of author
-  /// @param t2PublicKey 32 byte sr25519 public key of author
+  /// @param t1PubKey 64 byte Ethereum public key of author
+  /// @param t2PubKey 32 byte sr25519 public key of author
   /// @param expiry Timestamp by which the function must be called
-  /// @param t2TransactionId Unique transaction ID
+  /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
     Author details are retained.
     Emits an author removal event to be read by T2.
   */
-  function removeAuthor(bytes calldata t1PublicKey, bytes32 t2PublicKey, uint256 expiry, uint32 t2TransactionId,
+  function removeAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId,
       bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
-    uint256 id = t2PublicKeyToId[t2PublicKey];
+    uint256 id = t2PubKeyToId[t2PubKey];
     if (!isAuthor[id]) revert NotAnAuthor();
 
     isAuthor[id] = false;
@@ -377,63 +377,63 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     // The order of the elements is the reverse of the addAuthorHash
-    bytes32 removeAuthorHash = keccak256(abi.encodePacked(t2PublicKey, t1PublicKey));
-    _verifyConfirmations(keccak256(abi.encode(removeAuthorHash, expiry, t2TransactionId)), confirmations);
-    _storeT2TransactionId(t2TransactionId);
+    bytes32 removeAuthorHash = keccak256(abi.encodePacked(t2PubKey, t1PubKey));
+    _verifyConfirmations(keccak256(abi.encode(removeAuthorHash, expiry, t2TxId)), confirmations);
+    _storet2TxId(t2TxId);
 
-    emit LogAuthorRemoved(idToT1Address[id], t2PublicKey, t2TransactionId);
+    emit LogAuthorRemoved(idToT1Address[id], t2PubKey, t2TxId);
   }
 
   /// @notice Stores a Merkle tree root hash representing the latest set of transactions to have occurred on T2
   /// @param rootHash 32 byte keccak256 hash of the Merkle tree root
   /// @param expiry Timestamp by which the function must be called
-  /// @param t2TransactionId Unique transaction ID
+  /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /// @dev Emits a root published event to be read by T2
-  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TransactionId, bytes calldata confirmations)
+  function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
     if (isPublishedRootHash[rootHash]) revert RootHashIsUsed();
-    _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TransactionId)), confirmations);
-    _storeT2TransactionId(t2TransactionId);
+    _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TxId)), confirmations);
+    _storet2TxId(t2TxId);
     isPublishedRootHash[rootHash] = true;
-    emit LogRootPublished(rootHash, t2TransactionId);
+    emit LogRootPublished(rootHash, t2TxId);
   }
 
   /// @notice Lift an amount of ERC20 tokens to the specified T2 recipient, providing the amount has first been approved
   /// @param erc20Address address of the ERC20 token contract
-  /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
+  /// @param t2PubKey 32 byte sr25519 public key value of the T2 recipient account
   /// @param amount of token to lift (in the token's full decimals)
   /** @dev
     Locks the tokens in the contract and emits a corresponding lift event to be read by T2.
     Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
   */
-  function lift(address erc20Address, bytes calldata t2PublicKey, uint256 amount)
-    onlyWhenLiftingIsEnabled
+  function lift(address erc20Address, bytes calldata t2PubKey, uint256 amount)
+    onlyWhenLiftingEnabled
     external
   {
     if (amount == 0) revert AmountIsZero();
     assert(IERC20(erc20Address).transferFrom(msg.sender, address(this), amount));
     if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
-    emit LogLifted(erc20Address, _checkT2PublicKey(t2PublicKey), amount);
+    emit LogLifted(erc20Address, _checkT2PubKey(t2PubKey), amount);
   }
 
   /// @notice Lift all ETH sent to the specified T2 recipient
-  /// @param t2PublicKey 32 byte sr25519 public key value of the T2 recipient account
+  /// @param t2PubKey 32 byte sr25519 public key value of the T2 recipient account
   /** @dev
     Locks the ETH in the contract and emits a corresponding lift event to be read by T2.
     Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
   */
-  function liftETH(bytes calldata t2PublicKey)
+  function liftETH(bytes calldata t2PubKey)
     payable
-    onlyWhenLiftingIsEnabled
+    onlyWhenLiftingEnabled
     external
   {
     if (msg.value == 0) revert AmountIsZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PublicKey(t2PublicKey), msg.value);
+    emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PubKey(t2PubKey), msg.value);
   }
 
   /// @notice Lifts all ERC777 tokens received to the T2 recipient specified in the data payload
@@ -447,7 +447,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   */
   function tokensReceived(address operator, address from, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
-    onlyWhenLiftingIsEnabled
+    onlyWhenLiftingEnabled
     external
   {
     if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
@@ -456,7 +456,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (to != address(this)) revert InvalidRecipient();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
     if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
-    emit LogLifted(msg.sender, _checkT2PublicKey(data), amount);
+    emit LogLifted(msg.sender, _checkT2PubKey(data), amount);
   }
 
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
@@ -466,9 +466,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function lower(bytes calldata leaf, bytes32[] calldata merklePath)
     external
   {
-    if (!loweringIsEnabled) revert LowerDisabled();
+    if (!loweringEnabled) revert LowerDisabled();
     bytes32 leafHash = keccak256(leaf);
-    if (!confirmAvnTransaction(leafHash, merklePath)) revert InvalidTxData();
+    if (!confirmTransaction(leafHash, merklePath)) revert InvalidTxData();
     if (hasLowered[leafHash]) revert LowerIsUsed();
     hasLowered[leafHash] = true;
 
@@ -495,14 +495,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 numBytesToSkip = numBytesToLowerData[callId]; // get the number of bytes between the pointer and the lower arguments
     if (numBytesToSkip == 0) revert NotALowerTx(); // we don't recognise this Call ID as a lower so revert
 
-    bytes32 t2PublicKey;
+    bytes32 t2PubKey;
     address token;
     uint128 amount;
     address t1Address;
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // skip the required number of bytes to point to the start of lower transaction arguments
-      t2PublicKey := calldataload(ptr) // load next 32 bytes into 32 byte type starting at ptr
+      t2PubKey := calldataload(ptr) // load next 32 bytes into 32 byte type starting at ptr
       token := calldataload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
       amount := calldataload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
       t1Address := calldataload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
@@ -524,13 +524,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
     }
 
-    emit LogLoweredFrom(t2PublicKey);
+    emit LogLoweredFrom(t2PubKey);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  function confirmAvnTransaction(bytes32 leafHash, bytes32[] calldata merklePath)
+  function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath)
     public
     view
     returns (bool)
@@ -637,19 +637,19 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (validConfirmations != requiredConfirmations) revert BadConfirmations();
   }
 
-  function _storeT2TransactionId(uint256 t2TransactionId)
+  function _storet2TxId(uint256 t2TxId)
     private
   {
-    if (isUsedT2TransactionId[t2TransactionId]) revert TxIdIsUsed();
-    isUsedT2TransactionId[t2TransactionId] = true;
+    if (isUsedt2TxId[t2TxId]) revert TxIdIsUsed();
+    isUsedt2TxId[t2TxId] = true;
   }
 
-  function _checkT2PublicKey(bytes calldata t2PublicKey)
+  function _checkT2PubKey(bytes calldata t2PubKey)
     private
     pure
-    returns (bytes32 checkedT2PublicKey)
+    returns (bytes32 checkedT2PubKey)
   {
-    if (t2PublicKey.length != 32) revert InvalidT2Key();
-    checkedT2PublicKey = bytes32(t2PublicKey);
+    if (t2PubKey.length != 32) revert InvalidT2Key();
+    checkedT2PubKey = bytes32(t2PubKey);
   }
 }
