@@ -66,8 +66,6 @@ The following manual steps are then required to interact with the AVN contract o
 - Return to the ERC1967Proxy page's Contract tab
 - Now you will be able to "Read as Proxy" or "Write as Proxy" to interact with the AVN contract
 
-### Mainnet Addresses
+### Mainnet Address
 
-AVNBridge Persistent Proxy: 0xF05Df39f745A240fb133cC4a11E42467FAB10f1F
-AVNBridge Version 1 Implementation Address: 0xd0800E6cb9Fe4327BF6e791398f68ab1d76E59a1
-Unlocker: 0x9FC92E791FD6315ab267eC0990D701d81a068c76
+0xF05Df39f745A240fb133cC4a11E42467FAB10f1F
