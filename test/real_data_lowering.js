@@ -14,13 +14,13 @@ describe('AVNBridge lowering', async () => {
     token20 = await Token20.deploy(10000000);
     avnBridge = await helper.deployAVNBridge(token20.address);
     const accounts = helper.accounts();
-    const someT2PublicKey = helper.someT2PublicKey();
+    const someT2PubKey = helper.someT2PubKey();
     const authors = helper.authors();
 
     // lift enough funds to cover all the lowers
     const liftAmount = 100000;
     await token20.approve(avnBridge.address, liftAmount);
-    await avnBridge.lift(token20.address, someT2PublicKey, liftAmount);
+    await avnBridge.lift(token20.address, someT2PubKey, liftAmount);
     await helper.loadAuthors(avnBridge, authors, 10);
   });
 

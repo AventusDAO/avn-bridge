@@ -13,7 +13,7 @@ let additionalTx = [];
 let accounts = [];
 let authors = [];
 let owner;
-const someT2PublicKey = randomBytes32();
+const someT2PubKey = randomBytes32();
 
 async function init(largeTree) {
   [owner] = await ethers.provider.listAccounts();
@@ -30,10 +30,10 @@ async function init(largeTree) {
     authors.push({
       account: account,
       t1Address: account.address,
-      t1PublicKey: '0x' + account.publicKey.slice(4, 132),
-      t1PublicKeyLHS: '0x' + account.publicKey.slice(4, 68),
-      t1PublicKeyRHS: '0x' + account.publicKey.slice(68, 132),
-      t2PublicKey: randomBytes32(),
+      t1PubKey: '0x' + account.publicKey.slice(4, 132),
+      t1PubKeyLHS: '0x' + account.publicKey.slice(4, 68),
+      t1PubKeyRHS: '0x' + account.publicKey.slice(68, 132),
+      t2PubKey: randomBytes32(),
       registered: false,
       active: false
     });
@@ -78,12 +78,12 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function getConfirmations(contract, data, expiry, t2TransactionId, adjustment, startPos) {
+async function getConfirmations(contract, data, expiry, t2TxId, adjustment, startPos) {
   startPos = startPos || 2; // Start from Author 2 as Author 1 always sends the tx
   adjustment = adjustment || 0;
   const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
   let concatenatedConfirmations = '0x';
-  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
+  const confirmationHash = toConfirmationHash(data, expiry, t2TxId);
   for (i = startPos; i <= numConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
     concatenatedConfirmations += strip_0x(confirmation);
@@ -91,60 +91,60 @@ async function getConfirmations(contract, data, expiry, t2TransactionId, adjustm
   return concatenatedConfirmations;
 }
 
-async function getSingleConfirmation(contract, data, expiry, t2TransactionId, author) {
-  const confirmationHash = toConfirmationHash(data, expiry, t2TransactionId);
+async function getSingleConfirmation(contract, data, expiry, t2TxId, author) {
+  const confirmationHash = toConfirmationHash(data, expiry, t2TxId);
   return await author.account.signMessage(ethers.utils.arrayify(confirmationHash));
 }
 
 async function loadAuthors(avnBridge, authors, numAuthors) {
   let t1AddressArray = [];
-  let t1PublicKeyLHSArray = [];
-  let t1PublicKeyRHSArray = [];
-  let t2PublicKeyArray = [];
+  let t1PubKeyLHSArray = [];
+  let t1PubKeyRHSArray = [];
+  let t2PubKeyArray = [];
 
   for (i = 0; i < numAuthors; i++) {
     t1AddressArray.push(authors[i].t1Address);
-    t1PublicKeyLHSArray.push(authors[i].t1PublicKeyLHS);
-    t1PublicKeyRHSArray.push(authors[i].t1PublicKeyRHS);
-    t2PublicKeyArray.push(authors[i].t2PublicKey);
+    t1PubKeyLHSArray.push(authors[i].t1PubKeyLHS);
+    t1PubKeyRHSArray.push(authors[i].t1PubKeyRHS);
+    t2PubKeyArray.push(authors[i].t2PubKey);
     authors[i].registered = true;
     authors[i].active = true;
   }
 
-  await avnBridge.loadAuthors(t1AddressArray, t1PublicKeyLHSArray, t1PublicKeyRHSArray, t2PublicKeyArray);
+  await avnBridge.loadAuthors(t1AddressArray, t1PubKeyLHSArray, t1PubKeyRHSArray, t2PubKeyArray);
 }
 
 async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyLower, id) {
   id = id ? id : isProxyLower ? PROXY_LOWER_ID : LOWER_ID;
   const proxyProof = isProxyLower ? strip_0x(randomHex(PROXY_LOWER_PROOF_LENGTH)) : '';
-  const t2FromPublicKey = strip_0x(someT2PublicKey);
+  const t2FromPubKey = strip_0x(someT2PubKey);
   const token = strip_0x(tokenAddress);
   const amountBytes = toLittleEndianBytesStr(amount);
   const t1Address = strip_0x(owner);
-  const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPublicKey + token + amountBytes + t1Address;
+  const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPubKey + token + amountBytes + t1Address;
   const leaves = [encodedLeaf].concat(additionalTx);
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
-  const t2TransactionId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  const t2TxId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
 
 async function createTreeAndPublishRootWithLoweree(contract, loweree, tokenAddress, amount, isProxyLower, id) {
   id = id ? id : isProxyLower ? PROXY_LOWER_ID : LOWER_ID;
   const proxyProof = isProxyLower ? strip_0x(randomHex(PROXY_LOWER_PROOF_LENGTH)) : '';
-  const t2FromPublicKey = strip_0x(someT2PublicKey);
+  const t2FromPubKey = strip_0x(someT2PubKey);
   const token = strip_0x(tokenAddress);
   const amountBytes = toLittleEndianBytesStr(amount);
   const t1Address = strip_0x(loweree);
-  const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPublicKey + token + amountBytes + t1Address;
+  const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPubKey + token + amountBytes + t1Address;
   const leaves = [encodedLeaf].concat(additionalTx);
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
-  const t2TransactionId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  const t2TxId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
 
@@ -152,9 +152,9 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
   const leaves = [testLeaf, randomBytes32()];
   const merkleTree = await createMerkleTree(leaves);
   const expiry = await getValidExpiry();
-  const t2TransactionId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TransactionId);
-  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TransactionId, confirmations);
+  const t2TxId = randomT2TxId();
+  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
 
@@ -163,8 +163,8 @@ async function getNumRequiredConfirmations(contract) {
   return numAuthors - Math.floor((numAuthors * 2) / 3);
 }
 
-function toConfirmationHash(data, expiry, t2TransactionId) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TransactionId]);
+function toConfirmationHash(data, expiry, t2TxId) {
+  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TxId]);
   return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
 }
 
@@ -236,7 +236,7 @@ module.exports = {
   randomBytes32,
   randomHex,
   randomT2TxId,
-  someT2PublicKey: () => someT2PublicKey,
+  someT2PubKey: () => someT2PubKey,
   strip_0x,
   toConfirmationHash,
   authors: () => authors,
