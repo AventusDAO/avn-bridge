@@ -153,7 +153,7 @@ async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
   const merkleTree = await createMerkleTree(leaves);
   const expiry = await getValidExpiry();
   const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  const confirmations = await getConfirmations(contract, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
   await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
