@@ -159,7 +159,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       _t2PubKey = t2PubKey[i];
       if (t1AddressToId[_t1Address] != 0) revert AddressInUse(_t1Address);
       if (t2PubKeyToId[_t2PubKey] != 0) revert T2KeyInUse(_t2PubKey);
-      t1PubKey = abi.encodePacked(t1PubKeyLHS[i], t1PubKeyRHS[i]);
+      t1PubKey = abi.encode(t1PubKeyLHS[i], t1PubKeyRHS[i]);
       if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PubKey);
       idToT1Address[nextAuthorId] = _t1Address;
       idToT2PubKey[nextAuthorId] = _t2PubKey;
@@ -274,8 +274,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       if (msg.sender != owner()) revert OwnerOnly();
       _releaseGrowth(amount, period);
     } else {
-      bytes32 growthHash = keccak256(abi.encode(amount, period));
-      _verifyConfirmations(keccak256(abi.encode(growthHash, expiry, t2TxId)), confirmations);
+      _verifyConfirmations(keccak256(abi.encode(amount, period, expiry, t2TxId)), confirmations);
       _storeT2TxId(t2TxId);
       uint256 releaseTime = block.timestamp;
       if (growthDelay == 0) {
@@ -327,9 +326,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 id = t1AddressToId[t1Address];
     if (isAuthor[id]) revert AlreadyAdded();
 
-    // The order of the elements is the reverse of the removeAuthorHash
-    bytes32 addAuthorHash = keccak256(abi.encodePacked(t1PubKey, t2PubKey));
-    _verifyConfirmations(keccak256(abi.encode(addAuthorHash, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(keccak256(abi.encode(t1PubKey, t2PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
 
     if (id == 0) {
@@ -374,9 +371,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       unchecked { --numActiveAuthors; }
     }
 
-    // The order of the elements is the reverse of the addAuthorHash
-    bytes32 removeAuthorHash = keccak256(abi.encodePacked(t2PubKey, t1PubKey));
-    _verifyConfirmations(keccak256(abi.encode(removeAuthorHash, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
 
     emit LogAuthorRemoved(idToT1Address[id], t2PubKey, t2TxId);

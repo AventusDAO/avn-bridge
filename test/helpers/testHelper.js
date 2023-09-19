@@ -78,12 +78,12 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function getConfirmations(contract, data, expiry, t2TxId, adjustment, startPos) {
+async function getConfirmations(contract, method, data, expiry, t2TxId, adjustment, startPos) {
   startPos = startPos || 2; // Start from Author 2 as Author 1 always sends the tx
   adjustment = adjustment || 0;
   const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
   let concatenatedConfirmations = '0x';
-  const confirmationHash = toConfirmationHash(data, expiry, t2TxId);
+  const confirmationHash = toConfirmationHash[method](data, expiry, t2TxId);
   for (i = startPos; i <= numConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(confirmationHash));
     concatenatedConfirmations += strip_0x(confirmation);
@@ -91,8 +91,8 @@ async function getConfirmations(contract, data, expiry, t2TxId, adjustment, star
   return concatenatedConfirmations;
 }
 
-async function getSingleConfirmation(contract, data, expiry, t2TxId, author) {
-  const confirmationHash = toConfirmationHash(data, expiry, t2TxId);
+async function getSingleConfirmation(contract, method, data, expiry, t2TxId, author) {
+  const confirmationHash = toConfirmationHash[method](data, expiry, t2TxId);
   return await author.account.signMessage(ethers.utils.arrayify(confirmationHash));
 }
 
@@ -126,7 +126,7 @@ async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyL
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
   const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  const confirmations = await getConfirmations(contract, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
   await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
@@ -143,7 +143,7 @@ async function createTreeAndPublishRootWithLoweree(contract, loweree, tokenAddre
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
   const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, merkleTree.rootHash, expiry, t2TxId);
+  const confirmations = await getConfirmations(contract, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
   await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
@@ -163,10 +163,33 @@ async function getNumRequiredConfirmations(contract) {
   return numAuthors - Math.floor((numAuthors * 2) / 3);
 }
 
-function toConfirmationHash(data, expiry, t2TxId) {
-  const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TxId]);
-  return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
-}
+const toConfirmationHash = {
+  publishRoot: function (data, expiry, t2TxId) {
+    const encodedParams = ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TxId]);
+    return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
+  },
+  addAuthor: function (data, expiry, t2TxId) {
+    const encodedParams = ethers.utils.defaultAbiCoder.encode(
+      ['bytes', 'bytes32', 'uint256', 'uint32'],
+      [data[0], data[1], expiry, t2TxId]
+    );
+    return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
+  },
+  removeAuthor: function (data, expiry, t2TxId) {
+    const encodedParams = ethers.utils.defaultAbiCoder.encode(
+      ['bytes32', 'bytes', 'uint256', 'uint32'],
+      [data[0], data[1], expiry, t2TxId]
+    );
+    return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
+  },
+  triggerGrowth: function (data, expiry, t2TxId) {
+    const encodedParams = ethers.utils.defaultAbiCoder.encode(
+      ['uint128', 'uint32', 'uint256', 'uint32'],
+      [data[0], data[1], expiry, t2TxId]
+    );
+    return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
+  }
+};
 
 function randomHex(length) {
   const bytes = ethers.utils.randomBytes(length);

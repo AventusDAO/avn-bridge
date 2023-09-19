@@ -189,10 +189,7 @@ describe('AVNBridge', async () => {
 
       it('attempting to lift 0 ERC20 tokens', async () => {
         await token20.approve(avnBridge.address, 0);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 0)).to.be.revertedWithCustomError(
-          avnBridge,
-          'AmountIsZero'
-        );
+        await expect(avnBridge.lift(token20.address, someT2PubKey, 0)).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
       });
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
@@ -258,10 +255,7 @@ describe('AVNBridge', async () => {
 
       it('attempting to lift ETH when lift is disabled', async () => {
         await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(false);
-        await expect(avnBridge.liftETH(someT2PubKey, { value: 100 })).to.be.revertedWithCustomError(
-          avnBridge,
-          'LiftDisabled'
-        );
+        await expect(avnBridge.liftETH(someT2PubKey, { value: 100 })).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
         await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
         await avnBridge.liftETH(someT2PubKey, { value: 100 });
       });
@@ -279,10 +273,7 @@ describe('AVNBridge', async () => {
       it('attempting to lift ERC20 tokens when lift is disabled', async () => {
         await avnBridge.toggleLifting(false);
         await token20.approve(avnBridge.address, 1);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 1)).to.be.revertedWithCustomError(
-          avnBridge,
-          'LiftDisabled'
-        );
+        await expect(avnBridge.lift(token20.address, someT2PubKey, 1)).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
         await avnBridge.toggleLifting(true);
         await avnBridge.lift(token20.address, someT2PubKey, 1);
       });
