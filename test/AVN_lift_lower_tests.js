@@ -540,48 +540,45 @@ describe('AVNBridge', async () => {
   });
 
   context('triggerGrowth - via owner', async () => {
-    const growthAmount = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(5));
+    const reward = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(5000));
+    const avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(372));
+    const period = 1;
+    const ownerT2TxId = 0; // Owner can pass zero for T2 TX ID
+    const ownerConfirmations = '0x'; // Owner can pass empty bytes for confirmations
 
-    it('fails to trigger zero growth', async () => {
+    it('fails to trigger growth when average stake is zero', async () => {
       const expiry = await helper.getValidExpiry();
-      await expect(avnBridge.triggerGrowth(0, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+      await expect(
+        avnBridge.triggerGrowth(reward, 0, period, expiry, ownerT2TxId, ownerConfirmations)
+      ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
     });
 
     it('fails to trigger growth if called without author confirmations by someone other than the owner', async () => {
       const expiry = await helper.getValidExpiry();
       await expect(
-        avnBridge.connect(someOtherAccount).triggerGrowth(growthAmount, 1, expiry, 0, '0x')
+        avnBridge.connect(someOtherAccount).triggerGrowth(reward, avgStaked, period, expiry, ownerT2TxId, ownerConfirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
     });
 
-    it('succeeds for growth period "2"', async () => {
-      const period = 2;
+    it('succeeds for growth period "1"', async () => {
       const expiry = await helper.getValidExpiry();
       const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
       const avtSupplyBefore = await token20.totalSupply();
+      const expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked);
 
-      await expect(avnBridge.triggerGrowth(growthAmount, period, expiry, 0, '0x'))
+      await expect(avnBridge.triggerGrowth(reward, avgStaked, period, expiry, ownerT2TxId, ownerConfirmations))
         .to.emit(avnBridge, 'LogGrowth')
-        .withArgs(growthAmount, period);
+        .withArgs(expectedGrowthAmount, period);
 
-      expect(avnBalanceBefore.add(growthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore.add(growthAmount)).to.equal(await token20.totalSupply());
-    });
-
-    it('succeeds for growth period "1"', async () => {
-      const period = 1;
-      const expiry = await helper.getValidExpiry();
-      await expect(avnBridge.triggerGrowth(growthAmount, period, expiry, 0, '0x'))
-        .to.emit(avnBridge, 'LogGrowth')
-        .withArgs(growthAmount, period);
+      expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
+      expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
     });
 
     it('fails to re-trigger growth for an existing period', async () => {
       const expiry = await helper.getValidExpiry();
-      await expect(avnBridge.triggerGrowth(growthAmount, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
-        avnBridge,
-        'PeriodIsUsed'
-      );
+      await expect(
+        avnBridge.triggerGrowth(reward, avgStaked, period, expiry, ownerT2TxId, ownerConfirmations)
+      ).to.be.revertedWithCustomError(avnBridge, 'PeriodIsUsed');
     });
   });
 });

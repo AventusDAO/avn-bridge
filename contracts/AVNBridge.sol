@@ -56,7 +56,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or canceled
   mapping (uint32 => uint256) public growthRelease;
   /// @notice Query the amount of growth requested for a period
-  mapping (uint32 => uint128) public growthAmount;
+  mapping (uint32 => uint256) public growthAmount;
 
   uint256[2] public _unused1_; // Storage slot no longer used but must not be removed
   uint256 public numActiveAuthors;
@@ -249,7 +249,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Initialise inflating the core token supply by the specified amount
-  /// @param amount Amount of new tokens to mint for period
+  /// @param rewards Total amount of rewards generated in the period
+  /// @param avgStaked Average amount staked in the period
   /// @param period Unique growth period
   /// @param expiry Timestamp by which the function must be called
   /// @param t2TxId Unique transaction ID
@@ -260,21 +261,21 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
   {
-    if (amount == 0) revert AmountIsZero();
+    if (rewards == 0 || avgStaked == 0) revert AmountIsZero();
     if (growthAmount[period] != 0) revert PeriodIsUsed();
-
+    uint256 amount = rewards * IERC20(coreToken).totalSupply() / avgStaked;
     growthAmount[period] = amount;
 
     if (confirmations.length == 0) {
       if (msg.sender != owner()) revert OwnerOnly();
       _releaseGrowth(amount, period);
     } else {
-      _verifyConfirmations(keccak256(abi.encode(amount, period, expiry, t2TxId)), confirmations);
+      _verifyConfirmations(keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
       _storeT2TxId(t2TxId);
       uint256 releaseTime = block.timestamp;
       if (growthDelay == 0) {
@@ -542,7 +543,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
-  function _releaseGrowth(uint128 amount, uint32 period)
+  function _releaseGrowth(uint256 amount, uint32 period)
     private
   {
     uint256 expectedBalance;
