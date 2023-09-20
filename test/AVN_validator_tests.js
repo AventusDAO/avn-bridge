@@ -78,10 +78,8 @@ describe('AVNBridge', async () => {
 
   context('Growth', async () => {
     const growthAmount = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(3));
-
     async function getGrowthConfirmations(growthAmount, period, expiry, t2TxId) {
-      const growthHash = helper.keccak256(ethers.utils.defaultAbiCoder.encode(['uint128', 'uint32'], [growthAmount, period]));
-      return await helper.getConfirmations(avnBridge, growthHash, expiry, t2TxId);
+      return await helper.getConfirmations(avnBridge, 'triggerGrowth', [growthAmount, period], expiry, t2TxId);
     }
 
     it('fails to trigger zero growth', async () => {
@@ -232,7 +230,7 @@ describe('AVNBridge', async () => {
 
     it('author can publish a root with valid confirmations', async () => {
       const expiry = await helper.getValidExpiry();
-      const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
       await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations))
         .to.emit(avnBridge, 'LogRootPublished')
         .withArgs(rootHash, t2TxId);
@@ -244,7 +242,7 @@ describe('AVNBridge', async () => {
         const newt2TxId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newt2TxId);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, newt2TxId);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
@@ -255,7 +253,7 @@ describe('AVNBridge', async () => {
         const newt2TxId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
         const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
-        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, newt2TxId);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, newt2TxId);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
@@ -264,7 +262,7 @@ describe('AVNBridge', async () => {
       it('the t2 transaction ID is not unique', async () => {
         const newRootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, newRootHash, expiry, t2TxId);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, t2TxId);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
@@ -273,7 +271,7 @@ describe('AVNBridge', async () => {
       it('the root has already been published', async () => {
         const newt2TxId = helper.randomT2TxId();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, newt2TxId);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, newt2TxId);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, newt2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'RootHashIsUsed');
@@ -284,7 +282,7 @@ describe('AVNBridge', async () => {
         rootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
         let confirmations =
-          '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId));
+          '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId));
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
@@ -293,9 +291,10 @@ describe('AVNBridge', async () => {
       it('there are no confirmations', async () => {
         rootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, '0x')
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, '0x')).to.be.revertedWithCustomError(
+          avnBridge,
+          'BadConfirmations'
+        );
       });
 
       it('there are not enough confirmations', async () => {
@@ -303,7 +302,7 @@ describe('AVNBridge', async () => {
         rootHash = helper.randomBytes32();
         const numRequiredConfirmations = await helper.getNumRequiredConfirmations(avnBridge);
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId, -1);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId, -1);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
@@ -313,7 +312,7 @@ describe('AVNBridge', async () => {
         t2TxId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        let confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId);
+        let confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
         confirmations = confirmations.replace(/1/g, '2');
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
@@ -327,6 +326,7 @@ describe('AVNBridge', async () => {
         const expiry = await helper.getValidExpiry();
         const confirmations = await helper.getConfirmations(
           avnBridge,
+          'publishRoot',
           rootHash,
           expiry,
           t2TxId,
@@ -343,7 +343,7 @@ describe('AVNBridge', async () => {
         rootHash = helper.randomBytes32();
         const halfSet = Math.round(numActiveAuthors / 2);
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId, -halfSet);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId, -halfSet);
         const duplicateConfirmations = confirmations + helper.strip_0x(confirmations);
         await expect(
           avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)
@@ -355,19 +355,18 @@ describe('AVNBridge', async () => {
   context('addAuthor()', async () => {
     it('a new author can be added', async () => {
       const numActiveAuthorsBefore = await avnBridge.numActiveAuthors();
-
       const newAuthor = authors[nextAuthorId];
       let t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [newAuthor.t1PubKey, newAuthor.t2PubKey]
-      );
       let expiry = await helper.getValidExpiry();
-      let confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
+      let confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [newAuthor.t1PubKey, newAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
       )
         .to.emit(avnBridge, 'LogAuthorAdded')
         .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
@@ -381,8 +380,8 @@ describe('AVNBridge', async () => {
       rootHash = helper.randomBytes32();
       expiry = await helper.getValidExpiry();
       t2TxId = helper.randomT2TxId();
-      confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId);
-      newAuthorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TxId, newAuthor);
+      confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+      newAuthorConfirmation = await helper.getSingleConfirmation(avnBridge, 'publishRoot', rootHash, expiry, t2TxId, newAuthor);
       const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
       await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
 
@@ -397,8 +396,13 @@ describe('AVNBridge', async () => {
       const emptyKey = '0x';
       const expiry = await helper.getValidExpiry();
       const t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(['bytes', 'bytes32'], [emptyKey, prospectAuthor.t2PubKey]);
-      const confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [emptyKey, prospectAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
         avnBridge.connect(activeAuthor).addAuthor(emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1Key');
@@ -408,11 +412,13 @@ describe('AVNBridge', async () => {
       const prospectAuthor = authors[nextAuthorId];
       const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
       const t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey]
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey],
+        expiry,
+        t2TxId
       );
-      const confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
       await expect(
         avnBridge
           .connect(activeAuthor)
@@ -424,8 +430,13 @@ describe('AVNBridge', async () => {
       const existingAuthor = authors[1];
       const expiry = await helper.getValidExpiry();
       const t2TxId = helper.randomT2TxId();
-      const addAuthorHash = helper.keccak256(existingAuthor.t1PubKey, existingAuthor.t2PubKey);
-      const confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [existingAuthor.t1PubKey, existingAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
         avnBridge
           .connect(activeAuthor)
@@ -437,11 +448,13 @@ describe('AVNBridge', async () => {
       const existingAuthor = authors[numActiveAuthors];
       let expiry = await helper.getValidExpiry();
       let t2TxId = helper.randomT2TxId();
-      const removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [existingAuthor.t2PubKey, existingAuthor.t1PubKey]
+      let confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [existingAuthor.t2PubKey, existingAuthor.t1PubKey],
+        expiry,
+        t2TxId
       );
-      let confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await avnBridge
         .connect(activeAuthor)
         .removeAuthor(existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId, confirmations);
@@ -450,23 +463,25 @@ describe('AVNBridge', async () => {
       const newAuthor = authors[nextAuthorId];
       expiry = await helper.getValidExpiry();
       t2TxId = helper.randomT2TxId();
-      let addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [existingAuthor.t1PubKey, newAuthor.t2PubKey]
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [existingAuthor.t1PubKey, newAuthor.t2PubKey],
+        expiry,
+        t2TxId
       );
-      confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .addAuthor(existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2Key');
 
       t2TxId = helper.randomT2TxId();
-      addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [existingAuthor.t1PubKey, existingAuthor.t2PubKey]
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [existingAuthor.t1PubKey, existingAuthor.t2PubKey],
+        expiry,
+        t2TxId
       );
-      confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
       await avnBridge
         .connect(activeAuthor)
         .addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations);
@@ -476,12 +491,14 @@ describe('AVNBridge', async () => {
       const prospectAuthor = authors[nextAuthorId];
       const existingAuthor = authors[1];
       const t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [prospectAuthor.t1PubKey, existingAuthor.t2PubKey]
-      );
       const expiry = await helper.getValidExpiry();
-      const confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [prospectAuthor.t1PubKey, existingAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
         avnBridge
           .connect(activeAuthor)
@@ -497,14 +514,14 @@ describe('AVNBridge', async () => {
       const newAuthor = authors[nextAuthorId];
       let expiry = await helper.getValidExpiry();
       let t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [newAuthor.t1PubKey, newAuthor.t2PubKey]
+      let confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [newAuthor.t1PubKey, newAuthor.t2PubKey],
+        expiry,
+        t2TxId
       );
-      let confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
-      await avnBridge
-        .connect(activeAuthor)
-        .addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+      await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
       nextAuthorId++;
       expect(await avnBridge.nextAuthorId()).to.equal(nextAuthorId);
       expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition);
@@ -513,23 +530,30 @@ describe('AVNBridge', async () => {
       expiry = await helper.getValidExpiry();
       t2TxId = helper.randomT2TxId();
       const rootHash = helper.randomBytes32();
-      confirmations = await helper.getConfirmations(avnBridge, rootHash, expiry, t2TxId);
-      const newAuthorConfirmation = await helper.getSingleConfirmation(avnBridge, rootHash, expiry, t2TxId, newAuthor);
+      confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+      const newAuthorConfirmation = await helper.getSingleConfirmation(
+        avnBridge,
+        'publishRoot',
+        rootHash,
+        expiry,
+        t2TxId,
+        newAuthor
+      );
       const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
       await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
       expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition.add(1));
 
       expiry = await helper.getValidExpiry();
       t2TxId = helper.randomT2TxId();
-      const removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [newAuthor.t2PubKey, newAuthor.t1PubKey]
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [newAuthor.t2PubKey, newAuthor.t1PubKey],
+        expiry,
+        t2TxId
       );
-      confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       )
         .to.emit(avnBridge, 'LogAuthorRemoved')
         .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
@@ -543,30 +567,30 @@ describe('AVNBridge', async () => {
       expect(await avnBridge.nextAuthorId()).to.equal(nextAuthorId);
       const newAuthor = authors[nextAuthorId];
       let t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [newAuthor.t1PubKey, newAuthor.t2PubKey]
-      );
       let expiry = await helper.getValidExpiry();
-      let confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
-      await avnBridge
-        .connect(activeAuthor)
-        .addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+      let confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [newAuthor.t1PubKey, newAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
+      await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
       nextAuthorId++;
       expect(await avnBridge.nextAuthorId()).to.equal(nextAuthorId);
       expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition);
 
       t2TxId = helper.randomT2TxId();
-      const removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [newAuthor.t2PubKey, newAuthor.t1PubKey]
-      );
       expiry = await helper.getValidExpiry();
-      confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [newAuthor.t2PubKey, newAuthor.t1PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       )
         .to.emit(avnBridge, 'LogAuthorRemoved')
         .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
@@ -578,51 +602,54 @@ describe('AVNBridge', async () => {
     it('cannot remove an author who has already been removed', async () => {
       const newAuthor = authors[nextAuthorId];
       let t2TxId = helper.randomT2TxId();
-      const addAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes', 'bytes32'],
-        [newAuthor.t1PubKey, newAuthor.t2PubKey]
-      );
       let expiry = await helper.getValidExpiry();
-      let confirmations = await helper.getConfirmations(avnBridge, addAuthorHash, expiry, t2TxId);
-      await avnBridge
-        .connect(activeAuthor)
-        .addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+      let confirmations = await helper.getConfirmations(
+        avnBridge,
+        'addAuthor',
+        [newAuthor.t1PubKey, newAuthor.t2PubKey],
+        expiry,
+        t2TxId
+      );
+      await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
       nextAuthorId++;
       t2TxId = helper.randomT2TxId();
       expiry = await helper.getValidExpiry();
-      let removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [newAuthor.t2PubKey, newAuthor.t1PubKey]
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [newAuthor.t2PubKey, newAuthor.t1PubKey],
+        expiry,
+        t2TxId
       );
-      confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
-      await avnBridge
-        .connect(activeAuthor)
-        .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
+      await avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
       numActiveAuthors--;
       t2TxId = helper.randomT2TxId();
       expiry = await helper.getValidExpiry();
-      removeAuthorHash = ethers.utils.solidityKeccak256(['bytes32', 'bytes'], [newAuthor.t2PubKey, newAuthor.t1PubKey]);
-      confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
+      confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [newAuthor.t2PubKey, newAuthor.t1PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'NotAnAuthor');
     });
 
     it('authors are disabled', async () => {
       await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
       const t2TxId = helper.randomT2TxId();
-      const removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [authors[0].t2PubKey, authors[0].t1PubKey]
-      );
       const expiry = await helper.getValidExpiry();
-      const confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [authors[0].t2PubKey, authors[0].t1PubKey],
+        expiry,
+        t2TxId
+      );
       await expect(
-        avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
+        avnBridge.connect(activeAuthor).removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
       await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
     });
@@ -630,11 +657,13 @@ describe('AVNBridge', async () => {
     it('the expiry time for the call has passed', async () => {
       const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
       const t2TxId = helper.randomT2TxId();
-      const removeAuthorHash = ethers.utils.solidityKeccak256(
-        ['bytes32', 'bytes'],
-        [authors[0].t2PubKey, authors[0].t1PubKey]
+      const confirmations = await helper.getConfirmations(
+        avnBridge,
+        'removeAuthor',
+        [authors[0].t2PubKey, authors[0].t1PubKey],
+        expiry,
+        t2TxId
       );
-      const confirmations = await helper.getConfirmations(avnBridge, removeAuthorHash, expiry, t2TxId);
       await expect(
         avnBridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
       ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
