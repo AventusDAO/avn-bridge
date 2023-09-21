@@ -34,8 +34,8 @@ describe('Author Functions', async () => {
     });
 
     beforeEach(async () => {
-      const randomRewards =  Math. floor((Math. random() * 1000000) + 1);
-      const randomAvgStaked =  Math. floor((Math. random() * 1000000) + 1);
+      const randomRewards = Math.floor(Math.random() * 1000000 + 1);
+      const randomAvgStaked = Math.floor(Math.random() * 1000000 + 1);
       rewards = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(randomRewards));
       avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(randomAvgStaked));
       period++;
@@ -112,7 +112,12 @@ describe('Author Functions', async () => {
           const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1, t2TxId);
+            .withArgs(
+              expectedGrowthAmount,
+              period,
+              (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1,
+              t2TxId
+            );
           expect(await avnBridge.isUsedT2TxId(t2TxId), true);
           usedGrowthPeriod = period;
           usedTxId = t2TxId;
@@ -196,7 +201,12 @@ describe('Author Functions', async () => {
 
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1, t2TxId);
+            .withArgs(
+              expectedGrowthAmount,
+              period,
+              (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1,
+              t2TxId
+            );
 
           await avnBridge.denyGrowth(period);
 

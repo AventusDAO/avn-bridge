@@ -628,7 +628,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     } while (i < numConfirmations);
 
-    if (validConfirmations != requiredConfirmations) revert BadConfirmations();
+    revert BadConfirmations();
   }
 
   function _storeT2TxId(uint256 t2TxId)
