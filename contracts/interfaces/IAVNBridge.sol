@@ -29,7 +29,7 @@ interface IAVNBridge {
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
 
   // Owner or authors only
-  function triggerGrowth(uint128 amount, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;

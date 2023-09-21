@@ -184,8 +184,8 @@ const toConfirmationHash = {
   },
   triggerGrowth: function (data, expiry, t2TxId) {
     const encodedParams = ethers.utils.defaultAbiCoder.encode(
-      ['uint128', 'uint32', 'uint256', 'uint32'],
-      [data[0], data[1], expiry, t2TxId]
+      ['uint128', 'uint128', 'uint32', 'uint256', 'uint32'],
+      [data[0], data[1], data[2], expiry, t2TxId]
     );
     return ethers.utils.solidityKeccak256(['bytes'], [encodedParams]);
   }
