@@ -544,9 +544,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _releaseGrowth(uint256 amount, uint32 period)
     private
   {
-    uint256 expectedBalance;
-    unchecked { expectedBalance = IERC20(coreToken).balanceOf(address(this)) + amount; }
-    if (expectedBalance > LIFT_LIMIT) revert LiftLimitHit();
+    if (IERC20(coreToken).balanceOf(address(this)) + amount > LIFT_LIMIT) revert LiftLimitHit();
     (bool success, ) = coreToken.call(abi.encodeWithSignature("mint(uint128)", amount));
     if (!success) revert CoreMintFailed();
     emit LogGrowth(amount, period);
