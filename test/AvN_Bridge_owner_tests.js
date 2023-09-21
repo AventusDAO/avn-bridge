@@ -227,6 +227,7 @@ describe('Owner Functions', async () => {
         });
       });
     });
+
     context('Toggle Lifting', async () => {
       context('succeeds', async () => {
         it('when called by the owner', async () => {
@@ -242,6 +243,7 @@ describe('Owner Functions', async () => {
         });
       });
     });
+
     context('Toggle Lowering', async () => {
       context('succeeds', async () => {
         it('when called by the owner', async () => {
@@ -256,6 +258,34 @@ describe('Owner Functions', async () => {
           await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
         });
       });
+    });
+  });
+
+  context('Core Token', async () => {
+    let bridgeWithIncompatibleCore;
+
+    before(async () => {
+      bridgeWithIncompatibleCore = await helper.deployAVNBridge(token777.address);
+    });
+
+    it('Cannot deploy a new contract without a core token', async () => {
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
+      await expect(upgrades.deployProxy(AVNBridge, [helper.ZERO_ADDRESS], { kind: 'uups' })).to.be.reverted;
+    });
+
+    it('Cannot set the core owner on an incompatible token', async () => {
+      await expect(bridgeWithIncompatibleCore.setCoreOwner()).to.be.revertedWithCustomError(
+        bridgeWithIncompatibleCore,
+        'SetCoreOwnerFailed'
+      );
+    });
+
+    it('Cannot release growth on an incompatible token', async () => {
+      expiry = await helper.getValidExpiry();
+      await expect(bridgeWithIncompatibleCore.triggerGrowth(1, 1, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
+        bridgeWithIncompatibleCore,
+        'CoreMintFailed'
+      );
     });
   });
 });

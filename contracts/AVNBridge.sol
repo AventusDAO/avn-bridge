@@ -68,7 +68,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public liftingEnabled;
   bool public loweringEnabled;
 
-  error NoCoreToken();
   error LiftDisabled();
   error AuthorsDisabled();
   error MissingKeys();
@@ -105,7 +104,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     public
     initializer
   {
-    if (_coreToken == address(0)) revert NoCoreToken();
+    assert(_coreToken != address(0));
     __Ownable_init();
     coreToken = _coreToken;
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
@@ -439,13 +438,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
     Emits a corresponding lift event to be read by T2.
   */
-  function tokensReceived(address operator, address from, address to, uint256 amount, bytes calldata data,
+  function tokensReceived(address operator, address /* from */, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
     onlyWhenLiftingEnabled
     external
   {
     if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
-    if (data.length == 0 && from == address(0) && msg.sender == coreToken) return; // growth action so we don't lift here
     if (amount == 0) revert AmountIsZero();
     if (to != address(this)) revert InvalidRecipient();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
