@@ -77,11 +77,11 @@ describe('AVNBridge', async () => {
   });
 
   context('Growth', async () => {
-    let reward, avgStaked, period, expiry, t2TxId, expectedGrowthAmount;
-    let successfullyTriggeredPeriod, usedTxId;
+    let rewards, avgStaked, period, expiry, t2TxId, expectedGrowthAmount;
+    let usedGrowthPeriod, usedTxId;
 
     before(async () => {
-      reward = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(233));
+      rewards = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(233));
       avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(893773));
       period = 0;
       t2TxId = 0;
@@ -94,134 +94,183 @@ describe('AVNBridge', async () => {
       expectedGrowthAmount;
     });
 
-    async function getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId) {
-      return await helper.getConfirmations(avnBridge, 'triggerGrowth', [reward, avgStaked, period], expiry, t2TxId);
+    async function getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId) {
+      return await helper.getConfirmations(avnBridge, 'triggerGrowth', [rewards, avgStaked, period], expiry, t2TxId);
     }
 
-    it('succeeds in triggering growth via authors', async () => {
-      const avtSupplyBefore = await token20.totalSupply();
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
-      expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked);
-      await expect(avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations))
-        .to.emit(avnBridge, 'LogGrowthTriggered')
-        .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + GROWTH_DELAY + 1, t2TxId);
-      successfullyTriggeredPeriod = period;
-      usedTxId = t2TxId;
+    context('via owner', async () => {
+      const ZERO_TXID = 0; // Owner can pass zero for T2 TX ID
+      const NO_CONFIRMATIONS = '0x'; // Owner can pass empty bytes for confirmations
+
+      it('succeeds in triggering and releasing growth', async () => {
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const avtSupplyBefore = await token20.totalSupply();
+        const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+
+        await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, ZERO_TXID, NO_CONFIRMATIONS))
+          .to.emit(avnBridge, 'LogGrowth')
+          .withArgs(expectedGrowthAmount, period);
+
+        expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
+        usedGrowthPeriod = period;
+      });
+
+      it('t2TxId is ignored if passed', async () => {
+        await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, NO_CONFIRMATIONS));
+        expect(await avnBridge.isUsedT2TxId(t2TxId), false);
+      });
+
+      it('fails to trigger and release growth when rewards are zero', async () => {
+        await expect(
+          avnBridge.triggerGrowth(0, avgStaked, period, expiry, ZERO_TXID, NO_CONFIRMATIONS)
+        ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+      });
+
+      it('fails to trigger and release growth when average stake is zero', async () => {
+        await expect(
+          avnBridge.triggerGrowth(rewards, 0, period, expiry, ZERO_TXID, NO_CONFIRMATIONS)
+        ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+      });
+
+      it('fails to trigger and release growth if called without author confirmations and not the owner', async () => {
+        await expect(
+          avnBridge.connect(someOtherAccount).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, NO_CONFIRMATIONS)
+        ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
+      });
+
+      it('fails to re-trigger growth for an existing period', async () => {
+        const expiry = await helper.getValidExpiry();
+        await expect(
+          avnBridge.triggerGrowth(rewards, avgStaked, usedGrowthPeriod, expiry, ZERO_TXID, NO_CONFIRMATIONS)
+        ).to.be.revertedWithCustomError(avnBridge, 'PeriodIsUsed');
+      });
     });
 
-    it('fails to trigger growth when 0 reward is passed', async () => {
-      const confirmations = await getGrowthConfirmations(0, avgStaked, period, expiry, t2TxId);
-      await expect(
-        avnBridge.connect(activeAuthor).triggerGrowth(0, avgStaked, period, expiry, t2TxId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-    });
+    context('via authors', async () => {
+      it('succeeds in triggering growth', async () => {
+        const avtSupplyBefore = await token20.totalSupply();
+        const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
+        expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+        await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
+          .to.emit(avnBridge, 'LogGrowthTriggered')
+          .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + GROWTH_DELAY + 1, t2TxId);
+        expect(await avnBridge.isUsedT2TxId(t2TxId), true);
+        usedGrowthPeriod = period;
+        usedTxId = t2TxId;
+      });
 
-    it('fails to trigger growth when 0 average stake is passed', async () => {
-      const confirmations = await getGrowthConfirmations(reward, 0, period, expiry, t2TxId);
-      await expect(
-        avnBridge.connect(activeAuthor).triggerGrowth(reward, 0, period, expiry, t2TxId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-    });
+      it('fails to trigger growth when 0 rewards are passed', async () => {
+        const confirmations = await getGrowthConfirmations(0, avgStaked, period, expiry, t2TxId);
+        await expect(
+          avnBridge.connect(activeAuthor).triggerGrowth(0, avgStaked, period, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+      });
 
-    it('fails to trigger growth with an invalid transaction ID', async () => {
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, usedTxId);
-      await expect(
-        avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, usedTxId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
-    });
+      it('fails to trigger growth when 0 average stake is passed', async () => {
+        const confirmations = await getGrowthConfirmations(rewards, 0, period, expiry, t2TxId);
+        await expect(
+          avnBridge.connect(activeAuthor).triggerGrowth(rewards, 0, period, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+      });
 
-    it('fails to trigger growth with an expiry that has passed', async () => {
-      expiry = (await helper.getCurrentBlockTimestamp()) - 1;
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
-      await expect(
-        avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
-    });
+      it('fails to trigger growth with an invalid transaction ID', async () => {
+        const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, usedTxId);
+        await expect(
+          avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, usedTxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
+      });
 
-    it('fails to trigger growth with BadConfirmations', async () => {
-      const confirmations = '0xbadd';
-      await expect(
-        avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations)
-      ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
-    });
+      it('fails to trigger growth with an expiry that has passed', async () => {
+        expiry = (await helper.getCurrentBlockTimestamp()) - 1;
+        const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
+        await expect(
+          avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
+      });
 
-    it('succeeds in releasing growth', async () => {
-      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-      const avtSupplyBefore = await token20.totalSupply();
+      it('fails to trigger growth with BadConfirmations', async () => {
+        const confirmations = '0xbadd';
+        await expect(
+          avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+      });
 
-      await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await expect(avnBridge.connect(someOtherAccount).releaseGrowth(successfullyTriggeredPeriod))
-        .to.emit(avnBridge, 'LogGrowth')
-        .withArgs(expectedGrowthAmount, successfullyTriggeredPeriod);
+      it('succeeds in releasing growth', async () => {
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const avtSupplyBefore = await token20.totalSupply();
 
-      expect(avnBalanceBefore.add(expectedGrowthAmount), await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore.add(expectedGrowthAmount), await token20.totalSupply());
-    });
+        await helper.increaseBlockTimestamp(GROWTH_DELAY);
+        await expect(avnBridge.connect(someOtherAccount).releaseGrowth(usedGrowthPeriod))
+          .to.emit(avnBridge, 'LogGrowth')
+          .withArgs(expectedGrowthAmount, usedGrowthPeriod);
 
-    it('fails to release growth that has already been released', async () => {
-      await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await expect(avnBridge.releaseGrowth(successfullyTriggeredPeriod)).to.be.revertedWithCustomError(
-        avnBridge,
-        'GrowthUnavailable'
-      );
-    });
+        expect(avnBalanceBefore.add(expectedGrowthAmount), await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore.add(expectedGrowthAmount), await token20.totalSupply());
+      });
 
-    it('fails to release growth that has since been denied by the owner', async () => {
-      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-      const avtSupplyBefore = await token20.totalSupply();
-      expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked); // recalculate this as it will have changed
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
+      it('fails to release growth that has already been released', async () => {
+        await helper.increaseBlockTimestamp(GROWTH_DELAY);
+        await expect(avnBridge.releaseGrowth(usedGrowthPeriod)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
+      });
 
-      await expect(avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations))
-        .to.emit(avnBridge, 'LogGrowthTriggered')
-        .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + GROWTH_DELAY + 1, t2TxId);
+      it('fails to release growth that has since been denied by the owner', async () => {
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const avtSupplyBefore = await token20.totalSupply();
+        expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked); // recalculate this as it will have changed
+        const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
 
-      await avnBridge.denyGrowth(period);
+        await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
+          .to.emit(avnBridge, 'LogGrowthTriggered')
+          .withArgs(expectedGrowthAmount, period, (await helper.getCurrentBlockTimestamp()) + GROWTH_DELAY + 1, t2TxId);
 
-      await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
+        await avnBridge.denyGrowth(period);
 
-      expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore).to.equal(await token20.totalSupply());
-    });
+        await helper.increaseBlockTimestamp(GROWTH_DELAY);
+        await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
 
-    it('fails to release growth before its release time', async () => {
-      const avtSupplyBefore = await token20.totalSupply();
-      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-      expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked);
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
+        expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore).to.equal(await token20.totalSupply());
+      });
 
-      await avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations);
-      await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'NotReady');
-      expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore).to.equal(await token20.totalSupply());
+      it('fails to release growth before its release time', async () => {
+        const avtSupplyBefore = await token20.totalSupply();
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+        const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
 
-      await helper.increaseBlockTimestamp(GROWTH_DELAY);
-      await avnBridge.releaseGrowth(period);
+        await avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations);
+        await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'NotReady');
+        expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore).to.equal(await token20.totalSupply());
 
-      expect(avnBalanceBefore.add(expectedGrowthAmount), await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore.add(expectedGrowthAmount), await token20.totalSupply());
-    });
+        await helper.increaseBlockTimestamp(GROWTH_DELAY);
+        await avnBridge.releaseGrowth(period);
 
-    it('succeeds in triggering and releasing immediate growth', async () => {
-      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-      const avtSupplyBefore = await token20.totalSupply();
-      reward = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(753443));
-      avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(3456));
-      expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked);
-      const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
+        expect(avnBalanceBefore.add(expectedGrowthAmount), await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore.add(expectedGrowthAmount), await token20.totalSupply());
+      });
 
-      await avnBridge.setGrowthDelay(0);
+      it('succeeds in triggering and releasing immediate growth', async () => {
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const avtSupplyBefore = await token20.totalSupply();
+        reward = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(753443));
+        avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(3456));
+        expectedGrowthAmount = reward.mul(avtSupplyBefore).div(avgStaked);
+        const confirmations = await getGrowthConfirmations(reward, avgStaked, period, expiry, t2TxId);
 
-      const nextBlockTimestamp = (await helper.getCurrentBlockTimestamp()) + 1;
-      await expect(avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations))
-        .to.emit(avnBridge, 'LogGrowthTriggered')
-        .withArgs(expectedGrowthAmount, period, nextBlockTimestamp, t2TxId)
-        .to.emit(avnBridge, 'LogGrowth')
-        .withArgs(expectedGrowthAmount, period);
+        await avnBridge.setGrowthDelay(0);
 
-      expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
+        const nextBlockTimestamp = (await helper.getCurrentBlockTimestamp()) + 1;
+        await expect(avnBridge.connect(activeAuthor).triggerGrowth(reward, avgStaked, period, expiry, t2TxId, confirmations))
+          .to.emit(avnBridge, 'LogGrowthTriggered')
+          .withArgs(expectedGrowthAmount, period, nextBlockTimestamp, t2TxId)
+          .to.emit(avnBridge, 'LogGrowth')
+          .withArgs(expectedGrowthAmount, period);
+
+        expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
+        expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
+      });
     });
   });
 
