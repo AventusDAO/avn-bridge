@@ -196,6 +196,9 @@ module.exports = {
       accounts: [process.env.GOERLI_PRIVATE_KEY || GOERLI_PRIVATE_KEY]
     },
     hardhat: {
+      accounts: {
+        accountsBalance: "5000000000000000000000000" // 5,000,000 ETH TO COVER ACCOUNTS FOR COVERAGE
+      }
       // forking: {
       //   url: getWeb3Url(`mainnet`),
       // },

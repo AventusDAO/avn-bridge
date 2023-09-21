@@ -16,14 +16,14 @@ let owner;
 const someT2PubKey = randomBytes32();
 
 async function init(largeTree) {
+  const [funder] = await ethers.getSigners();
   [owner] = await ethers.provider.listAccounts();
-  const ownerSigner = ethers.provider.getSigner(owner);
 
   for (i = 0; i < 30; i++) {
     // Generate a new random account (instantiating as a Wallet is the only way to retrieve the public and private keys we need)
     const account = ethers.Wallet.createRandom().connect(ethers.provider);
     // Fund it with ETH from deployer account
-    await ownerSigner.sendTransaction({ to: account.address, value: ethers.utils.parseEther('1', 'ether') });
+    await funder.sendTransaction({ to: account.address, value: ethers.utils.parseEther('10000') });
 
     accounts.push(account);
 
