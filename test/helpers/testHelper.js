@@ -8,6 +8,9 @@ const PSEUDO_ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PROXY_LOWER_PROOF_LENGTH = 131;
 const PROXY_LOWER_ID = '0x5900';
 const LOWER_ID = '0x5702';
+const DIRECT_LOWER_NUM_BYTES = 2;
+const PROXY_LOWER_NUM_BYTES = 133;
+const GROWTH_DELAY = 100;
 
 let additionalTx = [];
 let accounts = [];
@@ -242,17 +245,20 @@ module.exports = {
   createTreeAndPublishRootFromTestLeaf,
   createTreeAndPublishRootWithLoweree,
   deployAVNBridge,
+  DIRECT_LOWER_NUM_BYTES,
   getConfirmations,
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
   getSingleConfirmation,
   getValidExpiry,
+  GROWTH_DELAY,
   increaseBlockTimestamp,
   init,
   keccak256,
   loadAuthors,
   LOWER_ID,
   PROXY_LOWER_ID,
+  PROXY_LOWER_NUM_BYTES,
   PSEUDO_ETH_ADDRESS,
   ONE_AVT_IN_ATTO,
   owner: () => owner,
