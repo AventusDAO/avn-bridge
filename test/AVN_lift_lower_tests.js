@@ -95,7 +95,7 @@ describe('AVNBridge', async () => {
   });
 
   context('lift()', async () => {
-    it('can lift ETH [ @skip-on-coverage ]', async () => {
+    it('can lift ETH', async () => {
       const avnEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(avnBridge.address));
       const lifterEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(owner));
       const liftAmount = ethers.BigNumber.from(123);
@@ -335,7 +335,7 @@ describe('AVNBridge', async () => {
     const liftAmount = ethers.BigNumber.from(100);
     const lowerAmount = ethers.BigNumber.from(50);
 
-    it('lower ETH succeeds [ @skip-on-coverage ]', async () => {
+    it('lower ETH succeeds', async () => {
       await avnBridge.liftETH(someT2PubKey, { value: liftAmount });
       const tree = await helper.createTreeAndPublishRoot(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount);
 
@@ -356,7 +356,7 @@ describe('AVNBridge', async () => {
       await avnBridge.filters.LogLoweredFrom(someT2PubKey);
     });
 
-    it('proxy lower ETH succeeds [ @skip-on-coverage ]', async () => {
+    it('proxy lower ETH succeeds', async () => {
       await avnBridge.liftETH(someT2PubKey, { value: liftAmount });
       const tree = await helper.createTreeAndPublishRoot(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, true);
 
