@@ -197,7 +197,7 @@ module.exports = {
     },
     hardhat: {
       accounts: {
-        accountsBalance: "5000000000000000000000000" // 5,000,000 ETH TO COVER ACCOUNTS FOR COVERAGE
+        accountsBalance: '5000000000000000000000000' // 5,000,000 ETH TO COVER ACCOUNTS FOR COVERAGE
       }
       // forking: {
       //   url: getWeb3Url(`mainnet`),

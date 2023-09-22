@@ -2,7 +2,7 @@ const helper = require('./helpers/testHelper');
 const { expect } = require('chai');
 
 let avnBridge, token777, token20;
-let accounts, authors;
+let accounts, authors, numAuthors;
 let owner, someOtherAccount, someT2PubKey;
 
 describe('Owner Functions', async () => {
@@ -18,7 +18,8 @@ describe('Owner Functions', async () => {
     someOtherAccount = accounts[1];
     someT2PubKey = helper.someT2PubKey();
     authors = helper.authors();
-    await helper.loadAuthors(avnBridge, authors, 10);
+    numAuthors = 10;
+    await helper.loadAuthors(avnBridge, authors, numAuthors);
     await token20.transferOwnership(avnBridge.address);
   });
 
@@ -34,14 +35,14 @@ describe('Owner Functions', async () => {
       });
     });
 
-    context('fails if', async () => {
-      it('the new owner has a zero address', async () => {
+    context('fails', async () => {
+      it('when the new owner has a zero address', async () => {
         await expect(avnBridge.transferOwnership(helper.ZERO_ADDRESS)).to.be.revertedWith(
           'Ownable: new owner is the zero address'
         );
       });
 
-      it('the sender is not the owner', async () => {
+      it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).transferOwnership(owner)).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
@@ -90,10 +91,10 @@ describe('Owner Functions', async () => {
     });
 
     context('fails', async () => {
-      it('if the sender is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).updateLowerCall(newID, helper.DIRECT_LOWER_NUM_BYTES)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
+      it('when the caller is not the owner', async () => {
+        await expect(
+          avnBridge.connect(someOtherAccount).updateLowerCall(newID, helper.DIRECT_LOWER_NUM_BYTES)
+        ).to.be.revertedWith('Ownable: caller is not the owner');
       });
     });
   });
@@ -112,7 +113,7 @@ describe('Owner Functions', async () => {
     });
 
     context('fails', async () => {
-      it('if not called by the owner', async () => {
+      it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).setCoreOwner()).to.be.revertedWith('Ownable: caller is not the owner');
       });
     });
@@ -126,7 +127,7 @@ describe('Owner Functions', async () => {
     });
 
     context('fails', async () => {
-      it('if the sender is not the owner', async () => {
+      it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).denyGrowth(0)).to.be.revertedWith('Ownable: caller is not the owner');
       });
     });
@@ -144,12 +145,147 @@ describe('Owner Functions', async () => {
       });
     });
 
-    context('fails when', async () => {
-      it('the sender is not the owner', async () => {
+    context('fails', async () => {
+      it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5)).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
+    });
+  });
+
+  context('Loading Authors', async () => {
+    let t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey;
+
+    beforeEach(async () => {
+      const newAuthor = authors[++numAuthors];
+      t1Address = [newAuthor.t1Address];
+      t1PubKeyLHS = [newAuthor.t1PubKeyLHS];
+      t1PubKeyRHS = [newAuthor.t1PubKeyRHS];
+      t2PubKey = [newAuthor.t2PubKey];
+    });
+
+    context('succeeds', async () => {
+      it('when called by the owner', async () => {
+        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey));
+      });
+    });
+    context('fails', async () => {
+      it('when a T1 address is already in use', async () => {
+        t1Address = [authors[1].t1Address];
+        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
+          avnBridge,
+          'AddressInUse'
+        );
+      });
+
+      it('when a T2 key is already in use', async () => {
+        t2PubKey = [authors[1].t2PubKey];
+        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
+          avnBridge,
+          'T2KeyInUse'
+        );
+      });
+
+      it('when a T1 address does not correspond to its public key', async () => {
+        t1PubKeyLHS = [authors[++numAuthors].t1PubKeyLHS];
+        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
+          avnBridge,
+          'AddressMismatch'
+        );
+      });
+
+      it('when keys are missing', async () => {
+        t1Address.push(authors[++numAuthors].t1Address);
+        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
+          avnBridge,
+          'MissingKeys'
+        );
+      });
+
+      it('when the caller is not the owner', async () => {
+        await expect(
+          avnBridge.connect(someOtherAccount).loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)
+        ).to.be.revertedWith('Ownable: caller is not the owner');
+      });
+    });
+  });
+
+  context('Switches', async () => {
+    context('Toggle Authors', async () => {
+      context('succeeds', async () => {
+        it('when called by the owner', async () => {
+          await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
+        });
+      });
+      context('fails', async () => {
+        it('when the caller is not the owner', async () => {
+          await expect(avnBridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith(
+            'Ownable: caller is not the owner'
+          );
+          await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
+        });
+      });
+    });
+
+    context('Toggle Lifting', async () => {
+      context('succeeds', async () => {
+        it('when called by the owner', async () => {
+          await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(false);
+        });
+      });
+      context('fails', async () => {
+        it('when the caller is not the owner', async () => {
+          await expect(avnBridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith(
+            'Ownable: caller is not the owner'
+          );
+          await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
+        });
+      });
+    });
+
+    context('Toggle Lowering', async () => {
+      context('succeeds', async () => {
+        it('when called by the owner', async () => {
+          await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
+        });
+      });
+      context('fails', async () => {
+        it('when the caller is not the owner', async () => {
+          await expect(avnBridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith(
+            'Ownable: caller is not the owner'
+          );
+          await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
+        });
+      });
+    });
+  });
+
+  context('Core Token', async () => {
+    let bridgeWithIncompatibleCore;
+
+    before(async () => {
+      bridgeWithIncompatibleCore = await helper.deployAVNBridge(token777.address);
+    });
+
+    it('Cannot deploy a new contract without a core token', async () => {
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
+      await expect(upgrades.deployProxy(AVNBridge, [helper.ZERO_ADDRESS], { kind: 'uups' })).to.be.reverted;
+    });
+
+    it('Cannot set the core owner on an incompatible token', async () => {
+      await expect(bridgeWithIncompatibleCore.setCoreOwner()).to.be.revertedWithCustomError(
+        bridgeWithIncompatibleCore,
+        'SetCoreOwnerFailed'
+      );
+    });
+
+    it('Cannot release growth on an incompatible token', async () => {
+      expiry = await helper.getValidExpiry();
+      await expect(bridgeWithIncompatibleCore.triggerGrowth(1, 1, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
+        bridgeWithIncompatibleCore,
+        'CoreMintFailed'
+      );
     });
   });
 });
