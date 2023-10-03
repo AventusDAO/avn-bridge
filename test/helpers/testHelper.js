@@ -11,6 +11,7 @@ const LOWER_ID = '0x5702';
 const DIRECT_LOWER_NUM_BYTES = 2;
 const PROXY_LOWER_NUM_BYTES = 133;
 const GROWTH_DELAY = 100;
+const EXPIRY_WINDOW = 60;
 
 let additionalTx = [];
 let accounts = [];
@@ -235,7 +236,7 @@ async function getCurrentBlockTimestamp() {
 }
 
 async function getValidExpiry() {
-  return (await getCurrentBlockTimestamp()) + 60;
+  return (await getCurrentBlockTimestamp()) + EXPIRY_WINDOW;
 }
 // Keep exports alphabetical.
 module.exports = {
@@ -246,6 +247,7 @@ module.exports = {
   createTreeAndPublishRootWithLoweree,
   deployAVNBridge,
   DIRECT_LOWER_NUM_BYTES,
+  EXPIRY_WINDOW,
   getConfirmations,
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,

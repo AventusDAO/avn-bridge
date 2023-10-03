@@ -745,4 +745,36 @@ describe('Author Functions', async () => {
       });
     });
   });
+
+  context('Corroborate T2 tx', async () => {
+    let t2TxId, expiry;
+
+    beforeEach(async () => {
+      t2TxId = helper.randomT2TxId();
+      expiry = await helper.getValidExpiry();
+    });
+
+    async function publishRoot() {
+      const rootHash = helper.randomBytes32();
+      const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+      await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations);
+    }
+
+    it('The correct state is returned for an unsent tx', async () => {
+      expect(await avnBridge.corroborate(t2TxId, expiry)).to.equal(0);
+    });
+
+    it('The correct state is returned for a failed tx', async () => {
+      await avnBridge.toggleAuthors(false);
+      await expect(publishRoot()).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
+      await helper.increaseBlockTimestamp(helper.EXPIRY_WINDOW);
+      await avnBridge.toggleAuthors(true);
+      expect(await avnBridge.corroborate(t2TxId, expiry)).to.equal(-1);
+    });
+
+    it('The correct state is returned for a successful tx', async () => {
+      await publishRoot();
+      expect(await avnBridge.corroborate(t2TxId, expiry)).to.equal(1);
+    });
+  });
 });
