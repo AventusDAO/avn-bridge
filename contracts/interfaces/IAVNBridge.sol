@@ -42,4 +42,5 @@ interface IAVNBridge {
   function liftETH(bytes calldata t2PubKey) external payable;
   function lower(bytes calldata leaf, bytes32[] calldata merklePath) external;
   function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath) external view returns (bool);
+  function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8);
 }

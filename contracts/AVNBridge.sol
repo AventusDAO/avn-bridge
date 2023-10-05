@@ -539,6 +539,19 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return isPublishedRootHash[leafHash];
   }
 
+  /// @notice Enables authors to check the current status of a T2 TX
+  /// @param t2TxId Unique transaction ID
+  /// @param expiry Timestamp by which the t2TxId must have been used
+  function corroborate(uint32 t2TxId, uint256 expiry)
+    external
+    view
+    returns (int8)
+  {
+    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
+    else if (block.timestamp > expiry) return -1; // Failed
+    else return 0; // Currently undetermined
+  }
+
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
   function _releaseGrowth(uint256 amount, uint32 period)
