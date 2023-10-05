@@ -22,9 +22,9 @@ task('loadAuthors', 'initialise a new avn-bridge contract with a set of authors'
       t2PublicKey = [];
 
     authors.forEach(author => {
-      t1Address.push(validator.ethAddress);
-      t1PublicKeyLHS.push('0x' + validator.ethUncompressedPublicKey.slice(4, 68));
-      t1PublicKeyRHS.push('0x' + validator.ethUncompressedPublicKey.slice(68, 132));
+      t1Address.push(author.ethAddress);
+      t1PublicKeyLHS.push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
+      t1PublicKeyRHS.push('0x' + author.ethUncompressedPublicKey.slice(68, 132));
       t2PublicKey.push(author.validator.tier2PublicKeyHex);
     });
 
