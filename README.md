@@ -44,10 +44,16 @@ The values in config.json can also be set as environment variables.
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`
 
 #### Prepare for an upgrade (testnet only)
-If the above upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` you will need to:
-- temporarily replace the AVNBridge.sol contract file you were attempting to deploy with the previous version of that contract
-- prepare the openzeppelin manifest by running `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
-- now you can revert AVNBridge.sol back to the version you were attempting to upgrade to and run the upgrade command again
+If the above upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` you will need to temporarily replace the AVNBridge files you were attempting to deploy with the currently deployed versions. To do this:
+
+- Visit the avn-bridge proxy contract address on Goerli etherscan.
+- Click the `Read as Proxy` tab
+- Click on the `Implementation contract` link
+- From its `Code` tab copy both the `AVNBridge.sol` code (at the top of the files) and the `IAVNBridge.sol` code (at the bottom of the files) over their respective local versions in your `contracts` directory.
+- Note: If the pragma version at the top of the contracts has changed since (eg: from "pragma solidity 0.8.21" to pragma solidity "0.8.17") then the `solidity.compilers.version` value in `hardhat.config.js`'s `module export`s will also need updating to match.
+- Now delete the `.openzeppelin/goerli.json` manifest, along with the entire `artifacts` and `cache` folders.
+- Now prepare the new `openzeppelin/goerli.json` manifest by running: `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
+- You can now revert `AVNBridge.sol` and `IAVNBridge.sol`back to the versions you were originally attempting to upgrade to and run the standard upgrade command again, remembering to update the solidity compiler version if it was changed.
 
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
