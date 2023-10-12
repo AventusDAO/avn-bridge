@@ -53,7 +53,7 @@ If the above upgrade command fails with: `Error: Deployment at address 0x... is 
 - Note: If the pragma version at the top of the contracts has changed since (eg: from "`pragma solidity 0.8.21`" to "`pragma solidity 0.8.17`") then the `solidity.compilers.version` value in `hardhat.config.js`'s `module exports` will also need updating to match.
 - Now delete the `.openzeppelin/goerli.json` manifest, along with the entire `artifacts` and `cache` folders.
 - Now prepare the new `openzeppelin/goerli.json` manifest by running: `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
-- You can now revert `AVNBridge.sol` and `IAVNBridge.sol`back to the versions you were originally attempting to upgrade to and run the standard upgrade command again, remembering to update the solidity compiler version if it was changed.
+- You can now revert `AVNBridge.sol` and `IAVNBridge.sol`back to the versions you were originally attempting to upgrade to and run the standard upgrade command again (remembering to update the solidity compiler version first if it was changed).
 
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
