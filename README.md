@@ -54,6 +54,7 @@ If the above upgrade command fails with: `Error: Deployment at address 0x... is 
 - Now delete the `.openzeppelin/goerli.json` manifest, along with the entire `artifacts` and `cache` folders.
 - Now prepare the new `openzeppelin/goerli.json` manifest by running: `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
 - You can now revert `AVNBridge.sol` and `IAVNBridge.sol`back to the versions you were originally attempting to upgrade to and run the standard upgrade command again (remembering to update the solidity compiler version first if it was changed).
+- **One final note**: dependent on network conditions, the upgraded contract may not get published and Etherscan will not display the Read/Write Proxy interface of the new contract. To correct this click through the prompts on Etherscan to publish and save the new implementation.
 
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
