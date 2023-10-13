@@ -44,7 +44,7 @@ The values in config.json can also be set as environment variables.
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`
 
 #### Force an upgrade (testnet only)
-If the upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` it means your goerli manifest is incorrectly configured. Correcting this requires temporarily swapping out for the old contract to prepare the correct manifest, before re-attempting the upgrade. Do the following:
+If the upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` it means your goerli manifest is incorrectly configured. Resolving this requires temporarily swapping out the contracts in order to prepare the correct manifest, before re-attempting the upgrade. Follow these steps:
 
 - Delete the `.openzeppelin/goerli.json` manifest, along with the entire `artifacts` and `cache` folders.
 - Visit the avn-bridge proxy contract address on Goerli etherscan to view the current contract.
