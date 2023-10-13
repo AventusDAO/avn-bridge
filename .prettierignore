@@ -1,9 +1,0 @@
-node_modules/
-.openzeppelin/
-artifacts/
-cache/
-contracts/
-coverage/
-*.json
-**/*.md
-*ignore
