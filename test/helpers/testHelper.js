@@ -8,6 +8,7 @@ const PSEUDO_ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PROXY_LOWER_PROOF_LENGTH = 131;
 const PROXY_LOWER_ID = '0x5900';
 const LOWER_ID = '0x5702';
+const GROWTH_DELAY = 100;
 
 let additionalTx = [];
 let accounts = [];
@@ -213,6 +214,7 @@ module.exports = {
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
   getSingleConfirmation,
+  GROWTH_DELAY,
   increaseBlockTimestamp,
   init,
   keccak256,

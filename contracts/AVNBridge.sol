@@ -265,7 +265,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Initialise inflating the core token supply by the specified amount
-  /// @param amount Amount of new tokens to mint for period
+  /// @param rewards Total amount of rewards generated in the period
+  /// @param avgStaked Average amount staked in the period
   /// @param period Unique growth period
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
@@ -275,20 +276,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     In these immediate cases a growth event is then emitted to be read by T2.
     Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
   */
-  function triggerGrowth(uint128 amount, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
     external
   {
-    if (amount == 0) revert AmountCannotBeZero();
-    if (growthAmount[period] != 0) revert GrowthPeriodAlreadyUsed();
-
+    if (rewards == 0 || avgStaked == 0) revert AmountCannotBeZero();
+    if (growthAmount[period] != 0) revert  GrowthPeriodAlreadyUsed();
+    uint128 amount = uint128(rewards * IERC20(coreToken).totalSupply() / avgStaked);
     growthAmount[period] = amount;
 
     if (confirmations.length == 0) {
       if (msg.sender != owner()) revert OwnerOnly();
       _releaseGrowth(amount, period);
     } else {
-      bytes32 growthHash = keccak256(abi.encode(amount, period));
+      bytes32 growthHash = keccak256(abi.encode(rewards, avgStaked, period));
       _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
       _storeT2TransactionId(t2TransactionId);
       if (growthDelay == 0) {

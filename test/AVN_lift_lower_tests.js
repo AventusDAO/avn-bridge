@@ -467,40 +467,4 @@ describe('AVNBridge', async () => {
       expect(await avnBridge.confirmAvnTransaction(helper.randomBytes32(), tree.merklePath)).to.equal(false);
     });
   });
-
-  context('triggerGrowth - via owner', async () => {
-    const growthAmount = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(5));
-
-    it('fails to trigger zero growth', async () => {
-      await expect(avnBridge.triggerGrowth(0, 1, 0, '0x')).to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
-    });
-
-    it('fails to trigger growth if called without validator confirmations by someone other than the owner', async () => {
-      await expect(avnBridge.connect(someOtherAccount).triggerGrowth(growthAmount, 1, 0, '0x'))
-          .to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
-    });
-
-    it('succeeds for growth period "2"', async () => {
-      const period = 2;
-      const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-      const avtSupplyBefore = await token20.totalSupply();
-
-      await expect(avnBridge.triggerGrowth(growthAmount, period, 0, '0x')).to.emit(avnBridge, 'LogGrowth')
-          .withArgs(growthAmount, period);
-
-      expect(avnBalanceBefore.add(growthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-      expect(avtSupplyBefore.add(growthAmount)).to.equal(await token20.totalSupply());
-    });
-
-    it('succeeds for growth period "1"', async () => {
-      const period = 1;
-      await expect(avnBridge.triggerGrowth(growthAmount, period, 0, '0x')).to.emit(avnBridge, 'LogGrowth')
-          .withArgs(growthAmount, period);
-    });
-
-    it('fails to re-trigger growth for an existing period', async () => {
-      await expect(avnBridge.triggerGrowth(growthAmount, 1, 0, '0x'))
-          .to.be.revertedWithCustomError(avnBridge, 'GrowthPeriodAlreadyUsed');
-    });
-  });
 });
