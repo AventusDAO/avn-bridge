@@ -43,11 +43,18 @@ The values in config.json can also be set as environment variables.
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`
 
-#### Prepare for an upgrade (testnet only)
-If the above upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` you will need to:
-- temporarily replace the AVNBridge.sol contract file you were attempting to deploy with the previous version of that contract
-- prepare the openzeppelin manifest by running `npx hardhat --network <network> prepare-upgrade --proxy <proxy contract address>`
-- now you can revert AVNBridge.sol back to the version you were attempting to upgrade to and run the upgrade command again
+#### Force an upgrade (testnet only)
+If the upgrade command fails with: `Error: Deployment at address 0x... is not registered... use the forceImport function` it means your goerli manifest is incorrectly configured. Resolving this requires temporarily swapping out the contracts in order to prepare the correct manifest, before re-attempting the upgrade. Follow these steps:
+
+- Delete the `.openzeppelin/goerli.json` manifest, along with the entire `artifacts` and `cache` folders.
+- Visit the avn-bridge proxy contract address on Goerli etherscan to view the current contract.
+- Click the `Read as Proxy` tab
+- Click on the `Implementation contract` link
+- From its `Code` tab copy both the `AVNBridge.sol` code (at the top of the list of files) and the `IAVNBridge.sol` code (at the bottom) over their respective versions in your local `contracts` directory.
+- Note: If the pragma version at the top of the contracts has changed since (eg: from "`pragma solidity 0.8.21`" to "`pragma solidity 0.8.17`") then the `solidity.compilers.version` value in `hardhat.config.js`'s `module exports` will also require updating to match.
+- Now prepare the new `openzeppelin/goerli.json` manifest by running: `npx hardhat --network goerli prepare-upgrade --proxy <proxy contract address>`
+- You may now revert `AVNBridge.sol` and `IAVNBridge.sol`back to the versions you were originally attempting to upgrade to and run the standard upgrade command again (remembering to reset the solidity compiler version too, if required).
+- **One final note**: dependent upon network conditions, the upgraded contract may not get published and Etherscan will not yet be displaying its updated Read/Write Proxy interface. To correct this, click through the prompts on Etherscan to publish and save the new contract implementation.
 
 #### Publish a new test token
 `npx hardhat --network <network> publishToken`
