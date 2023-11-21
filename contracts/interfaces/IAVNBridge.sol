@@ -15,7 +15,7 @@ interface IAVNBridge {
   event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint256 indexed releaseTime, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
-  event LogLoweredFrom(bytes32 indexed t2PubKey);
+  event LogLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PubKey, uint256 amount);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only

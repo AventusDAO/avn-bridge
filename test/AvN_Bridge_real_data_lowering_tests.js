@@ -5,7 +5,7 @@ const ORIGINAL_TOKEN = 'c20ac8c712e8f7daee54f56c3e7e8b9f37893c0f';
 const T1_ADDRESS = '0x4d22263DCEe1B1D87980AB014b7184726c044517';
 const T2_PUBLIC_KEY = '0x50368dd692d19f39657a574ff9b9cc0c584219826ab1141d101f43a19a7f3122';
 
-let avnBridge, token20;
+let avnBridge, token20, owner;
 
 describe('Lowering', async () => {
   before(async () => {
@@ -16,6 +16,7 @@ describe('Lowering', async () => {
     const accounts = helper.accounts();
     const someT2PubKey = helper.someT2PubKey();
     const authors = helper.authors();
+    owner = helper.owner();
 
     // lift enough funds to cover all the lowers
     const liftAmount = 100000;
@@ -35,8 +36,8 @@ describe('Lowering', async () => {
         const tree = await helper.createTreeAndPublishRootFromTestLeaf(avnBridge, leaf);
         if (incrementingAmount === true) amount = i + 2;
         await expect(avnBridge.lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(T2_PUBLIC_KEY);
+          .to.emit(avnBridge, 'LogLowered')
+          .withArgs(token20.address, T1_ADDRESS, T2_PUBLIC_KEY, amount);
       }
     }
 
