@@ -409,8 +409,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (amount == 0) revert AmountIsZero();
+    uint256 expectedBalance = IERC20(erc20Address).balanceOf(address(this)) + amount;
+    if (expectedBalance > LIFT_LIMIT) revert LiftLimitHit();
     IERC20(erc20Address).transferFrom(msg.sender, address(this), amount);
-    if (IERC20(erc20Address).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
+    assert(IERC20(erc20Address).balanceOf(address(this)) == expectedBalance);
     emit LogLifted(erc20Address, _checkT2PubKey(t2PubKey), amount);
   }
 
