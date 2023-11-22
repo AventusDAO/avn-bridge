@@ -99,6 +99,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error TxIdIsUsed();
   error InvalidT2Key();
   error WindowExpired();
+  error LiftFailed();
 
   function initialize(address _coreToken)
     public
@@ -408,12 +409,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLiftingEnabled
     external
   {
-    if (amount == 0) revert AmountIsZero();
-    uint256 expectedBalance = IERC20(erc20Address).balanceOf(address(this)) + amount;
-    if (expectedBalance > LIFT_LIMIT) revert LiftLimitHit();
+    uint256 existingBalance = IERC20(erc20Address).balanceOf(address(this));
     IERC20(erc20Address).transferFrom(msg.sender, address(this), amount);
-    assert(IERC20(erc20Address).balanceOf(address(this)) == expectedBalance);
-    emit LogLifted(erc20Address, _checkT2PubKey(t2PubKey), amount);
+    uint256 newBalance = IERC20(erc20Address).balanceOf(address(this));
+    if (newBalance <= existingBalance) revert LiftFailed();
+    if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
+    emit LogLifted(erc20Address, _checkT2PubKey(t2PubKey), newBalance - existingBalance);
   }
 
   /// @notice Lift all ETH sent to the specified T2 recipient
@@ -512,10 +513,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       (bool success, ) = payable(t1Address).call{value: amount}("");
       if (!success) revert PaymentFailed();
     } else {
+      uint256 expectedNewBalance = IERC20(token).balanceOf(address(this)) - amount;
       try IERC777(token).send(t1Address, amount, "") {
       } catch {
         IERC20(token).transfer(t1Address, amount);
       }
+      if (t1Address != address(this)) assert(IERC20(token).balanceOf(address(this)) == expectedNewBalance);
     }
 
     emit LogLoweredFrom(t2PubKey);
