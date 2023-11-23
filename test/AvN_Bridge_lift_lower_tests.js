@@ -119,7 +119,7 @@ describe('Lifting and lowering', async () => {
 
       it('attempting to lift 0 ERC20 tokens', async () => {
         await token20.approve(avnBridge.address, 0);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 0)).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+        await expect(avnBridge.lift(token20.address, someT2PubKey, 0)).to.be.revertedWithCustomError(avnBridge, 'LiftFailed');
       });
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
