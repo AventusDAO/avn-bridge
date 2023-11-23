@@ -9,6 +9,7 @@ interface IAVNBridge {
   event LogLiftingIsEnabled(bool state);
   event LogLoweringIsEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
+  event LogMarkSpent();
 
   event LogValidatorRegistered(bytes32 indexed t1PublicKeyLHS, bytes32 t1PublicKeyRHS, bytes32 indexed t2PublicKey,
       uint256 indexed t2TransactionId);
@@ -32,6 +33,7 @@ interface IAVNBridge {
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
+  function markSpent(bytes32[] calldata hashes) external;
 
   // Owner or validators only
   function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 t2TransactionId, bytes calldata confirmations) external;

@@ -96,7 +96,7 @@ describe('AVNBridge', async () => {
       expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(false);
       expect(await avnBridge.hasLowered(leafHashes[leafHashes.length-1])).to.equal(false);
 
-      await avnBridge.markSpent(leafHashes);
+      expect(await avnBridge.markSpent(leafHashes)).to.emit(avnBridge, 'LogMarkSpent');
 
       expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(true);
       expect(await avnBridge.hasLowered(leafHashes[leafHashes.length-1])).to.equal(true);
