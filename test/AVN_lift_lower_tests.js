@@ -89,6 +89,18 @@ describe('AVNBridge', async () => {
     it('check a non-existent pointer', async () => {
       expect(await avnBridge.numBytesToLowerData(newID)).to.equal(0);
     });
+
+    it('owner can mark lower leaf hashes as spent', async () => {
+      const spentLowers = Array.from({ length: 50 }, () => helper.randomBytes32());
+
+      expect(await avnBridge.hasLowered(spentLowers[0])).to.equal(false);
+      expect(await avnBridge.hasLowered(spentLowers[spentLowers.length-1])).to.equal(false);
+
+      await avnBridge.markSpent(spentLowers);
+
+      expect(await avnBridge.hasLowered(spentLowers[0])).to.equal(true);
+      expect(await avnBridge.hasLowered(spentLowers[spentLowers.length-1])).to.equal(true);
+    });
   });
 
   context('lift()', async () => {
@@ -429,6 +441,12 @@ describe('AVNBridge', async () => {
 
       it('the leaf has already been used for a lower', async () => {
         await avnBridge.lower(tree.leafData, tree.merklePath);
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath))
+            .to.be.revertedWithCustomError(avnBridge, 'LowerAlreadyUsed');
+      });
+
+      it('the leaf has been marked as spent by the owner', async () => {
+        await avnBridge.markSpent([ethers.utils.keccak256(tree.leafData)]);
         await expect(avnBridge.lower(tree.leafData, tree.merklePath))
             .to.be.revertedWithCustomError(avnBridge, 'LowerAlreadyUsed');
       });
