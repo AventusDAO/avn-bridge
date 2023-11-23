@@ -260,6 +260,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLowerCallUpdated(callId, numBytes);
   }
 
+  function markSpent(bytes32[] calldata hashes)
+    onlyOwner
+    external
+  {
+    uint256 numHashes = hashes.length;
+    for (uint256 i; i < numHashes; ++i) hasLowered[hashes[i]] = true;
+    emit LogMarkSpent();
+  }
+
   receive() payable external {
     if (msg.sender != priorInstance) revert CannotReceiveETHUnlessLifting();
   }
