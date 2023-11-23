@@ -90,16 +90,21 @@ describe('AVNBridge', async () => {
       expect(await avnBridge.numBytesToLowerData(newID)).to.equal(0);
     });
 
-    it('owner can mark lower leaf hashes as spent', async () => {
-      const spentLowers = Array.from({ length: 50 }, () => helper.randomBytes32());
+    it('owner can mark leaf hashes as spent', async () => {
+      const leafHashes = Array.from({ length: 50 }, () => helper.randomBytes32());
 
-      expect(await avnBridge.hasLowered(spentLowers[0])).to.equal(false);
-      expect(await avnBridge.hasLowered(spentLowers[spentLowers.length-1])).to.equal(false);
+      expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(false);
+      expect(await avnBridge.hasLowered(leafHashes[leafHashes.length-1])).to.equal(false);
 
-      await avnBridge.markSpent(spentLowers);
+      await avnBridge.markSpent(leafHashes);
 
-      expect(await avnBridge.hasLowered(spentLowers[0])).to.equal(true);
-      expect(await avnBridge.hasLowered(spentLowers[spentLowers.length-1])).to.equal(true);
+      expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(true);
+      expect(await avnBridge.hasLowered(leafHashes[leafHashes.length-1])).to.equal(true);
+    });
+
+    it('fails to mark hashes spent if not the owner', async () => {
+      await expect(avnBridge.connect(someOtherAccount).markSpent([helper.randomBytes32()]))
+          .to.be.revertedWith('Ownable: caller is not the owner');
     });
   });
 
