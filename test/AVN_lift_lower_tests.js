@@ -91,7 +91,7 @@ describe('AVNBridge', async () => {
     });
 
     it('owner can mark leaf hashes as spent', async () => {
-      const leafHashes = Array.from({ length: 50 }, () => helper.randomBytes32());
+      const leafHashes = Array.from({ length: 72 }, () => helper.randomBytes32());
 
       expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(false);
       expect(await avnBridge.hasLowered(leafHashes[leafHashes.length-1])).to.equal(false);
