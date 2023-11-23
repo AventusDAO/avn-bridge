@@ -154,6 +154,30 @@ describe('Owner Functions', async () => {
     });
   });
 
+  context('Marking hashes spent', async () => {
+    context('succeeds', async () => {
+      it('when called by the owner', async () => {
+        const leafHashes = Array.from({ length: 72 }, () => helper.randomBytes32());
+
+        expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(false);
+        expect(await avnBridge.hasLowered(leafHashes[leafHashes.length - 1])).to.equal(false);
+
+        expect(await avnBridge.markSpent(leafHashes)).to.emit(avnBridge, 'LogMarkSpent');
+
+        expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(true);
+        expect(await avnBridge.hasLowered(leafHashes[leafHashes.length - 1])).to.equal(true);
+      });
+    });
+
+    context('fails', async () => {
+      it('when the caller is not the owner', async () => {
+        await expect(avnBridge.connect(someOtherAccount).markSpent([helper.randomBytes32()])).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
+      });
+    });
+  });
+
   context('Loading Authors', async () => {
     let t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey;
 

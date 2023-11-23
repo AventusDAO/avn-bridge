@@ -434,6 +434,11 @@ describe('Lifting and lowering', async () => {
         await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
       });
 
+      it('the leaf has been marked as spent by the owner', async () => {
+        await avnBridge.markSpent([helper.keccak256(tree.leafData)]);
+        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+      });
+
       it('the leaf is invalid', async () => {
         await expect(avnBridge.lower(helper.randomBytes32(), tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,

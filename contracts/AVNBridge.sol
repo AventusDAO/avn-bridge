@@ -248,6 +248,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLowerCallUpdated(callId, numBytes);
   }
 
+  function markSpent(bytes32[] calldata hashes)
+    onlyOwner
+    external
+  {
+    uint256 numHashes = hashes.length;
+    for (uint256 i; i < numHashes; ++i) hasLowered[hashes[i]] = true;
+    emit LogMarkSpent();
+  }
+
   /// @notice Initialise inflating the core token supply by the specified amount
   /// @param rewards Total amount of rewards generated in the period
   /// @param avgStaked Average amount staked in the period

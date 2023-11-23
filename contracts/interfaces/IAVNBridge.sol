@@ -8,6 +8,7 @@ interface IAVNBridge {
   event LogLiftingEnabled(bool state);
   event LogLoweringEnabled(bool state);
   event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
+  event LogMarkSpent();
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
@@ -27,6 +28,7 @@ interface IAVNBridge {
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
+  function markSpent(bytes32[] calldata hashes) external;
 
   // Owner or authors only
   function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
