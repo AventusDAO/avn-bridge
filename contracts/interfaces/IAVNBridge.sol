@@ -13,7 +13,7 @@ interface IAVNBridge {
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogRootPublished(bytes32 indexed rootHash, uint32 indexed t2TxId);
-  event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint256 indexed releaseTime, uint32 indexed t2TxId);
+  event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLoweredFrom(bytes32 indexed t2PubKey);
@@ -30,13 +30,11 @@ interface IAVNBridge {
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
   function markSpent(bytes32[] calldata hashes) external;
 
-  // Owner or authors only
-  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
-
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function removeAuthor(bytes32 t2PubKey, bytes calldata t1PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
 
   // Public
   function releaseGrowth(uint32 period) external;

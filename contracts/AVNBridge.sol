@@ -52,9 +52,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   mapping (uint256 => bool) public isUsedT2TxId;
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
-  /// @notice Query the release time of a unique growth period
-  /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or canceled
-  mapping (uint32 => uint256) public growthRelease;
+  /// @notice Query the submission time of a unique growth period, zeroed once released or cancelled
+  mapping (uint32 => uint256) public growthTriggered;
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint256) public growthAmount;
 
@@ -77,7 +76,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error SetCoreOwnerFailed();
   error AmountIsZero();
   error PeriodIsUsed();
-  error OwnerOnly();
   error GrowthUnavailable();
   error NotReady(uint256 releaseTime);
   error InvalidT1Key();
@@ -193,7 +191,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    growthRelease[period] = 0;
+    growthTriggered[period] = 0;
     emit LogGrowthDenied(period);
   }
 
@@ -265,10 +263,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2TxId Unique transaction ID
   /// @param confirmations Concatenated author-signed confirmations of the transaction details
   /** @dev
-    Immediate growth release occurs when called by the owner (passing zero for t2TxId and empty confirmations bytes).
-    Immediate growth release occurs when called by the authors, IFF the current growthDelay is set to zero.
-    In these immediate cases a growth event is then emitted to be read by T2.
-    Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
+    If growthDelay is zero immediate growth release occurs, otherwise growth values are stored to be released at a later time.
   */
   function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
@@ -279,22 +274,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (growthAmount[period] != 0) revert PeriodIsUsed();
     uint256 amount = rewards * IERC20(coreToken).totalSupply() / avgStaked;
     growthAmount[period] = amount;
-
-    if (confirmations.length == 0) {
-      if (msg.sender != owner()) revert OwnerOnly();
-      _releaseGrowth(amount, period);
-    } else {
-      _verifyConfirmations(keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
-      _storeT2TxId(t2TxId);
-      uint256 releaseTime = block.timestamp;
-      if (growthDelay == 0) {
-        _releaseGrowth(amount, period);
-      } else {
-        unchecked { releaseTime += growthDelay; }
-        growthRelease[period] = releaseTime;
-      }
-      emit LogGrowthTriggered(amount, period, releaseTime, t2TxId);
-    }
+    _verifyConfirmations(keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
+    _storeT2TxId(t2TxId);
+    if (growthDelay == 0) _releaseGrowth(amount, period);
+    else growthTriggered[period] = block.timestamp;
+    emit LogGrowthTriggered(amount, period, t2TxId);
   }
 
   /// @notice Release the requested growth for a period
@@ -306,10 +290,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function releaseGrowth(uint32 period)
     external
   {
-    uint256 releaseTime = growthRelease[period];
-    if (releaseTime == 0) revert GrowthUnavailable();
-    if (block.timestamp < releaseTime) revert NotReady(releaseTime);
-    growthRelease[period] = 0;
+    uint256 submissionTime = growthTriggered[period];
+    if (submissionTime == 0) revert GrowthUnavailable();
+    unchecked { submissionTime += growthDelay; }
+    if (block.timestamp < submissionTime) revert NotReady(submissionTime);
+    growthTriggered[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
 

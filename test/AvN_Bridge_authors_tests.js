@@ -47,63 +47,6 @@ describe('Author Functions', async () => {
       return await helper.getConfirmations(avnBridge, 'triggerGrowth', [rewards, avgStaked, period], expiry, t2TxId);
     }
 
-    context('(via owner)', async () => {
-      const ZERO_TXID = 0; // Owner can pass zero for T2 TX ID
-      const NO_CONFIRMATIONS = '0x'; // Owner can pass empty bytes for confirmations
-
-      context('succeeds', async () => {
-        it('in triggering and releasing growth', async () => {
-          const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-          const avtSupplyBefore = await token20.totalSupply();
-          const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
-
-          await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, ZERO_TXID, NO_CONFIRMATIONS))
-            .to.emit(avnBridge, 'LogGrowth')
-            .withArgs(expectedGrowthAmount, period);
-
-          expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-          expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
-          usedGrowthPeriod = period;
-        });
-
-        it('if the t2TxId is passed it gets ignored', async () => {
-          await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, NO_CONFIRMATIONS));
-          expect(await avnBridge.isUsedT2TxId(t2TxId), false);
-        });
-      });
-
-      context('fails', async () => {
-        it('to trigger and release growth when rewards are zero', async () => {
-          await expect(
-            avnBridge.triggerGrowth(0, avgStaked, period, expiry, ZERO_TXID, NO_CONFIRMATIONS)
-          ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-        });
-
-        it('to trigger and release growth when average staked is zero', async () => {
-          await expect(
-            avnBridge.triggerGrowth(rewards, 0, period, expiry, ZERO_TXID, NO_CONFIRMATIONS)
-          ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-        });
-
-        it('to trigger and release growth if called without confirmations by someone other than the owner', async () => {
-          await expect(
-            avnBridge.connect(someOtherAccount).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, NO_CONFIRMATIONS)
-          ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
-
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, NO_CONFIRMATIONS)
-          ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
-        });
-
-        it('to re-trigger growth for an existing period', async () => {
-          const expiry = await helper.getValidExpiry();
-          await expect(
-            avnBridge.triggerGrowth(rewards, avgStaked, usedGrowthPeriod, expiry, ZERO_TXID, NO_CONFIRMATIONS)
-          ).to.be.revertedWithCustomError(avnBridge, 'PeriodIsUsed');
-        });
-      });
-    });
-
     context('(via authors)', async () => {
       context('succeeds', async () => {
         it('in triggering growth', async () => {
@@ -115,7 +58,6 @@ describe('Author Functions', async () => {
             .withArgs(
               expectedGrowthAmount,
               period,
-              (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1,
               t2TxId
             );
           expect(await avnBridge.isUsedT2TxId(t2TxId), true);
@@ -204,7 +146,6 @@ describe('Author Functions', async () => {
             .withArgs(
               expectedGrowthAmount,
               period,
-              (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1,
               t2TxId
             );
 
@@ -246,7 +187,7 @@ describe('Author Functions', async () => {
           const nextBlockTimestamp = (await helper.getCurrentBlockTimestamp()) + 1;
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(expectedGrowthAmount, period, nextBlockTimestamp, t2TxId)
+            .withArgs(expectedGrowthAmount, period, t2TxId)
             .to.emit(avnBridge, 'LogGrowth')
             .withArgs(expectedGrowthAmount, period);
 

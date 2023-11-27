@@ -303,13 +303,5 @@ describe('Owner Functions', async () => {
         'SetCoreOwnerFailed'
       );
     });
-
-    it('Cannot release growth on an incompatible token', async () => {
-      expiry = await helper.getValidExpiry();
-      await expect(bridgeWithIncompatibleCore.triggerGrowth(1, 1, 1, expiry, 0, '0x')).to.be.revertedWithCustomError(
-        bridgeWithIncompatibleCore,
-        'CoreMintFailed'
-      );
-    });
   });
 });
