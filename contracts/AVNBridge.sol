@@ -81,7 +81,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
   error GrowthUnavailableForPeriod();
-  error ReleaseTimeNotPassed(uint256 triggeredAt);
+  error ReleaseTimeNotPassed(uint256 submissionTime);
   error InvalidT1PublicKey();
   error ValidatorAlreadyRegistered();
   error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
@@ -318,10 +318,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function releaseGrowth(uint32 period)
     external
   {
-    uint256 triggeredAt = growthTriggered[period];
-    if (triggeredAt == 0) revert GrowthUnavailableForPeriod();
-    unchecked { triggeredAt += growthDelay; }
-    if (block.timestamp < triggeredAt) revert ReleaseTimeNotPassed(triggeredAt);
+    uint256 submissionTime = growthTriggered[period];
+    if (submissionTime == 0) revert GrowthUnavailableForPeriod();
+    unchecked { submissionTime += growthDelay; }
+    if (block.timestamp < submissionTime) revert ReleaseTimeNotPassed(submissionTime);
     growthTriggered[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
