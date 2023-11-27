@@ -52,9 +52,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   mapping (uint256 => bool) public isUsedT2TransactionId;
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
-  /// @notice Query the release time of a unique growth period
-  /// @dev When a corresponding growth amount exists for the period, zero indicates the growth was either immediate or cancelled
-  mapping (uint32 => uint256) public growthRelease;
+  /// @notice Query the submission time of a unique growth period, zeroed once released or cancelled
+  mapping (uint32 => uint256) public growthTriggered;
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint128) public growthAmount;
 
@@ -82,7 +81,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
   error GrowthUnavailableForPeriod();
-  error ReleaseTimeNotPassed(uint256 releaseTime);
+  error ReleaseTimeNotPassed(uint256 triggeredAt);
   error InvalidT1PublicKey();
   error ValidatorAlreadyRegistered();
   error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
@@ -193,7 +192,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyOwner
     external
   {
-    growthRelease[period] = 0;
+    growthTriggered[period] = 0;
     emit LogGrowthDenied(period);
   }
 
@@ -304,10 +303,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       if (growthDelay == 0) {
         _releaseGrowth(amount, period);
       } else {
-        uint256 releaseTime;
-        unchecked { releaseTime = block.timestamp + growthDelay; }
-        growthRelease[period] = releaseTime;
-        emit LogGrowthTriggered(amount, period, releaseTime);
+        growthTriggered[period] = block.timestamp;
+        emit LogGrowthTriggered(amount, period);
       }
     }
   }
@@ -321,10 +318,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function releaseGrowth(uint32 period)
     external
   {
-    uint256 releaseTime = growthRelease[period];
-    if (releaseTime == 0) revert GrowthUnavailableForPeriod();
-    if (block.timestamp < releaseTime) revert ReleaseTimeNotPassed(releaseTime);
-    growthRelease[period] = 0;
+    uint256 triggeredAt = growthTriggered[period];
+    if (triggeredAt == 0) revert GrowthUnavailableForPeriod();
+    unchecked { triggeredAt += growthDelay; }
+    if (block.timestamp < triggeredAt) revert ReleaseTimeNotPassed(triggeredAt);
+    growthTriggered[period] = 0;
     _releaseGrowth(growthAmount[period], period);
   }
 

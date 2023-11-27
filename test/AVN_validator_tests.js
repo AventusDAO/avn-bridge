@@ -199,8 +199,7 @@ describe('AVNBridge', async () => {
           .to.emit(avnBridge, 'LogGrowthTriggered')
           .withArgs(
             expectedGrowthAmount,
-            period,
-            (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1
+            period
           );
         expect(await avnBridge.isUsedT2TransactionId(t2TransactionId), true);
         usedGrowthPeriod = period;
@@ -279,8 +278,7 @@ describe('AVNBridge', async () => {
           .to.emit(avnBridge, 'LogGrowthTriggered')
           .withArgs(
             expectedGrowthAmount,
-            period,
-            (await helper.getCurrentBlockTimestamp()) + helper.GROWTH_DELAY + 1
+            period
           );
 
         await avnBridge.denyGrowth(period);
