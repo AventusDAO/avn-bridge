@@ -35,15 +35,13 @@ interface IAVNBridge {
   function updateLowerCall(bytes2 callId, uint256 numBytes) external;
   function markSpent(bytes32[] calldata hashes) external;
 
-  // Owner or validators only
-  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 t2TransactionId, bytes calldata confirmations) external;
-
   // Validators only
   function registerValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations) external;
   function deregisterValidator(bytes memory t1PublicKey, bytes32 t2PublicKey, uint256 t2TransactionId,
       bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint256 t2TransactionId, bytes calldata confirmations) external;
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 t2TransactionId, bytes calldata confirmations) external;
 
   // Public
   function releaseGrowth(uint32 period) external;
