@@ -79,7 +79,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error CannotReceiveETHUnlessLifting();
   error AmountCannotBeZero();
   error GrowthPeriodAlreadyUsed();
-  error OwnerOnly();
   error GrowthUnavailableForPeriod();
   error ReleaseTimeNotPassed(uint256 releaseTime);
   error InvalidT1PublicKey();
@@ -279,10 +278,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param t2TransactionId Unique transaction ID
   /// @param confirmations Concatenated validator-signed confirmations of the transaction details
   /** @dev
-    Immediate growth release occurs when called by the owner (passing zero for t2TransactionId and empty confirmations bytes).
-    Immediate growth release occurs when called by the validators, IFF the current growthDelay is set to zero.
-    In these immediate cases a growth event is then emitted to be read by T2.
-    Otherwise, values are stored to be released at a later time, determined by the current value of growthDelay.
+    If growthDelay is zero immediate growth release occurs, otherwise growth values are stored to be released at a later time.
   */
   function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 t2TransactionId, bytes calldata confirmations)
     onlyWhenValidatorFunctionsAreEnabled
@@ -292,21 +288,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (growthAmount[period] != 0) revert  GrowthPeriodAlreadyUsed();
     uint128 amount = uint128(rewards * IERC20(coreToken).totalSupply() / avgStaked);
     growthAmount[period] = amount;
-
-    if (confirmations.length == 0) {
-      if (msg.sender != owner()) revert OwnerOnly();
-      _releaseGrowth(amount, period);
-    } else {
-      bytes32 growthHash = keccak256(abi.encode(rewards, avgStaked, period));
-      _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
-      _storeT2TransactionId(t2TransactionId);
-      if (growthDelay == 0) {
-        _releaseGrowth(amount, period);
-      } else {
-        growthTriggered[period] = block.timestamp;
-        emit LogGrowthTriggered(amount, period);
-      }
-    }
+    bytes32 growthHash = keccak256(abi.encode(rewards, avgStaked, period));
+    _verifyConfirmations(_toConfirmationHash(growthHash, t2TransactionId), confirmations);
+    _storeT2TransactionId(t2TransactionId);
+    if (growthDelay == 0) _releaseGrowth(amount, period);
+    else growthTriggered[period] = block.timestamp;
+    emit LogGrowthTriggered(amount, period);
   }
 
   /// @notice Release the requested growth for a period

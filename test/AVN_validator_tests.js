@@ -133,62 +133,6 @@ describe('AVNBridge', async () => {
       return await helper.getConfirmations(avnBridge, growthHash, t2TransactionId);
     }
 
-  context('(via owner)', async () => {
-    const ZERO_TXID = 0; // Owner can pass zero for T2 TX ID
-    const NO_CONFIRMATIONS = '0x'; // Owner can pass empty bytes for confirmations
-
-    context('succeeds', async () => {
-      it('in triggering and releasing growth', async () => {
-        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-        const avtSupplyBefore = await token20.totalSupply();
-        const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
-
-        await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, ZERO_TXID, NO_CONFIRMATIONS))
-          .to.emit(avnBridge, 'LogGrowth')
-          .withArgs(expectedGrowthAmount, period);
-
-        expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-        expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
-        usedGrowthPeriod = period;
-      });
-
-      it('if the t2TransactionId is passed it gets ignored', async () => {
-        await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, t2TransactionId, NO_CONFIRMATIONS));
-        expect(await avnBridge.isUsedT2TransactionId(t2TransactionId), false);
-      });
-    });
-
-    context('fails', async () => {
-      it('to trigger and release growth when rewards are zero', async () => {
-        await expect(
-          avnBridge.triggerGrowth(0, avgStaked, period, ZERO_TXID, NO_CONFIRMATIONS)
-        ).to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
-      });
-
-      it('to trigger and release growth when average staked is zero', async () => {
-        await expect(
-          avnBridge.triggerGrowth(rewards, 0, period, ZERO_TXID, NO_CONFIRMATIONS)
-        ).to.be.revertedWithCustomError(avnBridge, 'AmountCannotBeZero');
-      });
-
-      it('to trigger and release growth if called without confirmations by someone other than the owner', async () => {
-        await expect(
-          avnBridge.connect(someOtherAccount).triggerGrowth(rewards, avgStaked, period, t2TransactionId, NO_CONFIRMATIONS)
-        ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
-
-        await expect(
-          avnBridge.connect(activeValidator).triggerGrowth(rewards, avgStaked, period, t2TransactionId, NO_CONFIRMATIONS)
-        ).to.be.revertedWithCustomError(avnBridge, 'OwnerOnly');
-      });
-
-      it('to re-trigger growth for an existing period', async () => {
-        await expect(
-          avnBridge.triggerGrowth(rewards, avgStaked, usedGrowthPeriod, ZERO_TXID, NO_CONFIRMATIONS)
-        ).to.be.revertedWithCustomError(avnBridge, 'GrowthPeriodAlreadyUsed');
-      });
-    });
-  });
-
   context('(via authors)', async () => {
     context('succeeds', async () => {
       it('in triggering growth', async () => {
