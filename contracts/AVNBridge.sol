@@ -81,7 +81,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error GrowthPeriodAlreadyUsed();
   error OwnerOnly();
   error GrowthUnavailableForPeriod();
-  error ReleaseTimeNotPassed(uint256 submissionTime);
+  error ReleaseTimeNotPassed(uint256 releaseTime);
   error InvalidT1PublicKey();
   error ValidatorAlreadyRegistered();
   error CannotChangeT2PublicKey(bytes32 existingT2PublicKey);
