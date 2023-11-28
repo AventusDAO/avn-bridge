@@ -101,12 +101,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error TransactionIdAlreadyUsed();
   error InvalidT2PublicKey();
 
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() { _disableInitializers(); }
+
   function initialize(address _coreToken, address _priorInstance)
     public
     initializer
   {
     if (_coreToken == address(0)) revert NoCoreTokenSupplied();
     __Ownable_init();
+    __UUPSUpgradeable_init();
     coreToken = _coreToken;
     priorInstance = _priorInstance; // We allow address(0) for no prior instance
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
@@ -148,7 +152,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address _t1Address;
     bytes memory t1PublicKey;
 
-    if (t1PublicKeyLHS.length != numToLoad && t1PublicKeyRHS.length != numToLoad && t2PublicKey.length != numToLoad) {
+    if (t1PublicKeyLHS.length != numToLoad || t1PublicKeyRHS.length != numToLoad || t2PublicKey.length != numToLoad) {
       revert MissingValidatorKeys();
     }
 
