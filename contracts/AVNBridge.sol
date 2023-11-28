@@ -127,6 +127,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
+  modifier onlyWhenLoweringEnabled() {
+    if (!loweringEnabled) revert LowerDisabled();
+    _;
+  }
+
   modifier onlyWhenAuthorsEnabled() {
     if (!authorsEnabled) revert AuthorsDisabled();
     _;
@@ -458,9 +463,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
   function lower(bytes calldata leaf, bytes32[] calldata merklePath)
+    onlyWhenLoweringEnabled
     external
   {
-    if (!loweringEnabled) revert LowerDisabled();
     bytes32 leafHash = keccak256(leaf);
     if (!confirmTransaction(leafHash, merklePath)) revert InvalidTxData();
     if (hasLowered[leafHash]) revert LowerIsUsed();
@@ -521,6 +526,36 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     emit LogLoweredFrom(t2PubKey);
+  }
+
+  /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the proof
+  /// @param lowerProof Encoded proof supplied by T2
+  /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the proof
+  function claimLower(bytes calldata lowerProof)
+    onlyWhenLoweringEnabled
+    external
+  {
+    (address token, uint256 amount, address recipient, uint256 lowerId, bytes memory confirmations)
+        = abi.decode(lowerProof, (address, uint256, address, uint256, bytes));
+    bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+
+    if (hasLowered[lowerHash]) revert LowerIsUsed();
+    hasLowered[lowerHash] = true;
+    _verifyConfirmations(lowerHash, confirmations);
+
+    if (token == PSEUDO_ETH_ADDRESS) {
+      (bool success, ) = payable(recipient).call{value: amount}("");
+      if (!success) revert PaymentFailed();
+    } else {
+      uint256 expectedNewBalance = IERC20(token).balanceOf(address(this)) - amount;
+      try IERC777(token).send(recipient, amount, "") {
+      } catch {
+        IERC20(token).transfer(recipient, amount);
+      }
+      if (recipient != address(this)) assert(IERC20(token).balanceOf(address(this)) == expectedNewBalance);
+    }
+
+    emit LogLowerClaimed(lowerHash);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root
@@ -592,7 +627,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     unchecked { required -= required * 2 / 3; }
   }
 
-  function _verifyConfirmations(bytes32 msgHash, bytes calldata confirmations)
+  function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
     private
   {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
@@ -626,10 +661,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       assembly {
-        let sig := add(confirmations.offset, mul(i, SIGNATURE_LENGTH))
-        r := calldataload(sig)
-        s := calldataload(add(sig, 32))
-        v := byte(0, calldataload(add(sig, 64)))
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 0x20))
+        s := mload(add(offset, 0x40))
+        v := byte(0, mload(add(offset, 0x60)))
         i := add(i, 1)
       }
 

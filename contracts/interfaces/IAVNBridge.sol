@@ -17,6 +17,7 @@ interface IAVNBridge {
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLoweredFrom(bytes32 indexed t2PubKey);
+  event LogLowerClaimed(bytes32 indexed lowerHash);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
@@ -41,6 +42,7 @@ interface IAVNBridge {
   function lift(address erc20Address, bytes calldata t2PubKey, uint256 amount) external;
   function liftETH(bytes calldata t2PubKey) external payable;
   function lower(bytes calldata leaf, bytes32[] calldata merklePath) external;
+  function claimLower(bytes calldata lowerData) external;
   function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath) external view returns (bool);
   function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8);
 }
