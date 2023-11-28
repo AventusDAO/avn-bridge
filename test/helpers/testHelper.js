@@ -248,7 +248,7 @@ async function createLowerProof(contract, token, amount, recipient) {
   );
   const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerData]);
   let confirmations = '0x';
-  // Twice the required amount allows for reasonable changes to validator set to occur between  proof being generated and used:
+  // Twice the required amount allows for reasonable changes to validator set to occur between proof being generated and used:
   const doubleRequiredConfirmations = await getNumRequiredConfirmations(contract) * 2;
   for (i = 1; i <= doubleRequiredConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(lowerHash));
