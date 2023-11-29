@@ -53,6 +53,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
   /// @notice Query the submission time of a unique growth period, zeroed once released or cancelled
+  /// @custom:oz-renamed-from growthRelease
   mapping (uint32 => uint256) public growthTriggered;
   /// @notice Query the amount of growth requested for a period
   mapping (uint32 => uint256) public growthAmount;
