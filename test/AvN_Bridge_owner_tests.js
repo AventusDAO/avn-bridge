@@ -137,7 +137,7 @@ describe('Owner Functions', async () => {
     context('succeeds', async () => {
       it('when called by the owner', async () => {
         const oldGrowthDelay = (await avnBridge.growthDelay()).toNumber();
-        expect(60 * 60 * 24 * 7).to.equal(oldGrowthDelay);
+        expect(60 * 60 * 24 * 2).to.equal(oldGrowthDelay);
         const newGrowthDelay = helper.GROWTH_DELAY;
         await expect(avnBridge.setGrowthDelay(newGrowthDelay))
           .to.emit(avnBridge, 'LogGrowthDelayUpdated')

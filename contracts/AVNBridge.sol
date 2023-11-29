@@ -99,12 +99,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error WindowExpired();
   error LiftFailed();
 
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() { _disableInitializers(); }
+
   function initialize(address _coreToken)
     public
     initializer
   {
     assert(_coreToken != address(0));
     __Ownable_init();
+    __UUPSUpgradeable_init();
     coreToken = _coreToken;
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
     numBytesToLowerData[0x5900] = 133; // callID (2 bytes) + proof (2 prefix + 32 relayer + 32 signer + 1 prefix + 64 signature)
@@ -114,7 +118,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     liftingEnabled = true;
     loweringEnabled = true;
     nextAuthorId = 1;
-    growthDelay = 7 days;
+    growthDelay = 2 days;
   }
 
   modifier onlyWhenLiftingEnabled() {
@@ -148,7 +152,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address _t1Address;
     bytes memory t1PubKey;
 
-    if (t1PubKeyLHS.length != numToLoad && t1PubKeyRHS.length != numToLoad && t2PubKey.length != numToLoad) {
+    if (t1PubKeyLHS.length != numToLoad || t1PubKeyRHS.length != numToLoad || t2PubKey.length != numToLoad) {
       revert MissingKeys();
     }
 
