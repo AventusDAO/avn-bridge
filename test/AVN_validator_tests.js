@@ -63,7 +63,7 @@ describe('AVNBridge', async () => {
   context('setGrowthDelay()', async () => {
     it('can set the core token owner via the avn', async () => {
       const oldGrowthDelay = (await avnBridge.growthDelay()).toNumber();
-      expect(60 * 60 * 24 * 7).to.equal(oldGrowthDelay);
+      expect(60 * 60 * 24 * 2).to.equal(oldGrowthDelay);
       const newGrowthDelay = GROWTH_DELAY;
       await expect(avnBridge.setGrowthDelay(newGrowthDelay)).to.emit(avnBridge, 'LogGrowthDelayUpdated').withArgs(oldGrowthDelay, newGrowthDelay);
     });
