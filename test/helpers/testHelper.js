@@ -17,6 +17,7 @@ let additionalTx = [];
 let accounts = [];
 let authors = [];
 let owner;
+let lowerId = 0;
 const someT2PubKey = randomBytes32();
 
 async function init(largeTree) {
@@ -238,10 +239,33 @@ async function getCurrentBlockTimestamp() {
 async function getValidExpiry() {
   return (await getCurrentBlockTimestamp()) + EXPIRY_WINDOW;
 }
+
+async function createLowerProof(contract, token, amount, recipient) {
+  lowerId++;
+  const lowerData = ethers.utils.defaultAbiCoder.encode(
+    ['address', 'uint256', 'address', 'uint256'],
+    [token, amount, recipient, lowerId]
+  );
+  const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerData]);
+  let confirmations = '0x';
+  // Twice the required amount allows for reasonable changes to validator set to occur between proof being generated and used:
+  const doubleRequiredConfirmations = await getNumRequiredConfirmations(contract) * 2;
+  for (i = 1; i <= doubleRequiredConfirmations; i++) {
+    const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(lowerHash));
+    confirmations += strip_0x(confirmation);
+  }
+  const lowerProof = ethers.utils.defaultAbiCoder.encode(
+    ['address', 'uint256', 'address', 'uint256', 'bytes'],
+    [token, amount, recipient, lowerId, confirmations]
+  );
+  return [lowerProof, lowerHash];
+}
+
 // Keep exports alphabetical.
 module.exports = {
   accounts: () => accounts,
   createMerkleTree,
+  createLowerProof,
   createTreeAndPublishRoot,
   createTreeAndPublishRootFromTestLeaf,
   createTreeAndPublishRootWithLoweree,

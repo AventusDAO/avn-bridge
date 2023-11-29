@@ -473,6 +473,124 @@ describe('Lifting and lowering', async () => {
     });
   });
 
+  context('Lowering (claim)', async () => {
+    const liftAmount = ethers.BigNumber.from(100);
+    const lowerAmount = ethers.BigNumber.from(50);
+
+    context('succeeds', async () => {
+      it('in lowering ETH', async () => {
+        await avnBridge.liftETH(someT2PubKey, { value: liftAmount });
+
+        const avnEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(avnBridge.address));
+        const lowererEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(owner));
+
+        const [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, owner);
+        const txResponse = await avnBridge.claimLower(lowerProof);
+        const txReceipt = await txResponse.wait(1);
+        const gasPrice = ethers.BigNumber.from(await ethers.provider.getGasPrice());
+        const txCost = ethers.BigNumber.from(txReceipt.gasUsed).mul(txResponse.gasPrice);
+
+        const avnEthBalanceAfter = ethers.BigNumber.from(await ethers.provider.getBalance(avnBridge.address));
+        const lowererEthBalanceAfter = ethers.BigNumber.from(await ethers.provider.getBalance(owner));
+
+        expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
+        expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
+
+        await avnBridge.filters.LogLowerClaimed(lowerHash);
+      });
+
+      it('in lowering ERC20 tokens', async () => {
+        // lift
+        await token20.approve(avnBridge.address, liftAmount);
+        await avnBridge.lift(token20.address, someT2PubKey, liftAmount);
+        // record pre-lower balances
+        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const senderBalBefore = await token20.balanceOf(owner);
+
+        const [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner);
+
+        // lower and confirm values
+        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
+          .to.emit(avnBridge, 'LogLowerClaimed')
+          .withArgs(lowerHash);
+        expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
+        expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
+      });
+
+      it('in lowering ERC777 tokens', async () => {
+        // lift
+        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
+        // record pre-lower balances
+        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+        const senderBalBefore = await token777.balanceOf(owner);
+
+        const [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
+
+        // lower and confirm values
+        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
+          .to.emit(avnBridge, 'LogLowerClaimed')
+          .withArgs(lowerHash);
+        expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
+        expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
+      });
+
+      it('in lowering ERC777 to the avn bridge itself without accidentally triggering a subsequent lift', async () => {
+        // lift
+        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
+        // record pre-lower balances
+        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+        const senderBalBefore = await token777.balanceOf(owner);
+
+        const [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, avnBridge.address);
+
+        // lower and confirm values
+        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
+          .to.emit(avnBridge, 'LogLowerClaimed')
+          .withArgs(lowerHash)
+          .to.not.emit(avnBridge, 'LogLifted');
+        expect(avnBalanceBefore).to.equal(await token777.balanceOf(avnBridge.address));
+        expect(senderBalBefore).to.equal(await token777.balanceOf(owner));
+      });
+    });
+
+    context('fails when', async () => {
+      let lowerProof, lowerHash;
+      let lowerAmount = 100;
+
+      beforeEach(async () => {
+        [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
+      });
+
+      it('lowering is disabled', async () => {
+        await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
+        await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
+        await avnBridge.claimLower(lowerProof);
+      });
+
+      it('the proof has already been used', async () => {
+        await avnBridge.claimLower(lowerProof);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+      });
+
+      it('the lower has been marked as spent by the owner', async () => {
+        await avnBridge.markSpent([lowerHash]);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+      });
+
+      it('the proof is invalid', async () => {
+        await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.reverted;
+      });
+
+      it('attempting to lower ETH to an address which cannot receive it', async () => {
+        await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
+        const addressCannotReceiveETH = token20.address;
+        [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, addressCannotReceiveETH);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+      });
+    });
+  });
+
   context('Confirming T2 transactions on T1', async () => {
     context('succeeds', async () => {
       it('in confirming a T2 tx leaf exists in a published root', async () => {
