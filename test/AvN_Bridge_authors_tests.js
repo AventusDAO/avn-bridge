@@ -676,10 +676,9 @@ describe('Author Functions', async () => {
         ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
       });
 
-
       it('if it takes the number of authors below the minimum threshold', async () => {
         const numActiveAuthors = await avnBridge.numActiveAuthors();
-        let authorIndex = await avnBridge.numActiveAuthors() - 1;
+        let authorIndex = (await avnBridge.numActiveAuthors()) - 1;
 
         for (authorIndex; authorIndex >= helper.MIN_AUTHORS; authorIndex--) {
           let expiry = await helper.getValidExpiry();
@@ -695,7 +694,9 @@ describe('Author Functions', async () => {
         t1Key = authors[authorIndex].t1PubKey;
         t2Key = authors[authorIndex].t2PubKey;
         confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
-        await expect(avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'TooFewAuthors');
+        await expect(
+          avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'TooFewAuthors');
       });
     });
   });

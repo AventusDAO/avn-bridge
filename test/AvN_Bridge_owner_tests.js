@@ -187,7 +187,7 @@ describe('Owner Functions', async () => {
       try {
         await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
       } catch (error) {
-        const customError = (error.reason.split('custom error ')[1]).split('(')[0].replace(/'/g, '');
+        const customError = error.reason.split('custom error ')[1].split('(')[0].replace(/'/g, '');
         expect(customError).to.equal(expectedError);
       }
     }
@@ -307,6 +307,13 @@ describe('Owner Functions', async () => {
         bridgeWithIncompatibleCore,
         'SetCoreOwnerFailed'
       );
+    });
+  });
+
+  context('Initializer', async () => {
+    it('Cannot reinitialize', async () => {
+      const initArgs = helper.generateInitArgs(token20.address, helper.MIN_AUTHORS);
+      await expect(avnBridge.initialize(...initArgs)).to.be.reverted;
     });
   });
 });

@@ -55,7 +55,7 @@ async function init(largeTree) {
   }
 }
 
-async function deployAVNBridge(coreToken, numAuthors) {
+function generateInitArgs(coreToken, numAuthors) {
   const initArgs = [coreToken, [], [], [], []];
   for (i = 0; i < numAuthors; i++) {
     initArgs[1].push(authors[i].t1Address);
@@ -65,7 +65,11 @@ async function deployAVNBridge(coreToken, numAuthors) {
     authors[i].registered = true;
     authors[i].active = true;
   }
+  return initArgs;
+}
 
+async function deployAVNBridge(coreToken, numAuthors) {
+  const initArgs = generateInitArgs(coreToken, numAuthors);
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
   return await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 }
@@ -265,6 +269,7 @@ module.exports = {
   deployAVNBridge,
   DIRECT_LOWER_NUM_BYTES,
   EXPIRY_WINDOW,
+  generateInitArgs,
   getConfirmations,
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
