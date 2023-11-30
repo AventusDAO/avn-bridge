@@ -19,33 +19,45 @@ describe('Owner Functions', async () => {
     accounts = helper.accounts();
     owner = helper.owner();
     someOtherAccount = accounts[1];
+    yetAnotherAccount = accounts[2];
     someT2PubKey = helper.someT2PubKey();
     authors = helper.authors();
     await token20.transferOwnership(avnBridge.address);
   });
 
-  context('Transferring Ownership', async () => {
+  context('Transferring Ownership (2-step)', async () => {
     context('succeeds', async () => {
       it('when called by the owner', async () => {
         await expect(avnBridge.transferOwnership(someOtherAccount.address))
+          .to.emit(avnBridge, 'OwnershipTransferStarted')
+          .withArgs(owner, someOtherAccount.address);
+
+        expect(someOtherAccount.address).to.equal(await avnBridge.pendingOwner());
+
+        await expect(avnBridge.connect(someOtherAccount).acceptOwnership())
           .to.emit(avnBridge, 'OwnershipTransferred')
           .withArgs(owner, someOtherAccount.address);
+
+        expect(helper.ZERO_ADDRESS).to.equal(await avnBridge.pendingOwner());
         expect(someOtherAccount.address).to.equal(await avnBridge.owner());
+
         await avnBridge.connect(someOtherAccount).transferOwnership(owner);
+        await avnBridge.acceptOwnership();
         expect(owner.address, await avnBridge.owner());
       });
     });
 
     context('fails', async () => {
-      it('when the new owner has a zero address', async () => {
-        await expect(avnBridge.transferOwnership(helper.ZERO_ADDRESS)).to.be.revertedWith(
-          'Ownable: new owner is the zero address'
-        );
-      });
-
       it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).transferOwnership(owner)).to.be.revertedWith(
           'Ownable: caller is not the owner'
+        );
+      });
+
+      it('when the new owner is invalid', async () => {
+        avnBridge.transferOwnership(someOtherAccount.address);
+        await expect(avnBridge.connect(yetAnotherAccount).acceptOwnership()).to.be.revertedWith(
+          'Ownable2Step: caller is not the new owner'
         );
       });
     });
