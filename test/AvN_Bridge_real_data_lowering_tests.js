@@ -12,7 +12,8 @@ describe('Lowering', async () => {
     await helper.init();
     const Token20 = await ethers.getContractFactory('Token20');
     token20 = await Token20.deploy(10000000);
-    avnBridge = await helper.deployAVNBridge(token20.address);
+    const numAuthors = 10;
+    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
     const accounts = helper.accounts();
     const someT2PubKey = helper.someT2PubKey();
     const authors = helper.authors();
@@ -21,7 +22,6 @@ describe('Lowering', async () => {
     const liftAmount = 100000;
     await token20.approve(avnBridge.address, liftAmount);
     await avnBridge.lift(token20.address, someT2PubKey, liftAmount);
-    await helper.loadAuthors(avnBridge, authors, 10);
   });
 
   // Using the sets from: https://docs.google.com/spreadsheets/d/10AwBVX60VwQyw0tK_A2ND4qOf-XILvQzVJ1hXwontWk/edit#gid=0

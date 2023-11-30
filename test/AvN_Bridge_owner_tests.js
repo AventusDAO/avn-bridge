@@ -4,22 +4,23 @@ const { expect } = require('chai');
 let avnBridge, token777, token20;
 let accounts, authors, numAuthors;
 let owner, someOtherAccount, someT2PubKey;
+let AVNBridge;
 
 describe('Owner Functions', async () => {
   before(async () => {
     await helper.init();
+    AVNBridge = await ethers.getContractFactory('AVNBridge');
     const Token777 = await ethers.getContractFactory('Token777');
     token777 = await Token777.deploy(10000000);
     const Token20 = await ethers.getContractFactory('Token20');
     token20 = await Token20.deploy(10000000);
-    avnBridge = await helper.deployAVNBridge(token20.address);
+    const numAuthors = 10;
+    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
     accounts = helper.accounts();
     owner = helper.owner();
     someOtherAccount = accounts[1];
     someT2PubKey = helper.someT2PubKey();
     authors = helper.authors();
-    numAuthors = 10;
-    await helper.loadAuthors(avnBridge, authors, numAuthors);
     await token20.transferOwnership(avnBridge.address);
   });
 
@@ -178,60 +179,69 @@ describe('Owner Functions', async () => {
     });
   });
 
-  context('Loading Authors', async () => {
-    let t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey;
+  context('Initialization', async () => {
+    let initVals = {};
+
+    async function deployAndCatchInitError(expectedError) {
+      const initArgs = [initVals.token, initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      try {
+        await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+      } catch (error) {
+        const customError = (error.reason.split('custom error ')[1]).split('(')[0].replace(/'/g, '');
+        expect(customError).to.equal(expectedError);
+      }
+    }
 
     beforeEach(async () => {
-      const newAuthor = authors[++numAuthors];
-      t1Address = [newAuthor.t1Address];
-      t1PubKeyLHS = [newAuthor.t1PubKeyLHS];
-      t1PubKeyRHS = [newAuthor.t1PubKeyRHS];
-      t2PubKey = [newAuthor.t2PubKey];
+      initVals = { token: token20.address, t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
+
+      for (i = 0; i < helper.MIN_AUTHORS; i++) {
+        initVals.t1Addresses.push(authors[i].t1Address);
+        initVals.t1PubKeysLHS.push(authors[i].t1PubKeyLHS);
+        initVals.t1PubKeysRHS.push(authors[i].t1PubKeyRHS);
+        initVals.t2PubKeys.push(authors[i].t2PubKey);
+      }
     });
 
-    context('succeeds', async () => {
-      it('when called by the owner', async () => {
-        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey));
-      });
+    it('succeeds', async () => {
+      const initArgs = [initVals.token, initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+
+      for (i = 0; i < helper.MIN_AUTHORS; i++) {
+        const authorId = i + 1;
+        expect(await newBridge.t1AddressToId(initVals.t1Addresses[i])).to.equal(authorId);
+        expect(await newBridge.t2PubKeyToId(initVals.t2PubKeys[i])).to.equal(authorId);
+        expect(await newBridge.isAuthor(authorId)).to.equal(true);
+        expect(await newBridge.authorIsActive(authorId)).to.equal(true);
+        expect(await newBridge.idToT1Address(authorId)).to.equal(initVals.t1Addresses[i]);
+        expect(await newBridge.idToT2PubKey(authorId)).to.equal(initVals.t2PubKeys[i]);
+      }
+
+      expect(await newBridge.numActiveAuthors()).to.equal(helper.MIN_AUTHORS);
+      expect(await newBridge.nextAuthorId()).to.equal(helper.MIN_AUTHORS + 1);
     });
-    context('fails', async () => {
-      it('when a T1 address is already in use', async () => {
-        t1Address = [authors[1].t1Address];
-        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
-          avnBridge,
-          'AddressInUse'
-        );
-      });
 
-      it('when a T2 key is already in use', async () => {
-        t2PubKey = [authors[1].t2PubKey];
-        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
-          avnBridge,
-          'T2KeyInUse'
-        );
-      });
+    it('fails without a core token', async () => {
+      initVals.token = helper.ZERO_ADDRESS;
+      await deployAndCatchInitError('MissingCore');
+    });
 
-      it('when a T1 address does not correspond to its public key', async () => {
-        t1PubKeyLHS = [authors[++numAuthors].t1PubKeyLHS];
-        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
-          avnBridge,
-          'AddressMismatch'
-        );
-      });
+    it('fails when a T1 address does not correspond to its public key', async () => {
+      initVals.t1PubKeysLHS[0] = authors[helper.MIN_AUTHORS].t1PubKeyLHS;
+      await deployAndCatchInitError('AddressMismatch');
+    });
 
-      it('when keys are missing', async () => {
-        t1Address.push(authors[++numAuthors].t1Address);
-        await expect(avnBridge.loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)).to.be.revertedWithCustomError(
-          avnBridge,
-          'MissingKeys'
-        );
-      });
+    it('fails when keys are missing', async () => {
+      initVals.t1Addresses.push(authors[helper.MIN_AUTHORS].t1Address);
+      await deployAndCatchInitError('MissingKeys');
+    });
 
-      it('when the caller is not the owner', async () => {
-        await expect(
-          avnBridge.connect(someOtherAccount).loadAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey)
-        ).to.be.revertedWith('Ownable: caller is not the owner');
-      });
+    it('fails when there are too few authors', async () => {
+      initVals.t1Addresses.pop();
+      initVals.t1PubKeysLHS.pop();
+      initVals.t1PubKeysRHS.pop();
+      initVals.t2PubKeys.pop();
+      await deployAndCatchInitError('TooFewAuthors');
     });
   });
 
@@ -289,12 +299,7 @@ describe('Owner Functions', async () => {
     let bridgeWithIncompatibleCore;
 
     before(async () => {
-      bridgeWithIncompatibleCore = await helper.deployAVNBridge(token777.address);
-    });
-
-    it('Cannot deploy a new contract without a core token', async () => {
-      const AVNBridge = await ethers.getContractFactory('AVNBridge');
-      await expect(upgrades.deployProxy(AVNBridge, [helper.ZERO_ADDRESS], { kind: 'uups' })).to.be.reverted;
+      bridgeWithIncompatibleCore = await helper.deployAVNBridge(token777.address, helper.MIN_AUTHORS);
     });
 
     it('Cannot set the core owner on an incompatible token', async () => {

@@ -12,13 +12,13 @@ describe('Lifting and lowering', async () => {
     token777 = await Token777.deploy(10000000);
     const Token20 = await ethers.getContractFactory('Token20');
     token20 = await Token20.deploy(10000000);
-    avnBridge = await helper.deployAVNBridge(token20.address);
+    const numAuthors = 10;
+    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
     accounts = helper.accounts();
     owner = helper.owner();
     someOtherAccount = accounts[1];
     someT2PubKey = helper.someT2PubKey();
     authors = helper.authors();
-    await helper.loadAuthors(avnBridge, authors, 10);
     await token20.transferOwnership(avnBridge.address);
   });
 
@@ -541,7 +541,12 @@ describe('Lifting and lowering', async () => {
         const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
         const senderBalBefore = await token777.balanceOf(owner);
 
-        const [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, avnBridge.address);
+        const [lowerProof, lowerHash] = await helper.createLowerProof(
+          avnBridge,
+          token777.address,
+          lowerAmount,
+          avnBridge.address
+        );
 
         // lower and confirm values
         await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
@@ -585,7 +590,12 @@ describe('Lifting and lowering', async () => {
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
         const addressCannotReceiveETH = token20.address;
-        [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, addressCannotReceiveETH);
+        [lowerProof, _] = await helper.createLowerProof(
+          avnBridge,
+          helper.PSEUDO_ETH_ADDRESS,
+          lowerAmount,
+          addressCannotReceiveETH
+        );
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
       });
     });

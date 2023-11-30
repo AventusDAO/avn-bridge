@@ -31,6 +31,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal SIGNATURE_LENGTH = 65;
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  uint256 constant internal MINIMUM_NETWORK_SIZE = 4;
 
   /// @notice Query an author's current status by their internal ID
   mapping (uint256 => bool) public isAuthor;
@@ -71,9 +72,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error LiftDisabled();
   error AuthorsDisabled();
   error MissingKeys();
-  error AddressInUse(address t1Address);
   error T2KeyInUse(bytes32 t2PubKey);
-  error AddressMismatch(address t1Address, bytes t1PubKey);
+  error AddressMismatch();
   error SetCoreOwnerFailed();
   error AmountIsZero();
   error PeriodIsUsed();
@@ -99,15 +99,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidT2Key();
   error WindowExpired();
   error LiftFailed();
+  error TooFewAuthors();
+  error MissingCore();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() { _disableInitializers(); }
 
-  function initialize(address _coreToken)
+  function initialize(address _coreToken, address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS,
+      bytes32[] calldata t1PubKeyRHS, bytes32[] calldata t2PubKey)
     public
     initializer
   {
-    assert(_coreToken != address(0));
+    if (_coreToken == address(0)) revert MissingCore();
     __Ownable_init();
     __UUPSUpgradeable_init();
     coreToken = _coreToken;
@@ -120,6 +123,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     loweringEnabled = true;
     nextAuthorId = 1;
     growthDelay = 2 days;
+    initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
   }
 
   modifier onlyWhenLiftingEnabled() {
@@ -142,33 +146,24 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  /// @notice Bulk initialise a set of authors
-  /// @param t1Address Array of Ethereum addresses
-  /// @param t1PubKeyLHS Array of 32 leftmost bytes of Ethereum public keys corresponding to addresses
-  /// @param t1PubKeyRHS Array of 32 rightmost bytes of Ethereum public keys corresponding to addresses
-  /// @param t2PubKey Array of 32 byte sr25519 public key values
-  /// @dev This is useful for setting up existing networks, after which addAuthor should be used instead
-  function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
+  // TODO: Move to private methods
+  function initialiseAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
       bytes32[] calldata t2PubKey)
-    onlyOwner
-    external
+    private
   {
-    uint256 numToLoad = t1Address.length;
+    uint256 numAuth = t1Address.length;
+    if (numAuth < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
+    if (t1PubKeyLHS.length != numAuth || t1PubKeyRHS.length != numAuth || t2PubKey.length != numAuth) revert MissingKeys();
     bytes32 _t2PubKey;
     address _t1Address;
     bytes memory t1PubKey;
+    uint256 i;
 
-    if (t1PubKeyLHS.length != numToLoad || t1PubKeyRHS.length != numToLoad || t2PubKey.length != numToLoad) {
-      revert MissingKeys();
-    }
-
-    for (uint256 i; i < numToLoad;) {
+    do {
       _t1Address = t1Address[i];
       _t2PubKey = t2PubKey[i];
-      if (t1AddressToId[_t1Address] != 0) revert AddressInUse(_t1Address);
-      if (t2PubKeyToId[_t2PubKey] != 0) revert T2KeyInUse(_t2PubKey);
       t1PubKey = abi.encode(t1PubKeyLHS[i], t1PubKeyRHS[i]);
-      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch(_t1Address, t1PubKey);
+      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch();
       idToT1Address[nextAuthorId] = _t1Address;
       idToT2PubKey[nextAuthorId] = _t2PubKey;
       t1AddressToId[_t1Address] = nextAuthorId;
@@ -180,7 +175,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         ++nextAuthorId;
         ++i;
       }
-    }
+    } while (i < numAuth);
   }
 
   /// @notice Sets the owner of the associated core token contract to the owner of this contract
@@ -366,6 +361,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWithinCallWindow(expiry)
     external
   {
+    if (t1PubKey.length != 64) revert InvalidT1Key();
     uint256 id = t2PubKeyToId[t2PubKey];
     if (!isAuthor[id]) revert NotAnAuthor();
 
@@ -375,6 +371,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       authorIsActive[id] = false;
       unchecked { --numActiveAuthors; }
     }
+
+    if (numActiveAuthors < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
 
     _verifyConfirmations(keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);

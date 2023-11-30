@@ -21,7 +21,6 @@ interface IAVNBridge {
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
   // Owner only
-  function loadAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS, bytes32[] calldata t2PubKey) external;
   function setCoreOwner() external;
   function denyGrowth(uint32 period) external;
   function setGrowthDelay(uint256 delaySeconds) external;

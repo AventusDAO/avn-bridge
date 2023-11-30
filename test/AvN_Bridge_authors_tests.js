@@ -11,15 +11,14 @@ describe('Author Functions', async () => {
     await helper.init();
     const Token20 = await ethers.getContractFactory('Token20');
     token20 = await Token20.deploy(10000000);
-    avnBridge = await helper.deployAVNBridge(token20.address);
+    const numAuthors = 6;
+    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
     accounts = helper.accounts();
     someOtherAccount = accounts[1];
     authors = helper.authors();
     activeAuthor = authors[0].account;
-    let numInitialAuthors = 6;
-    numActiveAuthors = numInitialAuthors;
-    nextAuthorId = numInitialAuthors + 1;
-    await helper.loadAuthors(avnBridge, authors, numInitialAuthors);
+    numActiveAuthors = numAuthors;
+    nextAuthorId = numAuthors + 1;
     await token20.setOwner(avnBridge.address);
   });
 
@@ -55,11 +54,7 @@ describe('Author Functions', async () => {
           const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(
-              expectedGrowthAmount,
-              period,
-              t2TxId
-            );
+            .withArgs(expectedGrowthAmount, period, t2TxId);
           expect(await avnBridge.isUsedT2TxId(t2TxId), true);
           usedGrowthPeriod = period;
           usedTxId = t2TxId;
@@ -143,11 +138,7 @@ describe('Author Functions', async () => {
 
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(
-              expectedGrowthAmount,
-              period,
-              t2TxId
-            );
+            .withArgs(expectedGrowthAmount, period, t2TxId);
 
           await avnBridge.denyGrowth(period);
 
@@ -683,6 +674,28 @@ describe('Author Functions', async () => {
         await expect(
           avnBridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
+      });
+
+
+      it('if it takes the number of authors below the minimum threshold', async () => {
+        const numActiveAuthors = await avnBridge.numActiveAuthors();
+        let authorIndex = await avnBridge.numActiveAuthors() - 1;
+
+        for (authorIndex; authorIndex >= helper.MIN_AUTHORS; authorIndex--) {
+          let expiry = await helper.getValidExpiry();
+          let t2TxId = helper.randomT2TxId();
+          let t1Key = authors[authorIndex].t1PubKey;
+          let t2Key = authors[authorIndex].t2PubKey;
+          let confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
+          await avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations);
+        }
+
+        expiry = await helper.getValidExpiry();
+        t2TxId = helper.randomT2TxId();
+        t1Key = authors[authorIndex].t1PubKey;
+        t2Key = authors[authorIndex].t2PubKey;
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
+        await expect(avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(avnBridge, 'TooFewAuthors');
       });
     });
   });
