@@ -146,38 +146,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _;
   }
 
-  // TODO: Move to private methods
-  function initialiseAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
-      bytes32[] calldata t2PubKey)
-    private
-  {
-    uint256 numAuth = t1Address.length;
-    if (numAuth < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
-    if (t1PubKeyLHS.length != numAuth || t1PubKeyRHS.length != numAuth || t2PubKey.length != numAuth) revert MissingKeys();
-    bytes32 _t2PubKey;
-    address _t1Address;
-    bytes memory t1PubKey;
-    uint256 i;
-
-    do {
-      _t1Address = t1Address[i];
-      _t2PubKey = t2PubKey[i];
-      t1PubKey = abi.encode(t1PubKeyLHS[i], t1PubKeyRHS[i]);
-      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch();
-      idToT1Address[nextAuthorId] = _t1Address;
-      idToT2PubKey[nextAuthorId] = _t2PubKey;
-      t1AddressToId[_t1Address] = nextAuthorId;
-      t2PubKeyToId[_t2PubKey] = nextAuthorId;
-      isAuthor[nextAuthorId] = true;
-      authorIsActive[nextAuthorId] = true;
-      unchecked {
-        ++numActiveAuthors;
-        ++nextAuthorId;
-        ++i;
-      }
-    } while (i < numAuth);
-  }
-
   /// @notice Sets the owner of the associated core token contract to the owner of this contract
   /// @dev Note: Growth depends upon this contract owning the core token contract, so it cannot occur until the owner of the
   /// core token contract is set back to this contract
@@ -590,6 +558,37 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
+
+  function initialiseAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
+      bytes32[] calldata t2PubKey)
+    private
+  {
+    uint256 numAuth = t1Address.length;
+    if (numAuth < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
+    if (t1PubKeyLHS.length != numAuth || t1PubKeyRHS.length != numAuth || t2PubKey.length != numAuth) revert MissingKeys();
+    bytes32 _t2PubKey;
+    address _t1Address;
+    bytes memory t1PubKey;
+    uint256 i;
+
+    do {
+      _t1Address = t1Address[i];
+      _t2PubKey = t2PubKey[i];
+      t1PubKey = abi.encode(t1PubKeyLHS[i], t1PubKeyRHS[i]);
+      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch();
+      idToT1Address[nextAuthorId] = _t1Address;
+      idToT2PubKey[nextAuthorId] = _t2PubKey;
+      t1AddressToId[_t1Address] = nextAuthorId;
+      t2PubKeyToId[_t2PubKey] = nextAuthorId;
+      isAuthor[nextAuthorId] = true;
+      authorIsActive[nextAuthorId] = true;
+      unchecked {
+        ++numActiveAuthors;
+        ++nextAuthorId;
+        ++i;
+      }
+    } while (i < numAuth);
+  }
 
   function _releaseGrowth(uint256 amount, uint32 period)
     private
