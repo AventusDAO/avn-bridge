@@ -227,16 +227,16 @@ describe('Lifting and lowering', async () => {
 
       it('attempting to lift more ERC20 tokens than are approved', async () => {
         await token20.approve(avnBridge.address, 100);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 200)).to.be.rejectedWith(
+        await expect(avnBridge.lift(token20.address, someT2PubKey, 200)).to.be.revertedWithCustomError(
           token20,
-          'ERC20: insufficient allowance'
+          'ERC20InsufficientAllowance'
         );
       });
 
       it('attempting to lift more ERC20 tokens than are available in sender balance', async () => {
-        await expect(avnBridge.connect(someOtherAccount).lift(token20.address, someT2PubKey, 1)).to.be.rejectedWith(
+        await expect(avnBridge.connect(someOtherAccount).lift(token20.address, someT2PubKey, 1)).to.be.revertedWithCustomError(
           token20,
-          'ERC20: insufficient allowance'
+          'ERC20InsufficientAllowance'
         );
       });
 

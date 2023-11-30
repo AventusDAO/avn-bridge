@@ -49,15 +49,17 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).transferOwnership(owner)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
+        await expect(avnBridge.connect(someOtherAccount).transferOwnership(owner)).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
         );
       });
 
-      it('when the new owner is invalid', async () => {
+      it('when an unauthorised account attempts to accept ownership', async () => {
         avnBridge.transferOwnership(someOtherAccount.address);
-        await expect(avnBridge.connect(yetAnotherAccount).acceptOwnership()).to.be.revertedWith(
-          'Ownable2Step: caller is not the new owner'
+        await expect(avnBridge.connect(yetAnotherAccount).acceptOwnership()).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
         );
       });
     });
@@ -107,7 +109,7 @@ describe('Owner Functions', async () => {
       it('when the caller is not the owner', async () => {
         await expect(
           avnBridge.connect(someOtherAccount).updateLowerCall(newID, helper.DIRECT_LOWER_NUM_BYTES)
-        ).to.be.revertedWith('Ownable: caller is not the owner');
+        ).to.be.revertedWithCustomError(avnBridge, 'OwnableUnauthorizedAccount');
       });
     });
   });
@@ -127,7 +129,10 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).setCoreOwner()).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(avnBridge.connect(someOtherAccount).setCoreOwner()).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
+        );
       });
     });
   });
@@ -141,7 +146,10 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).denyGrowth(0)).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(avnBridge.connect(someOtherAccount).denyGrowth(0)).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
+        );
       });
     });
   });
@@ -160,8 +168,9 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
+        await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5)).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
         );
       });
     });
@@ -184,8 +193,9 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).markSpent([helper.randomBytes32()])).to.be.revertedWith(
-          'Ownable: caller is not the owner'
+        await expect(avnBridge.connect(someOtherAccount).markSpent([helper.randomBytes32()])).to.be.revertedWithCustomError(
+          avnBridge,
+          'OwnableUnauthorizedAccount'
         );
       });
     });
@@ -266,8 +276,9 @@ describe('Owner Functions', async () => {
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith(
-            'Ownable: caller is not the owner'
+          await expect(avnBridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWithCustomError(
+            avnBridge,
+            'OwnableUnauthorizedAccount'
           );
           await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
         });
@@ -282,8 +293,9 @@ describe('Owner Functions', async () => {
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith(
-            'Ownable: caller is not the owner'
+          await expect(avnBridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWithCustomError(
+            avnBridge,
+            'OwnableUnauthorizedAccount'
           );
           await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
         });
@@ -298,8 +310,9 @@ describe('Owner Functions', async () => {
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith(
-            'Ownable: caller is not the owner'
+          await expect(avnBridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWithCustomError(
+            avnBridge,
+            'OwnableUnauthorizedAccount'
           );
           await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
         });

@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC777/ERC777.sol";
+import "./777/ERC777.sol";
 
 contract Token777 is ERC777 {
   address[] private empty;
