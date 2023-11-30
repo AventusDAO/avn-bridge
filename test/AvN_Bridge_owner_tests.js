@@ -43,7 +43,7 @@ describe('Owner Functions', async () => {
 
         await avnBridge.connect(someOtherAccount).transferOwnership(owner);
         await avnBridge.acceptOwnership();
-        expect(owner.address, await avnBridge.owner());
+        expect(owner).to.equal(await avnBridge.owner());
       });
     });
 
