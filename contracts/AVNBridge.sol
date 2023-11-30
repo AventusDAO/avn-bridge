@@ -19,9 +19,9 @@ import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
 import "@openzeppelin/contracts/interfaces/IERC1820Registry.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
-contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, Ownable2StepUpgradeable {
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
@@ -111,7 +111,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     initializer
   {
     if (_coreToken == address(0)) revert MissingCore();
-    __Ownable_init();
+    __Ownable2Step_init();
     __UUPSUpgradeable_init();
     coreToken = _coreToken;
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
