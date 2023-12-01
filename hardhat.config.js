@@ -148,7 +148,7 @@ function getWeb3Url(networkName) {
   }
 }
 
-function mainnetCheck() {
+function mainnetCheck(hre) {
   if (hre.network.name === 'mainnet') {
     console.log('MAINNET REQUIRES MANUAL OVERRIDE');
     process.exit(0);

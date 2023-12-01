@@ -32,7 +32,7 @@ The values in config.json can also be set as environment variables.
 `npx hardhat coverage`
 
 #### Deploy
-`npx hardhat --network <network> deploy --token [optional core token address] --authors <path to authors json file>`
+`npx hardhat --network <network> deploy --token [optional core token address] --authors [optional path to authors json file]`
 
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --proxy <proxy contract address>`
