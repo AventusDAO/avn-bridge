@@ -34,22 +34,27 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal MINIMUM_NETWORK_SIZE = 4;
 
   /// @notice Query an author's current status by their internal ID
+  /// @custom:oz-renamed-from isRegisteredValidator
   mapping (uint256 => bool) public isAuthor;
   /// @notice Query an author's current activation status by their internal ID
+  /// @custom:oz-renamed-from isActiveValidator
   mapping (uint256 => bool) public authorIsActive;
   /// @notice Query an author's persistent internal author ID by their Ethereum address
   mapping (address => uint256) public t1AddressToId;
   /// @notice Query an author's persistent internal author ID by their T2 public key
+  /// @custom:oz-renamed-from t2PublicKeyToId
   mapping (bytes32 => uint256) public t2PubKeyToId;
   /// @notice Query an author's persistent Ethereum address by their internal author ID
   mapping (uint256 => address) public idToT1Address;
   /// @notice Query an author's persistent T2 public key by their internal author ID
+  /// @custom:oz-renamed-from idToT2PublicKey
   mapping (uint256 => bytes32) public idToT2PubKey;
   /// @notice Mapping of T2 extrinsic IDs to the number of bytes that require traversing in a leaf before reaching lower data
   mapping (bytes2 => uint256) public numBytesToLowerData;
   /// @notice Query whether a particular Merkle tree root hash of T2 state has been published
   mapping (bytes32 => bool) public isPublishedRootHash;
   /// @notice Query whether a unique T2 transaction ID has been used
+  /// @custom:oz-renamed-from isUsedT2TransactionId
   mapping (uint256 => bool) public isUsedT2TxId;
   /// @notice Query whether the hash of a T2 lower transaction leaf has been used to claim its lowered funds on T1
   mapping (bytes32 => bool) public hasLowered;
@@ -57,16 +62,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @custom:oz-renamed-from growthRelease
   mapping (uint32 => uint256) public growthTriggered;
   /// @notice Query the amount of growth requested for a period
-  mapping (uint32 => uint256) public growthAmount;
+  mapping (uint32 => uint128) public growthAmount;
 
+  /// @custom:oz-renamed-from quorum
   uint256[2] public _unused1_; // Storage slot no longer used but must not be removed
+  /// @custom:oz-renamed-from numActiveValidators
   uint256 public numActiveAuthors;
+  /// @custom:oz-renamed-from nextValidatorId
   uint256 public nextAuthorId;
   uint256 public growthDelay;
   address public coreToken;
+  /// @custom:oz-renamed-from priorInstance
   address internal _unused2_; // Storage slot no longer used but must not be removed
+  /// @custom:oz-renamed-from validatorFunctionsAreEnabled
   bool public authorsEnabled;
+  /// @custom:oz-renamed-from liftingIsEnabled
   bool public liftingEnabled;
+    /// @custom:oz-renamed-from loweringIsEnabled
   bool public loweringEnabled;
 
   error LiftDisabled();
@@ -245,7 +257,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   {
     if (rewards == 0 || avgStaked == 0) revert AmountIsZero();
     if (growthAmount[period] != 0) revert PeriodIsUsed();
-    uint256 amount = rewards * IERC20(coreToken).totalSupply() / avgStaked;
+    uint128 amount = uint128(rewards * IERC20(coreToken).totalSupply() / avgStaked);
     growthAmount[period] = amount;
     _verifyConfirmations(keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
@@ -590,7 +602,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } while (i < numAuth);
   }
 
-  function _releaseGrowth(uint256 amount, uint32 period)
+  function _releaseGrowth(uint128 amount, uint32 period)
     private
   {
     if (IERC20(coreToken).balanceOf(address(this)) + amount > LIFT_LIMIT) revert LiftLimitHit();
