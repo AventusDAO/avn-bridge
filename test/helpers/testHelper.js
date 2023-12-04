@@ -12,6 +12,7 @@ const DIRECT_LOWER_NUM_BYTES = 2;
 const PROXY_LOWER_NUM_BYTES = 133;
 const GROWTH_DELAY = 100;
 const EXPIRY_WINDOW = 60;
+const MIN_AUTHORS = 4;
 
 let additionalTx = [];
 let accounts = [];
@@ -54,9 +55,23 @@ async function init(largeTree) {
   }
 }
 
-async function deployAVNBridge(coreToken) {
+function generateInitArgs(coreToken, numAuthors) {
+  const initArgs = [coreToken, [], [], [], []];
+  for (i = 0; i < numAuthors; i++) {
+    initArgs[1].push(authors[i].t1Address);
+    initArgs[2].push(authors[i].t1PubKeyLHS);
+    initArgs[3].push(authors[i].t1PubKeyRHS);
+    initArgs[4].push(authors[i].t2PubKey);
+    authors[i].registered = true;
+    authors[i].active = true;
+  }
+  return initArgs;
+}
+
+async function deployAVNBridge(coreToken, numAuthors) {
+  const initArgs = generateInitArgs(coreToken, numAuthors);
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
-  return await upgrades.deployProxy(AVNBridge, [coreToken], { kind: 'uups' });
+  return await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 }
 
 function getTxLeafMetadata() {
@@ -99,24 +114,6 @@ async function getConfirmations(contract, method, data, expiry, t2TxId, adjustme
 async function getSingleConfirmation(contract, method, data, expiry, t2TxId, author) {
   const confirmationHash = toConfirmationHash[method](data, expiry, t2TxId);
   return await author.account.signMessage(ethers.utils.arrayify(confirmationHash));
-}
-
-async function loadAuthors(avnBridge, authors, numAuthors) {
-  let t1AddressArray = [];
-  let t1PubKeyLHSArray = [];
-  let t1PubKeyRHSArray = [];
-  let t2PubKeyArray = [];
-
-  for (i = 0; i < numAuthors; i++) {
-    t1AddressArray.push(authors[i].t1Address);
-    t1PubKeyLHSArray.push(authors[i].t1PubKeyLHS);
-    t1PubKeyRHSArray.push(authors[i].t1PubKeyRHS);
-    t2PubKeyArray.push(authors[i].t2PubKey);
-    authors[i].registered = true;
-    authors[i].active = true;
-  }
-
-  await avnBridge.loadAuthors(t1AddressArray, t1PubKeyLHSArray, t1PubKeyRHSArray, t2PubKeyArray);
 }
 
 async function createTreeAndPublishRoot(contract, tokenAddress, amount, isProxyLower, id) {
@@ -249,7 +246,7 @@ async function createLowerProof(contract, token, amount, recipient) {
   const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerData]);
   let confirmations = '0x';
   // Twice the required amount allows for reasonable changes to validator set to occur between proof being generated and used:
-  const doubleRequiredConfirmations = await getNumRequiredConfirmations(contract) * 2;
+  const doubleRequiredConfirmations = (await getNumRequiredConfirmations(contract)) * 2;
   for (i = 1; i <= doubleRequiredConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(lowerHash));
     confirmations += strip_0x(confirmation);
@@ -272,6 +269,7 @@ module.exports = {
   deployAVNBridge,
   DIRECT_LOWER_NUM_BYTES,
   EXPIRY_WINDOW,
+  generateInitArgs,
   getConfirmations,
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
@@ -281,8 +279,8 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
-  loadAuthors,
   LOWER_ID,
+  MIN_AUTHORS,
   PROXY_LOWER_ID,
   PROXY_LOWER_NUM_BYTES,
   PSEUDO_ETH_ADDRESS,

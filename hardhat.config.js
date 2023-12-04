@@ -10,69 +10,46 @@ require('hardhat-erc1820');
 const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
 const fs = require('fs');
 
-task('loadAuthors', 'initialise a new avn-bridge contract with a set of authors')
-  .addParam('contract', 'avn-bridge contract address')
-  .addParam('authors', 'path to authors file')
-  .setAction(async args => {
-    console.log(`\nLoading authors from ${args.authors} into avn-bridge @ ${args.contract}`);
-    const authors = require(args.authors);
-    const t1Address = [],
-      t1PublicKeyLHS = [],
-      t1PublicKeyRHS = [],
-      t2PublicKey = [];
-
-    authors.forEach(author => {
-      t1Address.push(author.ethAddress);
-      t1PublicKeyLHS.push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
-      t1PublicKeyRHS.push('0x' + author.ethUncompressedPublicKey.slice(68, 132));
-      t2PublicKey.push(author.validator.tier2PublicKeyHex);
-    });
-
-    const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', args.contract);
-    await avnBridge.loadAuthors(t1Address, t1PublicKeyLHS, t1PublicKeyRHS, t2PublicKey);
-  });
-
-task('deploy', 'deploy a new avn-bridge contract and (optionally) initialise with authors')
-  .addOptionalParam('token', 'optional core token address (eg: AVT contract)', '0xe0A9E4f2591be648f18001e21dB16dDAB114fEF9')
-  .addOptionalParam('authors', 'optional path to file containing any authors to be loaded')
+task('deploy', 'deploy a new avn-bridge contract')
+  .addOptionalParam('token', 'optional core token address', '0x97d9b397189e8b771FfAc3Cb04cf26C780a93431')
+  .addOptionalParam('authors', 'optional filepath to initial author set', './authors.json')
   .setAction(async (args, hre) => {
+    mainnetCheck(hre);
     await hre.run('compile');
 
-    if (hre.network.name === 'mainnet') {
-      console.log('Requires manual setup for mainnet deployment');
-      process.exit(1);
-    } else {
-      const [deployer] = await hre.ethers.getSigners();
-      console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
+    const authors = require(args.authors);
+    const initArgs = [args.token, [], [], [], []];
+    authors.forEach(author => {
+      initArgs[1].push(author.ethAddress);
+      initArgs[2].push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
+      initArgs[3].push('0x' + author.ethUncompressedPublicKey.slice(68, 132));
+      initArgs[4].push(author.t2PublicKey);
+    });
 
-      // delete any existing OZ manifests as we want to deploy anew, not upgrade
-      if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
+    const [deployer] = await hre.ethers.getSigners();
+    console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
+    // delete any existing OZ manifests as we want to deploy anew, not upgrade
+    if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
 
-      const balanceBefore = await deployer.getBalance();
-      const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-      const avnBridge = await hre.upgrades.deployProxy(AVNBridge, [args.token], { kind: 'uups' });
-      await avnBridge.deployed();
-      const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
+    const balanceBefore = await deployer.getBalance();
+    const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
+    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+    await avnBridge.deployed();
+    const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
-      if (args.authors) {
-        // run optional loadAuthors task
-        await hre.run('loadAuthors', { contract: avnBridge.address, authors: args.authors });
-      }
+    // output new contract address to file
+    const outFile = './addresses.json';
+    const addresses = fs.existsSync(outFile) ? require(outFile) : {};
+    addresses[hre.network.name]['avn'] = avnBridge.address;
+    fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
-      // output new contract address to file
-      const outFile = './addresses.json';
-      const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-      addresses[hre.network.name]['avn'] = avnBridge.address;
-      fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
-
-      await new Promise(r => setTimeout(r, 20000));
-      try {
-        await hre.run('verify', { address: implementationAddress });
-        await hre.run('verify', { address: avnBridge.address });
-      } catch (e) {}
-      console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
-      console.log(`\nContract: ${avnBridge.address}`);
-    }
+    await new Promise(r => setTimeout(r, 20000));
+    try {
+      await hre.run('verify', { address: implementationAddress });
+      await hre.run('verify', { address: avnBridge.address });
+    } catch (e) {}
+    console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
+    console.log(`\nContract: ${avnBridge.address}`);
   });
 
 task('lift', 'lift a token to the chain')
@@ -116,32 +93,30 @@ task('lift', 'lift a token to the chain')
   });
 
 task('publishToken', 'deploy a new erc20 test token and publish it').setAction(async (args, hre) => {
+  mainnetCheck(hre);
   await hre.run('compile');
 
-  if (hre.network.name === 'mainnet') {
-    console.log('Requires manual setup for mainnet deployment');
-    process.exit(1);
-  } else {
-    const [deployer] = await hre.ethers.getSigners();
-    console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
-    const supply = 100000;
-    const Token20 = await hre.ethers.getContractFactory('Token20');
-    const token20 = await Token20.deploy(supply);
-    await token20.deployed();
-    await new Promise(r => setTimeout(r, 10000));
-    await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
+  const [deployer] = await hre.ethers.getSigners();
+  console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
+  const supply = 100000;
+  const Token20 = await hre.ethers.getContractFactory('Token20');
+  const token20 = await Token20.deploy(supply);
+  await token20.deployed();
+  await new Promise(r => setTimeout(r, 10000));
+  await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
 
-    const outFile = './addresses.json';
-    const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-    addresses[hre.network.name]['erc20token'] = token20.address;
-    fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
-  }
+  const outFile = './addresses.json';
+  const addresses = fs.existsSync(outFile) ? require(outFile) : {};
+  addresses[hre.network.name]['erc20token'] = token20.address;
+  fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 });
 
 task('upgrade', 'upgrade existing avn-bridge contract')
   .addParam('proxy', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
+    mainnetCheck(hre);
     await hre.run('compile');
+
     const [upgrader] = await hre.ethers.getSigners();
     const balanceBefore = await upgrader.getBalance();
     console.log(`\nUpgrading ${args.proxy} on ${hre.network.name} network using account ${upgrader.address}...`);
@@ -158,7 +133,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
 task('prepare-upgrade', 'prepare the openzeppelin mainfest (if required)')
   .addParam('proxy', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
-    if (hre.network.name !== 'goerli') return;
+    mainnetCheck(hre);
     await hre.run('compile');
     const AVNBridge = await ethers.getContractFactory('AVNBridge');
     await upgrades.forceImport(args.proxy, AVNBridge);
@@ -172,6 +147,14 @@ function getWeb3Url(networkName) {
     return process.env.WEB3_URL_OVERRIDE;
   }
 }
+
+function mainnetCheck() {
+  if (hre.network.name === 'mainnet') {
+    console.log('MAINNET REQUIRES MANUAL OVERRIDE');
+    process.exit(0);
+  }
+}
+
 module.exports = {
   mocha: {
     timeout: 100000000000

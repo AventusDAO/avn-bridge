@@ -1,7 +1,7 @@
 {
   "goerli": {
-    "avn": "0x29F08400e8F236f808D22347370Be887E4ab00a3",
-    "erc20token": ""
+    "avn": "0x8Fa6cD9A275506D719C434335c0C9FfD15e05A87",
+    "erc20token": "0x97d9b397189e8b771FfAc3Cb04cf26C780a93431"
   },
   "mainnet": {
     "avn": "0xF05Df39f745A240fb133cC4a11E42467FAB10f1F"
