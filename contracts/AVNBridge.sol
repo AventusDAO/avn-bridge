@@ -419,7 +419,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  /// @dev Legacy method - to lower funds please use claimLower() instead
+  /// @dev deprecated - to lower funds please use claimLower() instead
   function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath)
     onlyWhenLoweringEnabled
     external
