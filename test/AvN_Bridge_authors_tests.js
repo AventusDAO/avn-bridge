@@ -46,7 +46,7 @@ describe('Author Functions', async () => {
       return await helper.getConfirmations(avnBridge, 'triggerGrowth', [rewards, avgStaked, period], expiry, t2TxId);
     }
 
-    context('(via authors)', async () => {
+    context('trigger growth', async () => {
       context('succeeds', async () => {
         it('in triggering growth', async () => {
           const avtSupplyBefore = await token20.totalSupply();
@@ -92,6 +92,14 @@ describe('Author Functions', async () => {
           ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
         });
 
+        it('if the period is already used', async () => {
+          const usedPeriod = 1;
+          const confirmations = await getGrowthConfirmations(rewards, avgStaked, usedPeriod, expiry, t2TxId);
+          await expect(
+            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, usedPeriod, expiry, t2TxId, confirmations)
+          ).to.be.revertedWithCustomError(avnBridge, 'PeriodIsUsed');
+        });
+
         it('to trigger growth when the expiry has has passed', async () => {
           expiry = (await helper.getCurrentBlockTimestamp()) - 1;
           const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
@@ -108,6 +116,7 @@ describe('Author Functions', async () => {
         });
       });
 
+    context('releasing growth', async () => {
       context('succeeds', async () => {
         it('in releasing growth for an existing period', async () => {
           const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
@@ -185,6 +194,7 @@ describe('Author Functions', async () => {
           expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
           expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
         });
+      });
       });
     });
   });
@@ -659,6 +669,22 @@ describe('Author Functions', async () => {
           avnBridge.connect(activeAuthor).removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
         await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
+      });
+
+      it('an invalid t1PublicKey is passed', async () => {
+        const expiry = await helper.getValidExpiry();
+        const t2TxId = helper.randomT2TxId();
+        const badT1PublicKey = helper.randomHex(17);
+        const confirmations = await helper.getConfirmations(
+          avnBridge,
+          'removeAuthor',
+          [authors[0].t2PubKey, badT1PublicKey],
+          expiry,
+          t2TxId
+        );
+        await expect(
+          avnBridge.removeAuthor(authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId, confirmations)
+        ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1Key');
       });
 
       it('the expiry time for the call has passed', async () => {
