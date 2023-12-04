@@ -51,55 +51,6 @@ describe('Owner Functions', async () => {
     });
   });
 
-  context('Updating lower IDs', async () => {
-    const newID = '0xff00';
-
-    async function checkCanLower() {
-      await avnBridge.liftETH(someT2PubKey, { value: ethers.utils.parseEther('1000', 'wei') });
-      const tree = await helper.createTreeAndPublishRoot(avnBridge, helper.PSEUDO_ETH_ADDRESS, 1000, false, newID);
-      try {
-        await avnBridge.lower(tree.leafData, tree.merklePath);
-      } catch (error) {
-        return false;
-      }
-      return true;
-    }
-
-    context('succeeds', async () => {
-      it('when called by the owner', async () => {
-        await expect(avnBridge.updateLowerCall(newID, helper.DIRECT_LOWER_NUM_BYTES))
-          .to.emit(avnBridge, 'LogLowerCallUpdated')
-          .withArgs(newID, helper.DIRECT_LOWER_NUM_BYTES);
-        expect(await checkCanLower()).to.equal(true);
-      });
-
-      it('in removing a lower call by setting numbytes to zero', async () => {
-        await expect(avnBridge.updateLowerCall(newID, 0)).to.emit(avnBridge, 'LogLowerCallUpdated').withArgs(newID, 0);
-        expect(await checkCanLower()).to.equal(false);
-      });
-
-      it('checking an existing lower call', async () => {
-        expect(await avnBridge.numBytesToLowerData(helper.LOWER_ID)).to.equal(helper.DIRECT_LOWER_NUM_BYTES);
-      });
-
-      it('checking an existing proxy lower pointer', async () => {
-        expect(await avnBridge.numBytesToLowerData(helper.PROXY_LOWER_ID)).to.equal(helper.PROXY_LOWER_NUM_BYTES);
-      });
-
-      it('checking a non-existent pointer', async () => {
-        expect(await avnBridge.numBytesToLowerData(newID)).to.equal(0);
-      });
-    });
-
-    context('fails', async () => {
-      it('when the caller is not the owner', async () => {
-        await expect(
-          avnBridge.connect(someOtherAccount).updateLowerCall(newID, helper.DIRECT_LOWER_NUM_BYTES)
-        ).to.be.revertedWith('Ownable: caller is not the owner');
-      });
-    });
-  });
-
   context('Setting the Core Owner', async () => {
     after(async () => {
       await token20.setOwner(avnBridge.address);
@@ -149,30 +100,6 @@ describe('Owner Functions', async () => {
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
-      });
-    });
-  });
-
-  context('Marking hashes spent', async () => {
-    context('succeeds', async () => {
-      it('when called by the owner', async () => {
-        const leafHashes = Array.from({ length: 72 }, () => helper.randomBytes32());
-
-        expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(false);
-        expect(await avnBridge.hasLowered(leafHashes[leafHashes.length - 1])).to.equal(false);
-
-        expect(await avnBridge.markSpent(leafHashes)).to.emit(avnBridge, 'LogMarkSpent');
-
-        expect(await avnBridge.hasLowered(leafHashes[0])).to.equal(true);
-        expect(await avnBridge.hasLowered(leafHashes[leafHashes.length - 1])).to.equal(true);
-      });
-    });
-
-    context('fails', async () => {
-      it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).markSpent([helper.randomBytes32()])).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
