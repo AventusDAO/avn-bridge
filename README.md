@@ -31,6 +31,9 @@ The values in config.json can also be set as environment variables.
 #### Run coverage report
 `npx hardhat coverage`
 
+#### Check bytecode size
+`npx hardhat size-contracts`
+
 #### Deploy
 `npx hardhat --network <network> deploy --token [optional core token address] --authors <path to authors json file>`
 
