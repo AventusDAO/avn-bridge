@@ -7,8 +7,6 @@ interface IAVNBridge {
   event LogAuthorsEnabled(bool state);
   event LogLiftingEnabled(bool state);
   event LogLoweringEnabled(bool state);
-  event LogLowerCallUpdated(bytes2 callId, uint256 numBytes);
-  event LogMarkSpent();
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
@@ -16,7 +14,7 @@ interface IAVNBridge {
   event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
-  event LogLoweredFrom(bytes32 indexed t2PubKey);
+  event LogLegacyLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
   event LogLowerClaimed(bytes32 indexed lowerHash);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
@@ -27,8 +25,6 @@ interface IAVNBridge {
   function toggleAuthors(bool state) external;
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
-  function updateLowerCall(bytes2 callId, uint256 numBytes) external;
-  function markSpent(bytes32[] calldata hashes) external;
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
@@ -40,7 +36,7 @@ interface IAVNBridge {
   function releaseGrowth(uint32 period) external;
   function lift(address erc20Address, bytes calldata t2PubKey, uint256 amount) external;
   function liftETH(bytes calldata t2PubKey) external payable;
-  function lower(bytes calldata leaf, bytes32[] calldata merklePath) external;
+  function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath) external;
   function claimLower(bytes calldata lowerData) external;
   function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath) external view returns (bool);
   function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8);

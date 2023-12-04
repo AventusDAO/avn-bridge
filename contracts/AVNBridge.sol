@@ -220,26 +220,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLoweringEnabled(state);
   }
 
-  /// @notice Add or update T2 lower methods
-  /// @param callId the call index of the extrinsic in T2
-  /// @param numBytes the distance (in bytes) required to reach relevant lower data arguments encoded within a transaction leaf
-  function updateLowerCall(bytes2 callId, uint256 numBytes)
-    onlyOwner
-    external
-  {
-    numBytesToLowerData[callId] = numBytes;
-    emit LogLowerCallUpdated(callId, numBytes);
-  }
-
-  function markSpent(bytes32[] calldata hashes)
-    onlyOwner
-    external
-  {
-    uint256 numHashes = hashes.length;
-    for (uint256 i; i < numHashes; ++i) hasLowered[hashes[i]] = true;
-    emit LogMarkSpent();
-  }
-
   /// @notice Initialise inflating the core token supply by the specified amount
   /// @param rewards Total amount of rewards generated in the period
   /// @param avgStaked Average amount staked in the period
@@ -439,8 +419,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the transaction leaf, providing the T2 state is published
   /// @param leaf Raw encoded T2 transaction data
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
-  /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the leaf
-  function lower(bytes calldata leaf, bytes32[] calldata merklePath)
+  /// @dev deprecated - to lower funds please use claimLower() instead
+  function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath)
     onlyWhenLoweringEnabled
     external
   {
@@ -503,7 +483,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       if (t1Address != address(this)) assert(IERC20(token).balanceOf(address(this)) == expectedNewBalance);
     }
 
-    emit LogLoweredFrom(t2PubKey);
+    emit LogLegacyLowered(token, t1Address, t2PubKey, amount);
   }
 
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the proof

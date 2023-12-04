@@ -261,7 +261,7 @@ describe('Lifting and lowering', async () => {
     });
   });
 
-  context('Lowering', async () => {
+  context('Legacy lowering', async () => {
     const liftAmount = ethers.BigNumber.from(100);
     const lowerAmount = ethers.BigNumber.from(50);
 
@@ -273,7 +273,7 @@ describe('Lifting and lowering', async () => {
         const avnEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(avnBridge.address));
         const lowererEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(owner));
 
-        const txResponse = await avnBridge.lower(tree.leafData, tree.merklePath);
+        const txResponse = await avnBridge.legacyLower(tree.leafData, tree.merklePath);
         const txReceipt = await txResponse.wait(1);
         const gasPrice = ethers.BigNumber.from(await ethers.provider.getGasPrice());
         const txCost = ethers.BigNumber.from(txReceipt.gasUsed).mul(txResponse.gasPrice);
@@ -284,7 +284,7 @@ describe('Lifting and lowering', async () => {
         expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
         expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-        await avnBridge.filters.LogLoweredFrom(someT2PubKey);
+        await avnBridge.filters.LogLegacyLowered(helper.PSEUDO_ETH_ADDRESS, owner, someT2PubKey);
       });
 
       it('in proxy lowering ETH', async () => {
@@ -294,7 +294,7 @@ describe('Lifting and lowering', async () => {
         const avnEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(avnBridge.address));
         const lowererEthBalanceBefore = ethers.BigNumber.from(await ethers.provider.getBalance(owner));
 
-        const txResponse = await avnBridge.lower(tree.leafData, tree.merklePath);
+        const txResponse = await avnBridge.legacyLower(tree.leafData, tree.merklePath);
         const txReceipt = await txResponse.wait(1);
         const gasPrice = ethers.BigNumber.from(await ethers.provider.getGasPrice());
         const txCost = ethers.BigNumber.from(txReceipt.gasUsed).mul(txResponse.gasPrice);
@@ -305,19 +305,19 @@ describe('Lifting and lowering', async () => {
         expect(avnEthBalanceBefore.sub(lowerAmount)).to.equal(avnEthBalanceAfter);
         expect(lowererEthBalanceBefore.add(lowerAmount).sub(txCost)).to.equal(lowererEthBalanceAfter);
 
-        await avnBridge.filters.LogLoweredFrom(someT2PubKey);
+        await avnBridge.filters.LogLegacyLowered(helper.PSEUDO_ETH_ADDRESS, owner, someT2PubKey);
       });
 
       it('in lifting and lowering ETH for coverage', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: 100 });
         const tree = await helper.createTreeAndPublishRoot(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount);
-        await avnBridge.lower(tree.leafData, tree.merklePath);
+        await avnBridge.legacyLower(tree.leafData, tree.merklePath);
       });
 
       it('in proxy lifting and lowering ETH for coverage', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: 100 });
         const tree = await helper.createTreeAndPublishRoot(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, true);
-        await avnBridge.lower(tree.leafData, tree.merklePath);
+        await avnBridge.legacyLower(tree.leafData, tree.merklePath);
       });
 
       it('in lowering ERC20 tokens', async () => {
@@ -331,9 +331,9 @@ describe('Lifting and lowering', async () => {
         let tree = await helper.createTreeAndPublishRoot(avnBridge, token20.address, lowerAmount);
 
         // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(someT2PubKey);
+        await expect(avnBridge.connect(someOtherAccount).legacyLower(tree.leafData, tree.merklePath))
+          .to.emit(avnBridge, 'LogLegacyLowered')
+          .withArgs(token20.address, owner, someT2PubKey, lowerAmount);
         expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
         expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
       });
@@ -349,9 +349,9 @@ describe('Lifting and lowering', async () => {
         let tree = await helper.createTreeAndPublishRoot(avnBridge, token20.address, lowerAmount, true);
 
         // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(someT2PubKey);
+        await expect(avnBridge.connect(someOtherAccount).legacyLower(tree.leafData, tree.merklePath))
+          .to.emit(avnBridge, 'LogLegacyLowered')
+          .withArgs(token20.address, owner, someT2PubKey, lowerAmount);
         expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token20.balanceOf(avnBridge.address));
         expect(senderBalBefore.add(lowerAmount)).to.equal(await token20.balanceOf(owner));
       });
@@ -366,9 +366,9 @@ describe('Lifting and lowering', async () => {
         let tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount);
 
         // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(someT2PubKey);
+        await expect(avnBridge.connect(someOtherAccount).legacyLower(tree.leafData, tree.merklePath))
+          .to.emit(avnBridge, 'LogLegacyLowered')
+          .withArgs(token777.address, owner, someT2PubKey, lowerAmount);
         expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
         expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
       });
@@ -383,9 +383,9 @@ describe('Lifting and lowering', async () => {
         let tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true);
 
         // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(someT2PubKey);
+        await expect(avnBridge.connect(someOtherAccount).legacyLower(tree.leafData, tree.merklePath))
+          .to.emit(avnBridge, 'LogLegacyLowered')
+          .withArgs(token777.address, owner, someT2PubKey, lowerAmount);
         expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
         expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
       });
@@ -405,9 +405,9 @@ describe('Lifting and lowering', async () => {
         );
 
         // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).lower(tree.leafData, tree.merklePath))
-          .to.emit(avnBridge, 'LogLoweredFrom')
-          .withArgs(someT2PubKey)
+        await expect(avnBridge.connect(someOtherAccount).legacyLower(tree.leafData, tree.merklePath))
+          .to.emit(avnBridge, 'LogLegacyLowered')
+          .withArgs(token777.address, avnBridge.address, someT2PubKey, lowerAmount)
           .to.not.emit(avnBridge, 'LogLifted');
         expect(avnBalanceBefore).to.equal(await token777.balanceOf(avnBridge.address));
         expect(senderBalBefore).to.equal(await token777.balanceOf(owner));
@@ -424,30 +424,25 @@ describe('Lifting and lowering', async () => {
 
       it('lowering is disabled', async () => {
         await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
         await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
-        await avnBridge.lower(tree.leafData, tree.merklePath);
+        await avnBridge.legacyLower(tree.leafData, tree.merklePath);
       });
 
       it('the leaf has already been used for a lower', async () => {
-        await avnBridge.lower(tree.leafData, tree.merklePath);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
-      });
-
-      it('the leaf has been marked as spent by the owner', async () => {
-        await avnBridge.markSpent([helper.keccak256(tree.leafData)]);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+        await avnBridge.legacyLower(tree.leafData, tree.merklePath);
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
       });
 
       it('the leaf is invalid', async () => {
-        await expect(avnBridge.lower(helper.randomBytes32(), tree.merklePath)).to.be.revertedWithCustomError(
+        await expect(avnBridge.legacyLower(helper.randomBytes32(), tree.merklePath)).to.be.revertedWithCustomError(
           avnBridge,
           'InvalidTxData'
         );
       });
 
       it('the path is invalid', async () => {
-        await expect(avnBridge.lower(tree.leafData, [helper.randomBytes32()])).to.be.revertedWithCustomError(
+        await expect(avnBridge.legacyLower(tree.leafData, [helper.randomBytes32()])).to.be.revertedWithCustomError(
           avnBridge,
           'InvalidTxData'
         );
@@ -456,7 +451,7 @@ describe('Lifting and lowering', async () => {
       it('the leaf is not recognised as a lower leaf', async () => {
         const badId = '0xaaaa';
         tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true, badId);
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'NotALowerTx');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'NotALowerTx');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
@@ -468,12 +463,12 @@ describe('Lifting and lowering', async () => {
           helper.PSEUDO_ETH_ADDRESS,
           lowerAmount
         );
-        await expect(avnBridge.lower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
       });
     });
   });
 
-  context('Lowering (claim)', async () => {
+  context('Claiming lowers', async () => {
     const liftAmount = ethers.BigNumber.from(100);
     const lowerAmount = ethers.BigNumber.from(50);
 
@@ -575,11 +570,6 @@ describe('Lifting and lowering', async () => {
 
       it('the proof has already been used', async () => {
         await avnBridge.claimLower(lowerProof);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
-      });
-
-      it('the lower has been marked as spent by the owner', async () => {
-        await avnBridge.markSpent([lowerHash]);
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
       });
 
