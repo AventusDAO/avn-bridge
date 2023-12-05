@@ -80,6 +80,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public liftingEnabled;
     /// @custom:oz-renamed-from loweringIsEnabled
   bool public loweringEnabled;
+  address public pendingOwner;
 
   error LiftDisabled();
   error AuthorsDisabled();
@@ -113,6 +114,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error LiftFailed();
   error TooFewAuthors();
   error MissingCore();
+  error PendingOwnerOnly();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() { _disableInitializers(); }
@@ -547,6 +549,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
     else if (block.timestamp > expiry) return -1; // Failed
     else return 0; // Currently undetermined
+  }
+
+  /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
+   *  Can only be called by the current owner.
+   */
+  function transferOwnership(address newOwner) public override onlyOwner {
+    pendingOwner = newOwner;
+    emit OwnershipTransferStarted(owner(), newOwner);
+  }
+
+  /**
+   * @dev The new owner accepts the ownership transfer.
+   */
+  function acceptOwnership() external {
+    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
+    delete pendingOwner;
+    _transferOwnership(msg.sender);
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}

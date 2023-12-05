@@ -7,6 +7,7 @@ interface IAVNBridge {
   event LogAuthorsEnabled(bool state);
   event LogLiftingEnabled(bool state);
   event LogLoweringEnabled(bool state);
+  event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
