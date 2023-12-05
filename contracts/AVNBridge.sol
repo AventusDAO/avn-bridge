@@ -329,12 +329,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     isAuthor[id] = false;
 
+    if (numActiveAuthors <= MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
+
     if (authorIsActive[id]) {
       authorIsActive[id] = false;
       unchecked { --numActiveAuthors; }
     }
-
-    if (numActiveAuthors < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
 
     _verifyConfirmations(keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
