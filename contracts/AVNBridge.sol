@@ -693,5 +693,4 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (t2PubKey.length != 32) revert InvalidT2Key();
     checkedT2PubKey = bytes32(t2PubKey);
   }
-
 }
