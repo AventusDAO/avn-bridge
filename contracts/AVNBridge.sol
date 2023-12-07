@@ -137,7 +137,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     loweringEnabled = true;
     nextAuthorId = 1;
     growthDelay = 2 days;
-    initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
+    _initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
   }
 
   modifier onlyWhenLiftingEnabled() {
@@ -457,14 +457,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 t2PubKey;
     address token;
     uint128 amount;
-    address t1Address;
+    address recipient;
 
     assembly {
       ptr := add(ptr, numBytesToSkip) // skip the required number of bytes to point to the start of lower transaction arguments
       t2PubKey := calldataload(ptr) // load next 32 bytes into 32 byte type starting at ptr
       token := calldataload(add(ptr, 20)) // load leftmost 20 of next 32 bytes into 20 byte type starting at ptr + 20
       amount := calldataload(add(ptr, 36)) // load leftmost 16 of next 32 bytes into 16 byte type starting at ptr + 20 + 16
-      t1Address := calldataload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
+      recipient := calldataload(add(ptr, 56)) // load leftmost 20 of next 32 bytes type starting at ptr + 20 + 16 + 20
 
       // the amount was encoded in little endian so reverse it to big endian:
       amount := or(shr(8, and(amount, 0xFF00FF00FF00FF00FF00FF00FF00FF00)), shl(8, and(amount, 0x00FF00FF00FF00FF00FF00FF00FF00FF)))
@@ -473,49 +473,46 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       amount := or(shr(64, amount), shl(64, amount))
     }
 
-    if (token == PSEUDO_ETH_ADDRESS) {
-      (bool success, ) = payable(t1Address).call{value: amount}("");
-      if (!success) revert PaymentFailed();
-    } else {
-      uint256 expectedNewBalance = IERC20(token).balanceOf(address(this)) - amount;
-      try IERC777(token).send(t1Address, amount, "") {
-      } catch {
-        IERC20(token).transfer(t1Address, amount);
-      }
-      if (t1Address != address(this)) assert(IERC20(token).balanceOf(address(this)) == expectedNewBalance);
-    }
-
-    emit LogLegacyLowered(token, t1Address, t2PubKey, amount);
+    _releaseFunds(token, recipient, amount);
+    emit LogLegacyLowered(token, recipient, t2PubKey, amount);
   }
 
   /// @notice Unlock ERC20/ERC777/ETH to the recipient specified in the proof
-  /// @param lowerProof Encoded proof supplied by T2
+  /// @param proof Encoded proof supplied by T2
   /// @dev Anyone may call this method since the recipient of the tokens is governed by the content of the proof
-  function claimLower(bytes calldata lowerProof)
+  function claimLower(bytes calldata proof)
     onlyWhenLoweringEnabled
     external
   {
-    (address token, uint256 amount, address recipient, uint256 lowerId, bytes memory confirmations)
-        = abi.decode(lowerProof, (address, uint256, address, uint256, bytes));
+    (address token, uint256 amount, address recipient, uint256 lowerId) = abi.decode(proof, (address, uint256, address, uint256));
     bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
-
     if (hasLowered[lowerHash]) revert LowerIsUsed();
     hasLowered[lowerHash] = true;
-    _verifyConfirmations(lowerHash, confirmations);
-
-    if (token == PSEUDO_ETH_ADDRESS) {
-      (bool success, ) = payable(recipient).call{value: amount}("");
-      if (!success) revert PaymentFailed();
-    } else {
-      uint256 expectedNewBalance = IERC20(token).balanceOf(address(this)) - amount;
-      try IERC777(token).send(recipient, amount, "") {
-      } catch {
-        IERC20(token).transfer(recipient, amount);
-      }
-      if (recipient != address(this)) assert(IERC20(token).balanceOf(address(this)) == expectedNewBalance);
-    }
-
+    _verifyConfirmations(lowerHash, proof[192:]);
+    _releaseFunds(token, recipient, amount);
     emit LogLowerClaimed(lowerHash);
+  }
+
+  /// @notice Enables authors to check the current status of a T2 TX
+  /// @param t2TxId Unique transaction ID
+  /// @param expiry Timestamp by which the t2TxId must have been used
+  function corroborate(uint32 t2TxId, uint256 expiry)
+    external
+    view
+    returns (int8)
+  {
+    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
+    else if (block.timestamp > expiry) return -1; // Failed
+    else return 0; // Currently undetermined
+  }
+
+  /**
+   * @dev The new owner accepts the ownership transfer.
+   */
+  function acceptOwnership() external {
+    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
+    delete pendingOwner;
+    _transferOwnership(msg.sender);
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root
@@ -538,19 +535,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return isPublishedRootHash[leafHash];
   }
 
-  /// @notice Enables authors to check the current status of a T2 TX
-  /// @param t2TxId Unique transaction ID
-  /// @param expiry Timestamp by which the t2TxId must have been used
-  function corroborate(uint32 t2TxId, uint256 expiry)
-    external
-    view
-    returns (int8)
-  {
-    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
-    else if (block.timestamp > expiry) return -1; // Failed
-    else return 0; // Currently undetermined
-  }
-
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
    *  Can only be called by the current owner.
    */
@@ -559,18 +543,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit OwnershipTransferStarted(owner(), newOwner);
   }
 
-  /**
-   * @dev The new owner accepts the ownership transfer.
-   */
-  function acceptOwnership() external {
-    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
-    delete pendingOwner;
-    _transferOwnership(msg.sender);
-  }
-
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
-  function initialiseAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
+  function _initialiseAuthors(address[] calldata t1Address, bytes32[] calldata t1PubKeyLHS, bytes32[] calldata t1PubKeyRHS,
       bytes32[] calldata t2PubKey)
     private
   {
@@ -599,6 +574,22 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         ++i;
       }
     } while (i < numAuth);
+  }
+
+  function _releaseFunds(address token, address recipient, uint256 amount)
+    private
+  {
+    if (token == PSEUDO_ETH_ADDRESS) {
+      (bool success, ) = payable(recipient).call{value: amount}("");
+      if (!success) revert PaymentFailed();
+    } else if (IERC777(token).send.selector == bytes4(0)) {
+      IERC20(token).transfer(recipient, amount);
+    } else {
+      try IERC777(token).send(recipient, amount, "") {
+      } catch {
+        IERC20(token).transfer(recipient, amount);
+      }
+    }
   }
 
   function _releaseGrowth(uint128 amount, uint32 period)
@@ -635,7 +626,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     unchecked { required -= required * 2 / 3; }
   }
 
-  function _verifyConfirmations(bytes32 msgHash, bytes memory confirmations)
+  function _verifyConfirmations(bytes32 msgHash, bytes calldata confirmations)
     private
   {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
@@ -669,10 +660,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       assembly {
-        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
-        r := mload(add(offset, 0x20))
-        s := mload(add(offset, 0x40))
-        v := byte(0, mload(add(offset, 0x60)))
+        let sig := add(confirmations.offset, mul(i, SIGNATURE_LENGTH))
+        r := calldataload(sig)
+        s := calldataload(add(sig, 32))
+        v := byte(0, calldataload(add(sig, 64)))
         i := add(i, 1)
       }
 
@@ -702,4 +693,5 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (t2PubKey.length != 32) revert InvalidT2Key();
     checkedT2PubKey = bytes32(t2PubKey);
   }
+
 }
