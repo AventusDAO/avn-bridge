@@ -57,7 +57,8 @@ describe('Owner Functions', async () => {
 
       it('when an unauthorised account attempts to accept ownership', async () => {
         avnBridge.transferOwnership(someOtherAccount.address);
-        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(avnBridge,
+        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(
+          avnBridge,
           'PendingOwnerOnly'
         );
       });

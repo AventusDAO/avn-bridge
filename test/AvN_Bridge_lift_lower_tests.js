@@ -424,14 +424,20 @@ describe('Lifting and lowering', async () => {
 
       it('lowering is disabled', async () => {
         await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'LowerDisabled'
+        );
         await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
         await avnBridge.legacyLower(tree.leafData, tree.merklePath);
       });
 
       it('the leaf has already been used for a lower', async () => {
         await avnBridge.legacyLower(tree.leafData, tree.merklePath);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'LowerIsUsed'
+        );
       });
 
       it('the leaf is invalid', async () => {
@@ -451,7 +457,10 @@ describe('Lifting and lowering', async () => {
       it('the leaf is not recognised as a lower leaf', async () => {
         const badId = '0xaaaa';
         tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true, badId);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'NotALowerTx');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'NotALowerTx'
+        );
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
@@ -463,7 +472,10 @@ describe('Lifting and lowering', async () => {
           helper.PSEUDO_ETH_ADDRESS,
           lowerAmount
         );
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'PaymentFailed'
+        );
       });
     });
   });

@@ -493,28 +493,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLowerClaimed(lowerHash);
   }
 
-  /// @notice Enables authors to check the current status of a T2 TX
-  /// @param t2TxId Unique transaction ID
-  /// @param expiry Timestamp by which the t2TxId must have been used
-  function corroborate(uint32 t2TxId, uint256 expiry)
-    external
-    view
-    returns (int8)
-  {
-    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
-    else if (block.timestamp > expiry) return -1; // Failed
-    else return 0; // Currently undetermined
-  }
-
-  /**
-   * @dev The new owner accepts the ownership transfer.
-   */
-  function acceptOwnership() external {
-    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
-    delete pendingOwner;
-    _transferOwnership(msg.sender);
-  }
-
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
@@ -535,12 +513,34 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return isPublishedRootHash[leafHash];
   }
 
+  /// @notice Enables authors to check the current status of a T2 TX
+  /// @param t2TxId Unique transaction ID
+  /// @param expiry Timestamp by which the t2TxId must have been used
+  function corroborate(uint32 t2TxId, uint256 expiry)
+    external
+    view
+    returns (int8)
+  {
+    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
+    else if (block.timestamp > expiry) return -1; // Failed
+    else return 0; // Currently undetermined
+  }
+
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
    *  Can only be called by the current owner.
    */
   function transferOwnership(address newOwner) public override onlyOwner {
     pendingOwner = newOwner;
     emit OwnershipTransferStarted(owner(), newOwner);
+  }
+
+  /**
+   * @dev The new owner accepts the ownership transfer.
+   */
+  function acceptOwnership() external {
+    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
+    delete pendingOwner;
+    _transferOwnership(msg.sender);
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
