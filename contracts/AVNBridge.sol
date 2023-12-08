@@ -32,6 +32,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
   uint256 constant internal MINIMUM_NETWORK_SIZE = 4;
+  uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 6 * 32 (2 confirmations)
 
   /// @notice Query an author's current status by their internal ID
   /// @custom:oz-renamed-from isRegisteredValidator
@@ -115,6 +116,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error TooFewAuthors();
   error MissingCore();
   error PendingOwnerOnly();
+  error InvalidProof();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() { _disableInitializers(); }
@@ -484,6 +486,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     onlyWhenLoweringEnabled
     external
   {
+    if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
     (address token, uint256 amount, address recipient, uint256 lowerId) = abi.decode(proof, (address, uint256, address, uint256));
     bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
     if (hasLowered[lowerHash]) revert LowerIsUsed();
@@ -491,6 +494,57 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _verifyConfirmations(lowerHash, proof[192:]);
     _releaseFunds(token, recipient, amount);
     emit LogLowerClaimed(lowerHash);
+  }
+
+  /// @notice Helper to check the validity of a lower proof before calling claimLower
+  /// @param proof Encoded proof supplied by T2
+  /** @dev
+     Returns the details for a valid, unused lower, including the number of confirmations required and the number of
+     confirmations in the proof. If the former exceeds the latter a new proof is required and the validity is set to false.
+     When the proof has already been used or is invalid an empty result is returned.
+  */
+  function checkLower(bytes calldata proof)
+    external
+    view
+    returns (address token, address recipient, uint256 amount, uint256 reqConfirmations, uint256 numConfirmations, bool isValid)
+  {
+    if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), address(0), 0, 0, 0, false);
+
+    uint256 lowerId;
+    bytes memory confirmations;
+    (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
+
+    bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+    if (hasLowered[lowerHash]) return (address(0), address(0), 0, 0, 0, false);
+
+    numConfirmations = confirmations.length / SIGNATURE_LENGTH;
+    reqConfirmations = _requiredConfirmations();
+    bool[] memory confirmed = new bool[](nextAuthorId);
+    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
+    uint256 id;
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+
+    for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
+      assembly {
+        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+        r := mload(add(offset, 0x20))
+        s := mload(add(offset, 0x40))
+        v := byte(0, mload(add(offset, 0x60)))
+      }
+
+      if (v < 27) v += 27;
+      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+        ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+        : 0;
+
+      if (!authorIsActive[id] || confirmed[id]) numConfirmations--;
+      else confirmed[id] = true;
+    }
+
+    if (numConfirmations == 0)  return (address(0), address(0), 0, 0, 0, false);
+    isValid = numConfirmations >= reqConfirmations;
   }
 
   /// @notice Confirm the existence of any T2 transaction in a published root

@@ -39,6 +39,7 @@ interface IAVNBridge {
   function liftETH(bytes calldata t2PubKey) external payable;
   function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath) external;
   function claimLower(bytes calldata proof) external;
+  function checkLower(bytes calldata proof) external view returns (address token, address recipient, uint256 amount, uint256 reqConfirmations, uint256 numConfirmations, bool isValid);
   function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath) external view returns (bool);
   function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8);
 }
