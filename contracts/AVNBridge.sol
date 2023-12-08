@@ -31,7 +31,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal SIGNATURE_LENGTH = 65;
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  uint256 constant internal MINIMUM_NETWORK_SIZE = 4;
+  uint256 constant internal MINIMUM_NUMBER_OF_AUTHORS = 4;
   uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 7 * 32 (2 confirmations)
 
   /// @notice Query an author's current status by their internal ID
@@ -83,40 +83,40 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public loweringEnabled;
   address public pendingOwner;
 
-  error LiftDisabled();
-  error AuthorsDisabled();
-  error MissingKeys();
-  error T2KeyInUse(bytes32 t2PubKey);
   error AddressMismatch();
-  error SetCoreOwnerFailed();
-  error AmountIsZero();
-  error PeriodIsUsed();
-  error GrowthUnavailable();
-  error NotReady(uint256 releaseTime);
-  error InvalidT1Key();
   error AlreadyAdded();
-  error CannotChangeT2Key(bytes32 existingT2PubKey);
-  error NotAnAuthor();
-  error RootHashIsUsed();
-  error LiftLimitHit();
-  error InvalidRecipient();
-  error InvalidERC777();
-  error LowerDisabled();
-  error InvalidTxData();
-  error LowerIsUsed();
-  error UnsignedTx();
-  error NotALowerTx();
-  error PaymentFailed();
-  error CoreMintFailed();
+  error AmountIsZero();
+  error AuthorsDisabled();
   error BadConfirmations();
-  error TxIdIsUsed();
-  error InvalidT2Key();
-  error WindowExpired();
-  error LiftFailed();
-  error TooFewAuthors();
-  error MissingCore();
-  error PendingOwnerOnly();
+  error CannotChangeT2Key(bytes32 existingT2PubKey);
+  error CoreMintFailed();
+  error GrowthUnavailable();
+  error InvalidERC777();
   error InvalidProof();
+  error InvalidRecipient();
+  error InvalidT1Key();
+  error InvalidT2Key();
+  error InvalidTxData();
+  error LiftDisabled();
+  error LiftFailed();
+  error LiftLimitHit();
+  error LowerDisabled();
+  error LowerIsUsed();
+  error MissingCore();
+  error MissingKeys();
+  error NotALowerTx();
+  error NotAnAuthor();
+  error NotEnoughAuthors();
+  error NotReady(uint256 releaseTime);
+  error PaymentFailed();
+  error PendingOwnerOnly();
+  error PeriodIsUsed();
+  error RootHashIsUsed();
+  error SetCoreOwnerFailed();
+  error T2KeyInUse(bytes32 t2PubKey);
+  error TxIdIsUsed();
+  error UnsignedTx();
+  error WindowExpired();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() { _disableInitializers(); }
@@ -234,7 +234,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /** @dev
     If growthDelay is zero immediate growth release occurs, otherwise growth values are stored to be released at a later time.
   */
-  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
+  function triggerGrowth(uint128 rewards, uint128 avgStaked, uint32 period, uint256 expiry, uint32 t2TxId,
+      bytes calldata confirmations)
     onlyWhenAuthorsEnabled
     onlyWithinCallWindow(expiry)
     external
@@ -331,7 +332,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     isAuthor[id] = false;
 
-    if (numActiveAuthors <= MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
+    if (numActiveAuthors <= MINIMUM_NUMBER_OF_AUTHORS) revert NotEnoughAuthors();
 
     if (authorIsActive[id]) {
       authorIsActive[id] = false;
@@ -363,7 +364,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /// @notice Lift an amount of ERC20 tokens to the specified T2 recipient, providing the amount has first been approved
-  /// @param erc20Address address of the ERC20 token contract
+  /// @param token address of the ERC20 token contract
   /// @param t2PubKey 32 byte sr25519 public key value of the T2 recipient account
   /// @param amount of token to lift (in the token's full decimals)
   /** @dev
@@ -371,16 +372,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     Fails if no recipient is specified (though only the byte length of the recipient can be checked so care is required).
     Fails if it causes the total amount of the token held in this contract to exceed uint128 max (this is a T2 constraint).
   */
-  function lift(address erc20Address, bytes calldata t2PubKey, uint256 amount)
+  function lift(address token, bytes calldata t2PubKey, uint256 amount)
     onlyWhenLiftingEnabled
     external
   {
-    uint256 existingBalance = IERC20(erc20Address).balanceOf(address(this));
-    IERC20(erc20Address).transferFrom(msg.sender, address(this), amount);
-    uint256 newBalance = IERC20(erc20Address).balanceOf(address(this));
+    uint256 existingBalance = IERC20(token).balanceOf(address(this));
+    IERC20(token).transferFrom(msg.sender, address(this), amount);
+    uint256 newBalance = IERC20(token).balanceOf(address(this));
     if (newBalance <= existingBalance) revert LiftFailed();
     if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
-    emit LogLifted(erc20Address, _checkT2PubKey(t2PubKey), newBalance - existingBalance);
+    emit LogLifted(token, _checkT2PubKey(t2PubKey), newBalance - existingBalance);
   }
 
   /// @notice Lift all ETH sent to the specified T2 recipient
@@ -547,6 +548,30 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isValid = numConfirmations >= reqConfirmations;
   }
 
+  /// @notice Enables authors to check the current status of a T2 TX
+  /// @param t2TxId Unique transaction ID
+  /// @param expiry Timestamp by which the t2TxId must have been used
+  function corroborate(uint32 t2TxId, uint256 expiry)
+    external
+    view
+    returns (int8)
+  {
+    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
+    else if (block.timestamp > expiry) return -1; // Failed
+    else return 0; // Currently undetermined
+  }
+
+  /**
+   * @dev The new owner accepts the ownership transfer.
+   */
+  function acceptOwnership()
+    external
+  {
+    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
+    delete pendingOwner;
+    _transferOwnership(msg.sender);
+  }
+
   /// @notice Confirm the existence of any T2 transaction in a published root
   /// @param leafHash keccak256 hash of a raw encoded T2 transaction leaf
   /// @param merklePath Array of hashed leaves lying between the transaction leaf and the Merkle tree root hash
@@ -567,34 +592,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return isPublishedRootHash[leafHash];
   }
 
-  /// @notice Enables authors to check the current status of a T2 TX
-  /// @param t2TxId Unique transaction ID
-  /// @param expiry Timestamp by which the t2TxId must have been used
-  function corroborate(uint32 t2TxId, uint256 expiry)
-    external
-    view
-    returns (int8)
-  {
-    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
-    else if (block.timestamp > expiry) return -1; // Failed
-    else return 0; // Currently undetermined
-  }
-
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
    *  Can only be called by the current owner.
    */
-  function transferOwnership(address newOwner) public override onlyOwner {
+  function transferOwnership(address newOwner)
+    public
+    override
+    onlyOwner
+  {
     pendingOwner = newOwner;
     emit OwnershipTransferStarted(owner(), newOwner);
-  }
-
-  /**
-   * @dev The new owner accepts the ownership transfer.
-   */
-  function acceptOwnership() external {
-    if (msg.sender != pendingOwner) revert PendingOwnerOnly();
-    delete pendingOwner;
-    _transferOwnership(msg.sender);
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -604,7 +611,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     uint256 numAuth = t1Address.length;
-    if (numAuth < MINIMUM_NETWORK_SIZE) revert TooFewAuthors();
+    if (numAuth < MINIMUM_NUMBER_OF_AUTHORS) revert NotEnoughAuthors();
     if (t1PubKeyLHS.length != numAuth || t1PubKeyRHS.length != numAuth || t2PubKey.length != numAuth) revert MissingKeys();
     bytes32 _t2PubKey;
     address _t1Address;

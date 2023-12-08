@@ -182,7 +182,7 @@ describe('Owner Functions', async () => {
       initVals.t1PubKeysLHS.pop();
       initVals.t1PubKeysRHS.pop();
       initVals.t2PubKeys.pop();
-      await deployAndCatchInitError('TooFewAuthors');
+      await deployAndCatchInitError('NotEnoughAuthors');
     });
   });
 

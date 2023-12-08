@@ -2,11 +2,11 @@
 pragma solidity 0.8.23;
 
 interface IAVNBridge {
-  event LogGrowthDenied(uint32 period);
-  event LogGrowthDelayUpdated(uint256 oldDelaySeconds, uint256 newDelaySeconds);
-  event LogAuthorsEnabled(bool state);
-  event LogLiftingEnabled(bool state);
-  event LogLoweringEnabled(bool state);
+  event LogGrowthDenied(uint32 indexed period);
+  event LogGrowthDelayUpdated(uint256 indexed oldDelaySeconds, uint256 indexed newDelaySeconds);
+  event LogAuthorsEnabled(bool indexed state);
+  event LogLiftingEnabled(bool indexed state);
+  event LogLoweringEnabled(bool indexed state);
   event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
@@ -15,7 +15,7 @@ interface IAVNBridge {
   event LogGrowthTriggered(uint256 amount, uint32 indexed period, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
-  event LogLegacyLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PublicKey, uint256 amount);
+  event LogLegacyLowered(address indexed token, address indexed t1Address, bytes32 indexed t2PubKey, uint256 amount);
   event LogLowerClaimed(bytes32 indexed lowerHash);
   event LogGrowth(uint256 indexed amount, uint32 indexed period);
 
@@ -35,7 +35,7 @@ interface IAVNBridge {
 
   // Public
   function releaseGrowth(uint32 period) external;
-  function lift(address erc20Address, bytes calldata t2PubKey, uint256 amount) external;
+  function lift(address token, bytes calldata t2PubKey, uint256 amount) external;
   function liftETH(bytes calldata t2PubKey) external payable;
   function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath) external;
   function claimLower(bytes calldata proof) external;
