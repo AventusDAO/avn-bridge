@@ -32,7 +32,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
   uint256 constant internal MINIMUM_NETWORK_SIZE = 4;
-  uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 6 * 32 (2 confirmations)
+  uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 7 * 32 (2 confirmations)
 
   /// @notice Query an author's current status by their internal ID
   /// @custom:oz-renamed-from isRegisteredValidator
