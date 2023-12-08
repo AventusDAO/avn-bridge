@@ -729,7 +729,7 @@ describe('Author Functions', async () => {
         confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
         await expect(
           avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'TooFewAuthors');
+        ).to.be.revertedWithCustomError(avnBridge, 'NotEnoughAuthors');
       });
     });
   });
