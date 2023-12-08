@@ -57,7 +57,8 @@ describe('Owner Functions', async () => {
 
       it('when an unauthorised account attempts to accept ownership', async () => {
         avnBridge.transferOwnership(someOtherAccount.address);
-        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(avnBridge,
+        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(
+          avnBridge,
           'PendingOwnerOnly'
         );
       });
@@ -181,7 +182,7 @@ describe('Owner Functions', async () => {
       initVals.t1PubKeysLHS.pop();
       initVals.t1PubKeysRHS.pop();
       initVals.t2PubKeys.pop();
-      await deployAndCatchInitError('TooFewAuthors');
+      await deployAndCatchInitError('NotEnoughAuthors');
     });
   });
 

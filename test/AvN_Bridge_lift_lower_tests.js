@@ -424,14 +424,20 @@ describe('Lifting and lowering', async () => {
 
       it('lowering is disabled', async () => {
         await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'LowerDisabled'
+        );
         await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
         await avnBridge.legacyLower(tree.leafData, tree.merklePath);
       });
 
       it('the leaf has already been used for a lower', async () => {
         await avnBridge.legacyLower(tree.leafData, tree.merklePath);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'LowerIsUsed'
+        );
       });
 
       it('the leaf is invalid', async () => {
@@ -451,7 +457,10 @@ describe('Lifting and lowering', async () => {
       it('the leaf is not recognised as a lower leaf', async () => {
         const badId = '0xaaaa';
         tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, lowerAmount, true, badId);
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'NotALowerTx');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'NotALowerTx'
+        );
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
@@ -463,7 +472,10 @@ describe('Lifting and lowering', async () => {
           helper.PSEUDO_ETH_ADDRESS,
           lowerAmount
         );
-        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+        await expect(avnBridge.legacyLower(tree.leafData, tree.merklePath)).to.be.revertedWithCustomError(
+          avnBridge,
+          'PaymentFailed'
+        );
       });
     });
   });
@@ -574,7 +586,7 @@ describe('Lifting and lowering', async () => {
       });
 
       it('the proof is invalid', async () => {
-        await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.reverted;
+        await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.revertedWithCustomError(avnBridge, 'InvalidProof');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
@@ -588,6 +600,66 @@ describe('Lifting and lowering', async () => {
         );
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
       });
+    });
+  });
+
+  context('Check lower', async () => {
+    it('results are as expected for a valid, unused proof', async () => {
+      const lowerAmount = 123;
+      const [lowerProof] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner);
+      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(lowerProof);
+
+      const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      expect(token).to.equal(token20.address);
+      expect(recipient).to.equal(owner);
+      expect(amount).to.equal(lowerAmount);
+      expect(reqConfirmations).to.equal(numConfirmationsRequired);
+      expect(numConfirmations).to.equal(numConfirmationsRequired * 2);
+      expect(isValid).to.equal(true);
+    });
+
+    it('results are as expected for a used proof', async () => {
+      const lowerAmount = 456;
+      await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
+      const [lowerProof] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
+      await avnBridge.claimLower(lowerProof);
+      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(lowerProof);
+
+      expect(token).to.equal(helper.ZERO_ADDRESS);
+      expect(recipient).to.equal(helper.ZERO_ADDRESS);
+      expect(amount).to.equal(0);
+      expect(reqConfirmations).to.equal(0);
+      expect(numConfirmations).to.equal(0);
+      expect(isValid).to.equal(false);
+    });
+
+    it('results are as expected for valid data with invalid confirmations', async () => {
+      const lowerAmount = 789;
+      await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
+      const [lowerProofA] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
+      const [lowerProofB] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
+      const splitPoint = 2 + 32 * 6 * 2; // '0x' + 32 bytes * 6 for the data * 2 hex chars per byte
+      const dataFromProofA = lowerProofA.slice(0, splitPoint);
+      const confirmationsFromProofB = lowerProofB.slice(splitPoint);
+      const invalidProof = dataFromProofA + confirmationsFromProofB;
+      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(invalidProof);
+      expect(token).to.equal(helper.ZERO_ADDRESS);
+      expect(recipient).to.equal(helper.ZERO_ADDRESS);
+      expect(amount).to.equal(0);
+      expect(reqConfirmations).to.equal(0);
+      expect(numConfirmations).to.equal(0);
+      expect(isValid).to.equal(false);
+    });
+
+    it('results are as expected for a completely invalid proof', async () => {
+      const shortProof = helper.randomBytes32();
+      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(shortProof);
+      expect(token).to.equal(helper.ZERO_ADDRESS);
+      expect(recipient).to.equal(helper.ZERO_ADDRESS);
+      expect(amount).to.equal(0);
+      expect(reqConfirmations).to.equal(0);
+      expect(numConfirmations).to.equal(0);
+      expect(isValid).to.equal(false);
     });
   });
 
