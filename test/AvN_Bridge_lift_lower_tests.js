@@ -610,11 +610,12 @@ describe('Lifting and lowering', async () => {
       const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      const numConfirmationsSent = await avnBridge.numActiveAuthors() - numConfirmationsRequired;
       expect(token).to.equal(token20.address);
       expect(recipient).to.equal(owner);
       expect(amount).to.equal(lowerAmount);
       expect(reqConfirmations).to.equal(numConfirmationsRequired);
-      expect(numConfirmations).to.equal(numConfirmationsRequired * 2);
+      expect(numConfirmations).to.equal(numConfirmationsSent);
       expect(isValid).to.equal(true);
     });
 
