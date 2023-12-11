@@ -246,7 +246,6 @@ async function createLowerProof(contract, token, amount, recipient) {
   const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerData]);
   let confirmations = '0x';
   const supermajorityConfirmations = await contract.numActiveAuthors() - await getNumRequiredConfirmations(contract);
-  console.log(supermajorityConfirmations)
   for (i = 1; i <= supermajorityConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(lowerHash));
     confirmations += strip_0x(confirmation);
