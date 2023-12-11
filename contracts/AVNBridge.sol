@@ -596,14 +596,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(recipient).call{value: amount}("");
       if (!success) revert PaymentFailed();
-    } else if (IERC777(token).send.selector == bytes4(0)) {
-      IERC20(token).transfer(recipient, amount);
-    } else {
+    } else if (token == ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH)) {
       try IERC777(token).send(recipient, amount, "") {
       } catch {
         IERC20(token).transfer(recipient, amount);
       }
-    }
+    } else IERC20(token).transfer(recipient, amount);
   }
 
   function _releaseGrowth(uint128 amount, uint32 period)
