@@ -82,7 +82,7 @@ describe('Author Functions', async () => {
       });
 
       context('fails', async () => {
-        it('when not sent by an author', async () => {
+        it('when not sent by an author (and without an additional confirmation)', async () => {
           const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
           await expect(
             avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)

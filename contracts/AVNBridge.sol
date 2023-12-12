@@ -645,9 +645,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 numConfirmations = confirmations.length / SIGNATURE_LENGTH;
-    uint256 validConfirmations;
-    uint256 confirmationsIndex;
     uint256 confirmationsOffset;
+    uint256 confirmationsIndex;
+    uint256 validConfirmations;
     uint256 authorId;
 
     assembly { confirmationsOffset := confirmations.offset }
@@ -656,7 +656,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (isLower) { // For lowers all confirmations are explicit so the first authorId is extracted from the first confirmation
       authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
-    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is considered implicit
+    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is taken as implicit
       authorId = t1AddressToId[msg.sender];
       unchecked { ++numConfirmations; }
     }
