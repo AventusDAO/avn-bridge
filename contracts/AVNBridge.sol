@@ -12,6 +12,7 @@ pragma solidity 0.8.23;
  */
 
 import "./interfaces/IAVNBridge.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
@@ -21,6 +22,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+  using SafeERC20 for IERC20;
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
@@ -231,7 +233,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (growthAmount[period] != 0) revert PeriodIsUsed();
     uint128 amount = uint128(rewards * IERC20(coreToken).totalSupply() / avgStaked);
     growthAmount[period] = amount;
-    _verifyConfirmations(keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(false, keccak256(abi.encode(rewards, avgStaked, period, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
     if (growthDelay == 0) _releaseGrowth(amount, period);
     else growthTriggered[period] = block.timestamp;
@@ -267,7 +269,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 id = t1AddressToId[t1Address];
     if (isAuthor[id]) revert AlreadyAdded();
 
-    _verifyConfirmations(keccak256(abi.encode(t1PubKey, t2PubKey, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(false, keccak256(abi.encode(t1PubKey, t2PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
 
     if (id == 0) {
@@ -308,7 +310,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       unchecked { --numActiveAuthors; }
     }
 
-    _verifyConfirmations(keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(false, keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
 
     emit LogAuthorRemoved(idToT1Address[id], t2PubKey, t2TxId);
@@ -323,7 +325,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (isPublishedRootHash[rootHash]) revert RootHashIsUsed();
-    _verifyConfirmations(keccak256(abi.encode(rootHash, expiry, t2TxId)), confirmations);
+    _verifyConfirmations(false, keccak256(abi.encode(rootHash, expiry, t2TxId)), confirmations);
     _storeT2TxId(t2TxId);
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TxId);
@@ -339,7 +341,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 existingBalance = IERC20(token).balanceOf(address(this));
-    IERC20(token).transferFrom(msg.sender, address(this), amount);
+    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
     uint256 newBalance = IERC20(token).balanceOf(address(this));
     if (newBalance <= existingBalance) revert LiftFailed();
     if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
@@ -447,58 +449,55 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
     if (hasLowered[lowerHash]) revert LowerIsUsed();
     hasLowered[lowerHash] = true;
-    _verifyConfirmations(lowerHash, proof[192:]);
+    _verifyConfirmations(true, lowerHash, proof[192:]);
     _releaseFunds(token, recipient, amount);
     emit LogLowerClaimed(lowerHash);
   }
 
-  /** @dev Allows lower proofs to be checked before claiming. Returns details for any valid, unused lower,
-    * including the number of confirmations required to claim and the number of confirmations supplied in the proof.
-    * Should the former exceed the latter the proof cannot be used and a replacement must be requested from T2.
-    * For used or invalid proofs an empty result is returned.
+  /** @dev Check a lower proof. Returns the details, proof validity, and whether or not the lower has been claimed.
+    * For unclaimed lowers, if the confirmations required exceed those provided then the proof must be regenerated
+    * by T2 before claiming.
   */
   function checkLower(bytes calldata proof)
     external
     view
-    returns (address token, address recipient, uint256 amount, uint256 reqConfirmations, uint256 numConfirmations, bool isValid)
+    returns (address token, address recipient, uint256 amount, uint256 confirmationsRequired, uint256 confirmationsProvided, bool validProof, bool lowerClaimed)
   {
-    if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), address(0), 0, 0, 0, false);
+    if (proof.length >= MINIMUM_PROOF_LENGTH) {
+      uint256 lowerId;
+      bytes memory confirmations;
+      (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
 
-    uint256 lowerId;
-    bytes memory confirmations;
-    (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
+      bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+      if (hasLowered[lowerHash]) lowerClaimed = true;
+      confirmationsProvided = confirmations.length / SIGNATURE_LENGTH;
+      confirmationsRequired = _requiredConfirmations();
+      bool[] memory confirmed = new bool[](nextAuthorId);
+      bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
+      uint256 id;
+      bytes32 r;
+      bytes32 s;
+      uint8 v;
 
-    bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
-    if (hasLowered[lowerHash]) return (address(0), address(0), 0, 0, 0, false);
+      for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
+        assembly {
+          let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+          r := mload(add(offset, 0x20))
+          s := mload(add(offset, 0x40))
+          v := byte(0, mload(add(offset, 0x60)))
+        }
 
-    numConfirmations = confirmations.length / SIGNATURE_LENGTH;
-    reqConfirmations = _requiredConfirmations();
-    bool[] memory confirmed = new bool[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
-    uint256 id;
-    bytes32 r;
-    bytes32 s;
-    uint8 v;
+        if (v < 27) v += 27;
+        id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+          ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+          : 0;
 
-    for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
-      assembly {
-        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
-        r := mload(add(offset, 0x20))
-        s := mload(add(offset, 0x40))
-        v := byte(0, mload(add(offset, 0x60)))
+        if (!authorIsActive[id] || confirmed[id]) confirmationsProvided--;
+        else confirmed[id] = true;
       }
 
-      if (v < 27) v += 27;
-      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-        ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
-        : 0;
-
-      if (!authorIsActive[id] || confirmed[id]) numConfirmations--;
-      else confirmed[id] = true;
+      validProof = confirmationsProvided >= confirmationsRequired;
     }
-
-    if (numConfirmations == 0)  return (address(0), address(0), 0, 0, 0, false);
-    isValid = numConfirmations >= reqConfirmations;
   }
 
   /**
@@ -599,9 +598,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else if (token == ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH)) {
       try IERC777(token).send(recipient, amount, "") {
       } catch {
-        IERC20(token).transfer(recipient, amount);
+        IERC20(token).safeTransfer(recipient, amount);
       }
-    } else IERC20(token).transfer(recipient, amount);
+    } else IERC20(token).safeTransfer(recipient, amount);
   }
 
   function _releaseGrowth(uint128 amount, uint32 period)
@@ -638,56 +637,77 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     unchecked { required -= required * 2 / 3; }
   }
 
-  function _verifyConfirmations(bytes32 msgHash, bytes calldata confirmations)
+  function _verifyConfirmations(bool isLower, bytes32 msgHash, bytes calldata confirmations)
     private
   {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
     uint256 requiredConfirmations = _requiredConfirmations();
-    uint256 id = t1AddressToId[msg.sender];
-    uint256 numConfirmations;
-    unchecked { numConfirmations = 1 + confirmations.length / SIGNATURE_LENGTH; } // The sender's confirmation is implicit
+    uint256 numConfirmations = confirmations.length / SIGNATURE_LENGTH;
+    uint256 confirmationsOffset;
+    uint256 confirmationsIndex;
     uint256 validConfirmations;
-    uint256 i;
-    bytes32 r;
-    bytes32 s;
-    uint8 v;
+    uint256 authorId;
+
+    assembly { confirmationsOffset := confirmations.offset }
+
+    // Setup the first iteration of the do-while loop:
+    if (isLower) { // For lowers all confirmations are explicit so the first authorId is extracted from the first confirmation
+      authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
+      confirmationsIndex = 1;
+    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is taken as implicit
+      authorId = t1AddressToId[msg.sender];
+      unchecked { ++numConfirmations; }
+    }
 
     do {
-      if (!authorIsActive[id]) {
-        if (isAuthor[id]) { // Here we activate any previously added but as yet unactivated authors
-          authorIsActive[id] = true;
+      if (!authorIsActive[authorId]) {
+        if (isAuthor[authorId]) { // Here we activate any previously added but as yet unactivated authors
+          authorIsActive[authorId] = true;
           unchecked {
             ++numActiveAuthors;
             ++validConfirmations;
           }
           requiredConfirmations = _requiredConfirmations();
-          if (validConfirmations == requiredConfirmations) return;
-          confirmed[id] = 1;
+          if (validConfirmations == requiredConfirmations) return; // success
+          confirmed[authorId] = 1;
         }
-      } else if (confirmed[id] == 0) {
+      } else if (confirmed[authorId] == 0) {
         unchecked { ++validConfirmations; }
-        if (validConfirmations == requiredConfirmations) return;
-        confirmed[id] = 1;
+        if (validConfirmations == requiredConfirmations) return; // success
+        confirmed[authorId] = 1;
       }
 
-      assembly {
-        let sig := add(confirmations.offset, mul(i, SIGNATURE_LENGTH))
-        r := calldataload(sig)
-        s := calldataload(add(sig, 32))
-        v := byte(0, calldataload(add(sig, 64)))
-        i := add(i, 1)
-      }
+      // Setup the next iteration of the loop:
+      authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
+      unchecked { ++confirmationsIndex; }
 
-      if (v < 27) { unchecked { v += 27; } }
-
-      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-        ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
-        : 0;
-
-    } while (i < numConfirmations);
+    } while (confirmationsIndex <= numConfirmations);
 
     revert BadConfirmations();
+  }
+
+  function _recoverAuthorId(bytes32 ethSignedPrefixMsgHash, uint256 confirmationsOffset, uint256 confirmationsIndex)
+    private
+    view
+    returns (uint256 id)
+  {
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+
+    assembly {
+      let sig := add(confirmationsOffset, mul(confirmationsIndex, SIGNATURE_LENGTH))
+      r := calldataload(sig)
+      s := calldataload(add(sig, 32))
+      v := byte(0, calldataload(add(sig, 64)))
+    }
+
+    if (v < 27) { unchecked { v += 27; } }
+
+    id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+      ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+      : 0;
   }
 
   function _storeT2TxId(uint256 t2TxId)

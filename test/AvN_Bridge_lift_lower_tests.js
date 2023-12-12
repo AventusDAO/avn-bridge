@@ -607,30 +607,37 @@ describe('Lifting and lowering', async () => {
     it('results are as expected for a valid, unused proof', async () => {
       const lowerAmount = 123;
       const [lowerProof] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner);
-      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(lowerProof);
+      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+        await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      const numConfirmationsSent = (await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
       expect(token).to.equal(token20.address);
       expect(recipient).to.equal(owner);
       expect(amount).to.equal(lowerAmount);
-      expect(reqConfirmations).to.equal(numConfirmationsRequired);
-      expect(numConfirmations).to.equal(numConfirmationsRequired * 2);
-      expect(isValid).to.equal(true);
+      expect(confirmationsRequired).to.equal(numConfirmationsRequired);
+      expect(confirmationsProvided).to.equal(numConfirmationsSent);
+      expect(validProof).to.equal(true);
+      expect(lowerClaimed).to.equal(false);
     });
 
-    it('results are as expected for a used proof', async () => {
+    it('results are as expected for a valid, used proof', async () => {
       const lowerAmount = 456;
       await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
       const [lowerProof] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
       await avnBridge.claimLower(lowerProof);
-      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(lowerProof);
+      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+        await avnBridge.checkLower(lowerProof);
 
-      expect(token).to.equal(helper.ZERO_ADDRESS);
-      expect(recipient).to.equal(helper.ZERO_ADDRESS);
-      expect(amount).to.equal(0);
-      expect(reqConfirmations).to.equal(0);
-      expect(numConfirmations).to.equal(0);
-      expect(isValid).to.equal(false);
+      const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      const numConfirmationsSent = (await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
+      expect(token).to.equal(token777.address);
+      expect(recipient).to.equal(owner);
+      expect(amount).to.equal(lowerAmount);
+      expect(confirmationsRequired).to.equal(numConfirmationsRequired);
+      expect(confirmationsProvided).to.equal(numConfirmationsSent);
+      expect(validProof).to.equal(true);
+      expect(lowerClaimed).to.equal(true);
     });
 
     it('results are as expected for valid data with invalid confirmations', async () => {
@@ -642,24 +649,30 @@ describe('Lifting and lowering', async () => {
       const dataFromProofA = lowerProofA.slice(0, splitPoint);
       const confirmationsFromProofB = lowerProofB.slice(splitPoint);
       const invalidProof = dataFromProofA + confirmationsFromProofB;
-      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(invalidProof);
-      expect(token).to.equal(helper.ZERO_ADDRESS);
-      expect(recipient).to.equal(helper.ZERO_ADDRESS);
-      expect(amount).to.equal(0);
-      expect(reqConfirmations).to.equal(0);
-      expect(numConfirmations).to.equal(0);
-      expect(isValid).to.equal(false);
+      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+        await avnBridge.checkLower(invalidProof);
+      const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+
+      expect(token).to.equal(token);
+      expect(recipient).to.equal(recipient);
+      expect(amount).to.equal(amount);
+      expect(confirmationsRequired).to.equal(numConfirmationsRequired);
+      expect(confirmationsProvided).to.equal(0);
+      expect(validProof).to.equal(false);
+      expect(lowerClaimed).to.equal(false);
     });
 
     it('results are as expected for a completely invalid proof', async () => {
       const shortProof = helper.randomBytes32();
-      const [token, recipient, amount, reqConfirmations, numConfirmations, isValid] = await avnBridge.checkLower(shortProof);
+      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+        await avnBridge.checkLower(shortProof);
       expect(token).to.equal(helper.ZERO_ADDRESS);
       expect(recipient).to.equal(helper.ZERO_ADDRESS);
       expect(amount).to.equal(0);
-      expect(reqConfirmations).to.equal(0);
-      expect(numConfirmations).to.equal(0);
-      expect(isValid).to.equal(false);
+      expect(confirmationsRequired).to.equal(0);
+      expect(confirmationsProvided).to.equal(0);
+      expect(validProof).to.equal(false);
+      expect(lowerClaimed).to.equal(false);
     });
   });
 
