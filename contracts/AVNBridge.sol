@@ -452,53 +452,50 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLowerClaimed(lowerHash);
   }
 
-  /** @dev Allows lower proofs to be checked before claiming. Returns details for any valid, unused lower,
-    * including the number of confirmations required to claim and the number of confirmations supplied in the proof.
-    * Should the former exceed the latter the proof cannot be used and a replacement must be requested from T2.
-    * For used or invalid proofs an empty result is returned.
+  /** @dev Check a lower proof. Returns the details, proof validity, and whether or not the lower has been claimed.
+    * For unclaimed lowers, if the confirmations required exceed those provided then the proof must be regenerated
+    * by T2 before claiming.
   */
   function checkLower(bytes calldata proof)
     external
     view
-    returns (address token, address recipient, uint256 amount, uint256 reqConfirmations, uint256 numConfirmations, bool isValid)
+    returns (address token, address recipient, uint256 amount, uint256 confirmationsRequired, uint256 confirmationsProvided, bool validProof, bool lowerClaimed)
   {
-    if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), address(0), 0, 0, 0, false);
+    if (proof.length >= MINIMUM_PROOF_LENGTH) {
+      uint256 lowerId;
+      bytes memory confirmations;
+      (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
 
-    uint256 lowerId;
-    bytes memory confirmations;
-    (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
+      bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+      if (hasLowered[lowerHash]) lowerClaimed = true;
+      confirmationsProvided = confirmations.length / SIGNATURE_LENGTH;
+      confirmationsRequired = _requiredConfirmations();
+      bool[] memory confirmed = new bool[](nextAuthorId);
+      bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
+      uint256 id;
+      bytes32 r;
+      bytes32 s;
+      uint8 v;
 
-    bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
-    if (hasLowered[lowerHash]) return (address(0), address(0), 0, 0, 0, false);
+      for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
+        assembly {
+          let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
+          r := mload(add(offset, 0x20))
+          s := mload(add(offset, 0x40))
+          v := byte(0, mload(add(offset, 0x60)))
+        }
 
-    numConfirmations = confirmations.length / SIGNATURE_LENGTH;
-    reqConfirmations = _requiredConfirmations();
-    bool[] memory confirmed = new bool[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
-    uint256 id;
-    bytes32 r;
-    bytes32 s;
-    uint8 v;
+        if (v < 27) v += 27;
+        id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+          ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+          : 0;
 
-    for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
-      assembly {
-        let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
-        r := mload(add(offset, 0x20))
-        s := mload(add(offset, 0x40))
-        v := byte(0, mload(add(offset, 0x60)))
+        if (!authorIsActive[id] || confirmed[id]) confirmationsProvided--;
+        else confirmed[id] = true;
       }
 
-      if (v < 27) v += 27;
-      id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-        ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
-        : 0;
-
-      if (!authorIsActive[id] || confirmed[id]) numConfirmations--;
-      else confirmed[id] = true;
+      validProof = confirmationsProvided >= confirmationsRequired;
     }
-
-    if (numConfirmations == 0)  return (address(0), address(0), 0, 0, 0, false);
-    isValid = numConfirmations >= reqConfirmations;
   }
 
   /**
