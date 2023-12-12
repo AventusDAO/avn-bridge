@@ -12,6 +12,7 @@ pragma solidity 0.8.23;
  */
 
 import "./interfaces/IAVNBridge.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC777.sol";
 import "@openzeppelin/contracts/interfaces/IERC777Recipient.sol";
@@ -21,6 +22,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+  using SafeERC20 for IERC20;
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
   IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
@@ -339,7 +341,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     uint256 existingBalance = IERC20(token).balanceOf(address(this));
-    IERC20(token).transferFrom(msg.sender, address(this), amount);
+    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
     uint256 newBalance = IERC20(token).balanceOf(address(this));
     if (newBalance <= existingBalance) revert LiftFailed();
     if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
@@ -596,9 +598,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else if (token == ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH)) {
       try IERC777(token).send(recipient, amount, "") {
       } catch {
-        IERC20(token).transfer(recipient, amount);
+        IERC20(token).safeTransfer(recipient, amount);
       }
-    } else IERC20(token).transfer(recipient, amount);
+    } else IERC20(token).safeTransfer(recipient, amount);
   }
 
   function _releaseGrowth(uint128 amount, uint32 period)
