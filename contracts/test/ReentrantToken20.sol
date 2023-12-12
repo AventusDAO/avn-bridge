@@ -13,12 +13,12 @@ contract ReentrantToken20 is ERC20 {
     _bridge = bridge;
   }
 
-  // Override for testing - peforms a standard transfer (called from within lower()) before attempting to re-enter via a lift()
+  // Overriden for testing - peforms a standard transfer (called from within lower()) before attempting to re-enter via a lift()
   function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
-    _transfer(msg.sender, recipient, amount);
-    bytes memory someT2PublicKey;
-    uint256 someOtherAmount = 1;
-    IAVNBridge(_bridge).lift(address(this), someT2PublicKey, someOtherAmount);
+    super.transfer(recipient, amount);
+    bytes memory someBytes;
+    uint256 someAmount = 1;
+    IAVNBridge(_bridge).lift(address(this), someBytes, someAmount);
     return true;
   }
 }
