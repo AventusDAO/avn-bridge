@@ -589,6 +589,15 @@ describe('Lifting and lowering', async () => {
         await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.revertedWithCustomError(avnBridge, 'InvalidProof');
       });
 
+      it('a non-standard ERC20 triggers the re-entrancy check', async () => {
+        const ReentrantToken20 = await ethers.getContractFactory('ReentrantToken20');
+        const reentrantERC20 = await ReentrantToken20.deploy(10000000, avnBridge.address);
+        await reentrantERC20.approve(avnBridge.address, liftAmount);
+        await avnBridge.lift(reentrantERC20.address, someT2PubKey, liftAmount);
+        [lowerProof, lowerHash] = await helper.createLowerProof(avnBridge, reentrantERC20.address, lowerAmount, owner);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+      });
+
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
         const addressCannotReceiveETH = token20.address;
