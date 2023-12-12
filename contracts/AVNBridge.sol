@@ -34,6 +34,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
   uint256 constant internal MINIMUM_NUMBER_OF_AUTHORS = 4;
   uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 7 * 32 (2 confirmations)
+  uint256 constant internal UNLOCKED = 1;
+  uint256 constant internal LOCKED = 2;
 
   /// @custom:oz-renamed-from isRegisteredValidator
   mapping (uint256 => bool) public isAuthor;
@@ -71,6 +73,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @custom:oz-renamed-from loweringIsEnabled
   bool public loweringEnabled;
   address public pendingOwner;
+  uint256 private _lock;
 
   error AddressMismatch();
   error AlreadyAdded();
@@ -89,6 +92,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error LiftDisabled();
   error LiftFailed();
   error LiftLimitHit();
+  error Locked();
   error LowerDisabled();
   error LowerIsUsed();
   error MissingCore();
@@ -129,6 +133,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     nextAuthorId = 1;
     growthDelay = 2 days;
     _initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
+    _lock = UNLOCKED;
   }
 
   modifier onlyWhenLiftingEnabled() {
@@ -149,6 +154,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   modifier onlyWithinCallWindow(uint256 expiry) {
     if (block.timestamp > expiry) revert WindowExpired();
     _;
+  }
+
+  modifier lock() {
+    if (_lock == LOCKED) revert Locked();
+    _lock = LOCKED;
+    _;
+    _lock = UNLOCKED;
   }
 
   /**
@@ -338,6 +350,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function lift(address token, bytes calldata t2PubKey, uint256 amount)
     onlyWhenLiftingEnabled
+    lock
     external
   {
     uint256 existingBalance = IERC20(token).balanceOf(address(this));
@@ -354,6 +367,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function liftETH(bytes calldata t2PubKey)
     payable
     onlyWhenLiftingEnabled
+    lock
     external
   {
     if (msg.value == 0) revert AmountIsZero();
@@ -372,6 +386,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
+    if (_lock == LOCKED) revert Locked();
     if (amount == 0) revert AmountIsZero();
     if (to != address(this)) revert InvalidRecipient();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
@@ -384,6 +399,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function legacyLower(bytes calldata leaf, bytes32[] calldata merklePath)
     onlyWhenLoweringEnabled
+    lock
     external
   {
     bytes32 leafHash = keccak256(leaf);
@@ -442,6 +458,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function claimLower(bytes calldata proof)
     onlyWhenLoweringEnabled
+    lock
     external
   {
     if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
