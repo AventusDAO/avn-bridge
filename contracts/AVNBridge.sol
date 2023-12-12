@@ -683,7 +683,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
       unchecked { ++confirmationsIndex; }
 
-    } while (confirmationsIndex < numConfirmations);
+    } while (confirmationsIndex <= numConfirmations);
 
     revert BadConfirmations();
   }
