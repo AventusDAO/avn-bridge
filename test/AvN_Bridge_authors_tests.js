@@ -42,8 +42,16 @@ describe('Author Functions', async () => {
       expiry = await helper.getValidExpiry();
     });
 
-    async function getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId) {
-      return await helper.getConfirmations(avnBridge, 'triggerGrowth', [rewards, avgStaked, period], expiry, t2TxId);
+    async function getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId, additionalConfirmations) {
+      additionalConfirmations = additionalConfirmations || 0;
+      return await helper.getConfirmations(
+        avnBridge,
+        'triggerGrowth',
+        [rewards, avgStaked, period],
+        expiry,
+        t2TxId,
+        additionalConfirmations
+      );
     }
 
     context('trigger growth', async () => {
@@ -59,9 +67,28 @@ describe('Author Functions', async () => {
           usedGrowthPeriod = period;
           usedTxId = t2TxId;
         });
+
+        it('in triggering growth (when not sent by an author but with an additional confirmation)', async () => {
+          const avtSupplyBefore = await token20.totalSupply();
+          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId, 1);
+          const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+          await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
+            .to.emit(avnBridge, 'LogGrowthTriggered')
+            .withArgs(expectedGrowthAmount, period, t2TxId);
+          expect(await avnBridge.isUsedT2TxId(t2TxId), true);
+          usedGrowthPeriod = period;
+          usedTxId = t2TxId;
+        });
       });
 
       context('fails', async () => {
+        it('when not sent by an author', async () => {
+          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
+          await expect(
+            avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
+          ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+        });
+
         it('when author functions are disabled', async () => {
           await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
           const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
