@@ -513,7 +513,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
     uint256 numConfirmations = (proof.length - LOWER_DATA_LENGTH) / SIGNATURE_LENGTH;
     bool[] memory confirmed = new bool[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
+    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked(ESM_PREFIX, lowerHash));
     uint256 confirmationsOffset;
 
     lowerIsClaimed = hasLowered[lowerHash];
@@ -671,7 +671,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     private
   {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
+    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked(ESM_PREFIX, msgHash));
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     uint256 confirmationsOffset;
