@@ -279,6 +279,7 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
+  lowerId: () => lowerId,
   LOWER_ID,
   MIN_AUTHORS,
   PROXY_LOWER_ID,

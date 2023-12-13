@@ -24,18 +24,23 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   using SafeERC20 for IERC20;
   // Universal address as defined in Registry Contract Address section of https://eips.ethereum.org/EIPS/eip-1820
-  IERC1820Registry constant internal ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+  IERC1820Registry constant private ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
   // keccak256("ERC777Token")
-  bytes32 constant internal ERC777_TOKEN_HASH = 0xac7fbab5f54a3ca8194167523c6753bfeb96a445279294b6125b68cce2177054;
+  bytes32 constant private ERC777_TOKEN_HASH = 0xac7fbab5f54a3ca8194167523c6753bfeb96a445279294b6125b68cce2177054;
   // keccak256("ERC777TokensRecipient")
-  bytes32 constant internal ERC777_TOKENS_RECIPIENT_HASH = 0xb281fc8c12954d22544db45de3159a39272895b169a852b314f9cc762e44c53b;
-  uint256 constant internal SIGNATURE_LENGTH = 65;
-  uint256 constant internal LIFT_LIMIT = type(uint128).max;
-  address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  uint256 constant internal MINIMUM_NUMBER_OF_AUTHORS = 4;
-  uint256 constant internal MINIMUM_PROOF_LENGTH = 206; // 20B token + 32B amount + 20B recipient + 4B id + 130B 2 confirmations
-  uint256 constant internal UNLOCKED = 1;
-  uint256 constant internal LOCKED = 2;
+  bytes32 constant private ERC777_TOKENS_RECIPIENT_HASH = 0xb281fc8c12954d22544db45de3159a39272895b169a852b314f9cc762e44c53b;
+  string  constant private ESM_PREFIX = "\x19Ethereum Signed Message:\n32";
+  address constant private PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  uint256 constant private LIFT_LIMIT = type(uint128).max;
+  uint256 constant private MINIMUM_NUMBER_OF_AUTHORS = 4;
+  uint256 constant private LOWER_DATA_LENGTH = 20 + 32 + 20 + 4; // token address + amount + recipient address + lower ID
+  uint256 constant private SIGNATURE_LENGTH = 65;
+  uint256 constant private MINIMUM_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
+  uint256 constant private UNLOCKED = 1;
+  uint256 constant private LOCKED = 2;
+  int8 constant private TX_SUCCEEDED = 1;
+  int8 constant private TX_PENDING = 0;
+  int8 constant private TX_FAILED = -1;
 
   /// @custom:oz-renamed-from isRegisteredValidator
   mapping (uint256 => bool) public isAuthor;
@@ -462,12 +467,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
-
-    bytes32 lowerHash = keccak256(proof[:76]);
+    bytes32 lowerHash = keccak256(proof[:LOWER_DATA_LENGTH]);
     if (hasLowered[lowerHash]) revert LowerIsUsed();
     hasLowered[lowerHash] = true;
-    _verifyConfirmations(true, lowerHash, proof[76:]);
-
     address token;
     uint256 amount;
     address recipient;
@@ -478,6 +480,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       recipient := shr(96, calldataload(add(proof.offset, 52)))
     }
 
+    _verifyConfirmations(true, lowerHash, proof[LOWER_DATA_LENGTH:]);
     _releaseFunds(token, recipient, amount);
 
     emit LogLowerClaimed(lowerHash);
@@ -490,44 +493,41 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function checkLower(bytes calldata proof)
     external
     view
-    returns (address token, address recipient, uint256 amount, uint256 confirmationsRequired, uint256 confirmationsProvided, bool validProof, bool lowerClaimed)
+    returns (
+      address token,
+      uint256 amount,
+      address recipient,
+      uint32 lowerId,
+      uint256 confirmationsRequired,
+      uint256 confirmationsProvided,
+      bool validProof,
+      bool lowerClaimed
+    )
   {
-    if (proof.length >= MINIMUM_PROOF_LENGTH) {
-      token = address(bytes20(proof[0:20]));
-      amount = uint256(bytes32(proof[20:52]));
-      recipient = address(bytes20(proof[52:72]));
-      uint32 lowerId = uint32(bytes4(proof[72:76]));
-      bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
-      if (hasLowered[lowerHash]) lowerClaimed = true;
-      bytes memory confirmations = proof[76:];
-      confirmationsProvided = confirmations.length / SIGNATURE_LENGTH;
-      confirmationsRequired = _requiredConfirmations();
-      bool[] memory confirmed = new bool[](nextAuthorId);
-      bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
-      uint256 id;
-      bytes32 r;
-      bytes32 s;
-      uint8 v;
+    if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), 0, address(0), 0, 0, 0, false, false);
 
-      for (uint256 i = 0; i < confirmations.length / SIGNATURE_LENGTH; i++) {
-        assembly {
-          let offset := add(confirmations, mul(i, SIGNATURE_LENGTH))
-          r := mload(add(offset, 0x20))
-          s := mload(add(offset, 0x40))
-          v := byte(0, mload(add(offset, 0x60)))
-        }
+    token = address(bytes20(proof[0:20]));
+    amount = uint256(bytes32(proof[20:52]));
+    recipient = address(bytes20(proof[52:72]));
+    lowerId = uint32(bytes4(proof[72:LOWER_DATA_LENGTH]));
+    bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
+    uint256 numConfirmations = (proof.length - LOWER_DATA_LENGTH) / SIGNATURE_LENGTH;
+    bool[] memory confirmed = new bool[](nextAuthorId);
+    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
+    uint256 confirmationsOffset;
 
-        if (v < 27) v += 27;
-        id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-          ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
-          : 0;
+    lowerClaimed = hasLowered[lowerHash];
+    confirmationsProvided = numConfirmations;
+    confirmationsRequired = _requiredConfirmations();
+    assembly { confirmationsOffset := add(proof.offset, LOWER_DATA_LENGTH) }
 
-        if (!authorIsActive[id] || confirmed[id]) confirmationsProvided--;
-        else confirmed[id] = true;
-      }
-
-      validProof = confirmationsProvided >= confirmationsRequired;
+    for (uint256 i = 0; i < numConfirmations; ++i) {
+      uint256 id = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, i);
+      if (authorIsActive[id] && !confirmed[id]) confirmed[id] = true;
+      else confirmationsProvided--;
     }
+
+    validProof = confirmationsProvided >= confirmationsRequired;
   }
 
   /**
@@ -538,9 +538,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     view
     returns (int8)
   {
-    if (isUsedT2TxId[t2TxId]) return 1; // Succeeded
-    else if (block.timestamp > expiry) return -1; // Failed
-    else return 0; // Currently undetermined
+    if (isUsedT2TxId[t2TxId]) return TX_SUCCEEDED;
+    else if (block.timestamp > expiry) return TX_FAILED;
+    else return TX_PENDING;
   }
 
   /**
@@ -685,7 +685,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (isLower) { // For lowers all confirmations are explicit so the first authorId is extracted from the first confirmation
       authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
-    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is taken as implicit
+    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is taken to be implicit
       authorId = t1AddressToId[msg.sender];
       unchecked { ++numConfirmations; }
     }

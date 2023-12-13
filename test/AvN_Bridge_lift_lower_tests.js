@@ -616,14 +616,15 @@ describe('Lifting and lowering', async () => {
     it('results are as expected for a valid, unused proof', async () => {
       const lowerAmount = 123;
       const [lowerProof] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner);
-      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
         await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
       const numConfirmationsSent = (await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
       expect(token).to.equal(token20.address);
-      expect(recipient).to.equal(owner);
       expect(amount).to.equal(lowerAmount);
+      expect(recipient).to.equal(owner);
+      expect(lowerId).to.equal(helper.lowerId());
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsSent);
       expect(validProof).to.equal(true);
@@ -635,14 +636,15 @@ describe('Lifting and lowering', async () => {
       await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
       const [lowerProof] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
       await avnBridge.claimLower(lowerProof);
-      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
         await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
       const numConfirmationsSent = (await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
       expect(token).to.equal(token777.address);
-      expect(recipient).to.equal(owner);
       expect(amount).to.equal(lowerAmount);
+      expect(recipient).to.equal(owner);
+      expect(lowerId).to.equal(helper.lowerId());
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsSent);
       expect(validProof).to.equal(true);
@@ -658,13 +660,14 @@ describe('Lifting and lowering', async () => {
       const dataFromProofA = lowerProofA.slice(0, splitPoint);
       const confirmationsFromProofB = lowerProofB.slice(splitPoint);
       const invalidProof = ethers.utils.concat([dataFromProofA, confirmationsFromProofB]);
-      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
         await avnBridge.checkLower(invalidProof);
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
 
       expect(token).to.equal(token);
-      expect(recipient).to.equal(recipient);
       expect(amount).to.equal(amount);
+      expect(recipient).to.equal(recipient);
+      expect(lowerId).to.equal(helper.lowerId()-1);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(0);
       expect(validProof).to.equal(false);
@@ -673,11 +676,12 @@ describe('Lifting and lowering', async () => {
 
     it('results are as expected for a completely invalid proof', async () => {
       const shortProof = helper.randomBytes32();
-      const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
+      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
         await avnBridge.checkLower(shortProof);
       expect(token).to.equal(helper.ZERO_ADDRESS);
-      expect(recipient).to.equal(helper.ZERO_ADDRESS);
       expect(amount).to.equal(0);
+      expect(recipient).to.equal(helper.ZERO_ADDRESS);
+      expect(lowerId).to.equal(0);
       expect(confirmationsRequired).to.equal(0);
       expect(confirmationsProvided).to.equal(0);
       expect(validProof).to.equal(false);
