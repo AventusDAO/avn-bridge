@@ -33,7 +33,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant internal LIFT_LIMIT = type(uint128).max;
   address constant internal PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
   uint256 constant internal MINIMUM_NUMBER_OF_AUTHORS = 4;
-  uint256 constant internal MINIMUM_PROOF_LENGTH = 352; // 4 * 32 (data) + 7 * 32 (2 confirmations)
+  uint256 constant internal MINIMUM_PROOF_LENGTH = 206; // 20B token + 32B amount + 20B recipient + 4B id + 130B 2 confirmations
   uint256 constant internal UNLOCKED = 1;
   uint256 constant internal LOCKED = 2;
 
@@ -462,12 +462,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
-    (address token, uint256 amount, address recipient, uint256 lowerId) = abi.decode(proof, (address, uint256, address, uint256));
-    bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+
+    bytes32 lowerHash = keccak256(proof[:76]);
     if (hasLowered[lowerHash]) revert LowerIsUsed();
     hasLowered[lowerHash] = true;
-    _verifyConfirmations(true, lowerHash, proof[192:]);
+    _verifyConfirmations(true, lowerHash, proof[76:]);
+
+    address token = address(bytes20(proof[0:20]));
+    uint256 amount = uint256(bytes32(proof[20:52]));
+    address recipient = address(bytes20(proof[52:72]));
     _releaseFunds(token, recipient, amount);
+
     emit LogLowerClaimed(lowerHash);
   }
 
@@ -481,12 +486,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     returns (address token, address recipient, uint256 amount, uint256 confirmationsRequired, uint256 confirmationsProvided, bool validProof, bool lowerClaimed)
   {
     if (proof.length >= MINIMUM_PROOF_LENGTH) {
-      uint256 lowerId;
-      bytes memory confirmations;
-      (token, amount, recipient, lowerId, confirmations) = abi.decode(proof, (address, uint256, address, uint256, bytes));
-
-      bytes32 lowerHash = keccak256(abi.encode(token, amount, recipient, lowerId));
+      token = address(bytes20(proof[0:20]));
+      amount = uint256(bytes32(proof[20:52]));
+      recipient = address(bytes20(proof[52:72]));
+      bytes32 lowerHash = keccak256(proof[:76]);
       if (hasLowered[lowerHash]) lowerClaimed = true;
+      bytes memory confirmations = proof[76:];
       confirmationsProvided = confirmations.length / SIGNATURE_LENGTH;
       confirmationsRequired = _requiredConfirmations();
       bool[] memory confirmed = new bool[](nextAuthorId);

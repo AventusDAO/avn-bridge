@@ -239,21 +239,22 @@ async function getValidExpiry() {
 
 async function createLowerProof(contract, token, amount, recipient) {
   lowerId++;
-  const lowerData = ethers.utils.defaultAbiCoder.encode(
-    ['address', 'uint256', 'address', 'uint256'],
-    [token, amount, recipient, lowerId]
-  );
-  const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerData]);
-  let confirmations = '0x';
+  const tokenBytes = ethers.utils.arrayify(token);
+  const amountBytes = ethers.utils.zeroPad(ethers.utils.arrayify(amount), 32);
+  const recipientBytes = ethers.utils.arrayify(recipient);
+  const lowerIdBytes = ethers.utils.zeroPad(ethers.utils.arrayify(lowerId), 4);
+  const lowerDataBytes = ethers.utils.concat([tokenBytes, amountBytes, recipientBytes, lowerIdBytes]);
+  const lowerHash = ethers.utils.solidityKeccak256(['bytes'], [lowerDataBytes]);
+
   const supermajorityConfirmations = (await contract.numActiveAuthors()) - (await getNumRequiredConfirmations(contract));
+  let confirmations = '0x';
   for (i = 1; i <= supermajorityConfirmations; i++) {
     const confirmation = await authors[i].account.signMessage(ethers.utils.arrayify(lowerHash));
     confirmations += strip_0x(confirmation);
   }
-  const lowerProof = ethers.utils.defaultAbiCoder.encode(
-    ['address', 'uint256', 'address', 'uint256', 'bytes'],
-    [token, amount, recipient, lowerId, confirmations]
-  );
+
+  const confirmationsBytes = ethers.utils.arrayify(confirmations);
+  const lowerProof = ethers.utils.concat([lowerDataBytes, confirmationsBytes]);
   return [lowerProof, lowerHash];
 }
 

@@ -654,10 +654,10 @@ describe('Lifting and lowering', async () => {
       await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
       const [lowerProofA] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
       const [lowerProofB] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner);
-      const splitPoint = 2 + 32 * 6 * 2; // '0x' + 32 bytes * 6 for the data * 2 hex chars per byte
+      const splitPoint = 20 + 32 + 20 + 4; // token bytes + amount bytes + recipient bytes + lower ID bytes
       const dataFromProofA = lowerProofA.slice(0, splitPoint);
       const confirmationsFromProofB = lowerProofB.slice(splitPoint);
-      const invalidProof = dataFromProofA + confirmationsFromProofB;
+      const invalidProof = ethers.utils.concat([dataFromProofA, confirmationsFromProofB]);
       const [token, recipient, amount, confirmationsRequired, confirmationsProvided, validProof, lowerClaimed] =
         await avnBridge.checkLower(invalidProof);
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
