@@ -500,8 +500,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       uint32 lowerId,
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
-      bool validProof,
-      bool lowerClaimed
+      bool proofIsValid,
+      bool lowerIsClaimed
     )
   {
     if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), 0, address(0), 0, 0, 0, false, false);
@@ -516,7 +516,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", lowerHash));
     uint256 confirmationsOffset;
 
-    lowerClaimed = hasLowered[lowerHash];
+    lowerIsClaimed = hasLowered[lowerHash];
     confirmationsProvided = numConfirmations;
     confirmationsRequired = _requiredConfirmations();
     assembly { confirmationsOffset := add(proof.offset, LOWER_DATA_LENGTH) }
@@ -527,7 +527,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       else confirmationsProvided--;
     }
 
-    validProof = confirmationsProvided >= confirmationsRequired;
+    proofIsValid = confirmationsProvided >= confirmationsRequired;
   }
 
   /**
