@@ -468,9 +468,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     hasLowered[lowerHash] = true;
     _verifyConfirmations(true, lowerHash, proof[76:]);
 
-    address token = address(bytes20(proof[0:20]));
-    uint256 amount = uint256(bytes32(proof[20:52]));
-    address recipient = address(bytes20(proof[52:72]));
+    address token;
+    uint256 amount;
+    address recipient;
+
+    assembly {
+      token := shr(96, calldataload(add(proof.offset, 0)))
+      amount := calldataload(add(proof.offset, 20))
+      recipient := shr(96, calldataload(add(proof.offset, 52)))
+    }
+
     _releaseFunds(token, recipient, amount);
 
     emit LogLowerClaimed(lowerHash);
