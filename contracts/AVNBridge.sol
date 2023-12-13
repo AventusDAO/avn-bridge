@@ -496,7 +496,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       token = address(bytes20(proof[0:20]));
       amount = uint256(bytes32(proof[20:52]));
       recipient = address(bytes20(proof[52:72]));
-      bytes32 lowerHash = keccak256(proof[:76]);
+      uint32 lowerId = uint32(bytes4(proof[72:76]));
+      bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
       if (hasLowered[lowerHash]) lowerClaimed = true;
       bytes memory confirmations = proof[76:];
       confirmationsProvided = confirmations.length / SIGNATURE_LENGTH;
