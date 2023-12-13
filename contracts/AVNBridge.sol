@@ -473,7 +473,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address recipient;
 
     assembly {
-      token := shr(96, calldataload(add(proof.offset, 0)))
+      token := shr(96, calldataload(proof.offset))
       amount := calldataload(add(proof.offset, 20))
       recipient := shr(96, calldataload(add(proof.offset, 52)))
     }
