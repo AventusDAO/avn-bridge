@@ -212,7 +212,9 @@ module.exports = {
   networks: {
     goerli: {
       url: getWeb3Url(`goerli`),
-      accounts: [process.env.GOERLI_PRIVATE_KEY || GOERLI_PRIVATE_KEY]
+      accounts: [process.env.GOERLI_PRIVATE_KEY || GOERLI_PRIVATE_KEY],
+      maxFeePerGas: 10000000000, // 10 gwei in wei
+      maxPriorityFeePerGas: 2000000000 // 2 gwei in wei
     },
     hardhat: {
       accounts: {
