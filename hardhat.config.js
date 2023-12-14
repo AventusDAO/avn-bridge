@@ -128,7 +128,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     } catch (e) {
       if (e.toString().includes('use the forceImport function')) {
         console.log(
-          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network goerli prepare-manifests --bridge ${args.bridge}`
+          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network goerli prepare-manifest --bridge ${args.bridge}`
         );
         process.exit(0);
       } else {
