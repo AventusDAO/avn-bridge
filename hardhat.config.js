@@ -9,6 +9,7 @@ require('solidity-coverage');
 require('hardhat-erc1820');
 
 const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
+const axios = require('axios');
 const fs = require('fs');
 
 task('deploy', 'deploy a new avn-bridge contract')
@@ -113,31 +114,55 @@ task('publishToken', 'deploy a new erc20 test token and publish it').setAction(a
 });
 
 task('upgrade', 'upgrade existing avn-bridge contract')
-  .addParam('proxy', 'existing AVN Bridge proxy address')
+  .addParam('bridge', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
     mainnetCheck(hre);
     await hre.run('compile');
 
     const [upgrader] = await hre.ethers.getSigners();
     const balanceBefore = await upgrader.getBalance();
-    console.log(`\nUpgrading ${args.proxy} on ${hre.network.name} network using account ${upgrader.address}...`);
+    console.log(`\nUpgrading ${args.bridge} on ${hre.network.name} network using account ${upgrader.address}...`);
     const AVNBridge = await ethers.getContractFactory('AVNBridge');
-    await upgrades.upgradeProxy(args.proxy, AVNBridge);
+    try {
+      await upgrades.upgradeProxy(args.bridge, AVNBridge);
+    } catch (e) {
+      if (e.toString().includes('use the forceImport function')) {
+        console.log(
+          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network goerli prepare-manifests --bridge ${args.bridge}`
+        );
+        process.exit(0);
+      } else {
+        console.log(e);
+        process.exit(1);
+      }
+    }
     console.log(`\nCost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await upgrader.getBalance()))} ETH`);
     await new Promise(r => setTimeout(r, 30000));
     try {
-      const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.proxy);
+      const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.bridge);
       await hre.run('verify', { address: implementationAddress });
     } catch (e) {}
   });
 
-task('prepare-upgrade', 'prepare the openzeppelin mainfest (if required)')
-  .addParam('proxy', 'existing AVN Bridge proxy address')
+task('prepare-manifest', 'prepares the openzeppelin mainfest')
+  .addParam('bridge', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
     mainnetCheck(hre);
+    const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
+    const url = `https://api-goerli.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
+    const response = await axios.get(url);
+    const sources = JSON.parse(response.data.result[0].SourceCode.slice(1, -1)).sources;
+    const interfacePath = 'contracts/interfaces/IAVNBridge.sol';
+    const contractPath = 'contracts/AVNBridge.sol';
+    const interfaceCode = fs.readFileSync('./' + interfacePath, 'utf8');
+    const contractCode = fs.readFileSync('./' + contractPath, 'utf8');
+    fs.writeFileSync('./' + interfacePath, sources[interfacePath].content);
+    fs.writeFileSync('./' + contractPath, sources[contractPath].content);
     await hre.run('compile');
     const AVNBridge = await ethers.getContractFactory('AVNBridge');
-    await upgrades.forceImport(args.proxy, AVNBridge);
+    await upgrades.forceImport(args.bridge, AVNBridge);
+    fs.writeFileSync('./' + interfacePath, interfaceCode);
+    fs.writeFileSync('./' + contractPath, contractCode);
     console.log('Done');
   });
 
