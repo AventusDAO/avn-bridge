@@ -12,6 +12,9 @@ const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_K
 const axios = require('axios');
 const fs = require('fs');
 
+const INTERFACE_PATH = 'contracts/interfaces/IAVNBridge.sol';
+const CONTRACT_PATH = 'contracts/AVNBridge.sol';
+
 task('deploy', 'deploy a new avn-bridge contract')
   .addOptionalParam('token', 'optional core token address', '0x97d9b397189e8b771FfAc3Cb04cf26C780a93431')
   .addOptionalParam('authors', 'optional filepath to initial author set', './authors.json')
@@ -148,21 +151,26 @@ task('prepare-manifest', 'prepares the openzeppelin mainfest')
   .addParam('bridge', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
     mainnetCheck(hre);
+
     const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
     const url = `https://api-goerli.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await axios.get(url);
     const sources = JSON.parse(response.data.result[0].SourceCode.slice(1, -1)).sources;
-    const interfacePath = 'contracts/interfaces/IAVNBridge.sol';
-    const contractPath = 'contracts/AVNBridge.sol';
-    const interfaceCode = fs.readFileSync('./' + interfacePath, 'utf8');
-    const contractCode = fs.readFileSync('./' + contractPath, 'utf8');
-    fs.writeFileSync('./' + interfacePath, sources[interfacePath].content);
-    fs.writeFileSync('./' + contractPath, sources[contractPath].content);
-    await hre.run('compile');
-    const AVNBridge = await ethers.getContractFactory('AVNBridge');
-    await upgrades.forceImport(args.bridge, AVNBridge);
-    fs.writeFileSync('./' + interfacePath, interfaceCode);
-    fs.writeFileSync('./' + contractPath, contractCode);
+    const interfaceCode = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
+    const contractCode = fs.readFileSync('./' + CONTRACT_PATH, 'utf8');
+
+    try {
+      fs.writeFileSync('./' + INTERFACE_PATH, sources[INTERFACE_PATH].content);
+      fs.writeFileSync('./' + CONTRACT_PATH, sources[CONTRACT_PATH].content);
+      await hre.run('compile');
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
+      await upgrades.forceImport(args.bridge, AVNBridge);
+    } catch (e) {
+      console.log(e);
+      fs.writeFileSync('./' + INTERFACE_PATH, interfaceCode);
+      fs.writeFileSync('./' + CONTRACT_PATH, contractCode);
+    }
+
     console.log('Done');
   });
 
