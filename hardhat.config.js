@@ -196,9 +196,7 @@ module.exports = {
             details: { yul: true }
           }
         }
-      }
-    ],
-    compilers: [
+      },
       {
         version: '0.8.17',
         settings: {
