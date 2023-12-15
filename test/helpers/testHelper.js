@@ -255,7 +255,7 @@ async function createLowerProof(contract, token, amount, recipient) {
 
   const confirmationsBytes = ethers.utils.arrayify(confirmations);
   const lowerProof = ethers.utils.concat([lowerDataBytes, confirmationsBytes]);
-  return [lowerProof, lowerHash];
+  return [lowerProof, lowerId];
 }
 
 // Keep exports alphabetical.
@@ -279,7 +279,6 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
-  lowerId: () => lowerId,
   LOWER_ID,
   MIN_AUTHORS,
   PROXY_LOWER_ID,
