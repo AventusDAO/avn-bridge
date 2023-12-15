@@ -167,9 +167,10 @@ task('prepare-manifest', 'prepares the openzeppelin mainfest')
       await upgrades.forceImport(args.bridge, AVNBridge);
     } catch (e) {
       console.log(e);
-      fs.writeFileSync('./' + INTERFACE_PATH, interfaceCode);
-      fs.writeFileSync('./' + CONTRACT_PATH, contractCode);
     }
+
+    fs.writeFileSync('./' + INTERFACE_PATH, interfaceCode);
+    fs.writeFileSync('./' + CONTRACT_PATH, contractCode);
 
     console.log('Done');
   });

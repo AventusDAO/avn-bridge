@@ -454,7 +454,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       amount := or(shr(64, amount), shl(64, amount))
     }
 
-    _releaseFunds(token, recipient, amount);
+    _releaseFunds(token, amount, recipient);
     emit LogLegacyLowered(token, recipient, t2PubKey, amount);
   }
 
@@ -467,23 +467,27 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     external
   {
     if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
-    bytes32 lowerHash = keccak256(proof[:LOWER_DATA_LENGTH]);
-    if (hasLowered[lowerHash]) revert LowerIsUsed();
-    hasLowered[lowerHash] = true;
+
     address token;
     uint256 amount;
     address recipient;
+    uint32 lowerId;
 
     assembly {
       token := shr(96, calldataload(proof.offset))
       amount := calldataload(add(proof.offset, 20))
       recipient := shr(96, calldataload(add(proof.offset, 52)))
+      lowerId := shr(224, calldataload(add(proof.offset, 72)))
     }
 
-    _verifyConfirmations(true, lowerHash, proof[LOWER_DATA_LENGTH:]);
-    _releaseFunds(token, recipient, amount);
+    bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
+    if (hasLowered[lowerHash]) revert LowerIsUsed();
+    hasLowered[lowerHash] = true;
 
-    emit LogLowerClaimed(lowerHash);
+    _verifyConfirmations(true, lowerHash, proof[LOWER_DATA_LENGTH:]);
+    _releaseFunds(token, amount, recipient);
+
+    emit LogLowerClaimed(lowerId);
   }
 
   /** @dev Check a lower proof. Returns the details, proof validity, and whether or not the lower has been claimed.
@@ -619,7 +623,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } while (i < numAuth);
   }
 
-  function _releaseFunds(address token, address recipient, uint256 amount)
+  function _releaseFunds(address token, uint256 amount, address recipient)
     private
   {
     if (token == PSEUDO_ETH_ADDRESS) {
