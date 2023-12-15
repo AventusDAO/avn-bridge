@@ -454,7 +454,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       amount := or(shr(64, amount), shl(64, amount))
     }
 
-    _releaseFunds(token, recipient, amount);
+    _releaseFunds(token, amount, recipient);
     emit LogLegacyLowered(token, recipient, t2PubKey, amount);
   }
 
@@ -485,7 +485,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     hasLowered[lowerHash] = true;
 
     _verifyConfirmations(true, lowerHash, proof[LOWER_DATA_LENGTH:]);
-    _releaseFunds(token, recipient, amount);
+    _releaseFunds(token, amount, recipient);
 
     emit LogLowerClaimed(lowerId);
   }
@@ -623,7 +623,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } while (i < numAuth);
   }
 
-  function _releaseFunds(address token, address recipient, uint256 amount)
+  function _releaseFunds(address token, uint256 amount, address recipient)
     private
   {
     if (token == PSEUDO_ETH_ADDRESS) {
