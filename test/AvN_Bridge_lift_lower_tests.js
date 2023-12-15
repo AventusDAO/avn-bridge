@@ -667,7 +667,7 @@ describe('Lifting and lowering', async () => {
       expect(token).to.equal(token);
       expect(amount).to.equal(amount);
       expect(recipient).to.equal(recipient);
-      expect(lowerId).to.equal(helper.lowerId()-1);
+      expect(lowerId).to.equal(helper.lowerId() - 1);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
