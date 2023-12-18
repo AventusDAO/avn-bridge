@@ -1,22 +1,26 @@
 # AVN Bridge Overview
 
-The purpose of the AVN Bridge (T1) contract is to provide a lightweight and gas-efficient means of facilitating a Substrate-based fungible-token-scaling sidechain (T2), be that a parachain or a sovereign chain.
+The purpose of the AVN Bridge (T1) contract is to provide a lightweight and gas-efficient means of facilitating a Substrate-based sidechain (T2), be that a parachain or a sovereign chain.
 
 The contract utilises OpenZeppelin's implementation of the Universal Upgradeable Proxy Standard ([EIP-1822](https://eips.ethereum.org/EIPS/eip-1822)).
 
-The system is underwritten by its constructor-specified core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
+The system is underwritten by its core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
 
-#### The AVN Bridge has 4 main responsibilities:
+### Key Functions
 
-1. Management of *Authors* - AvN nodes responsible for block creation on T2 and interacting with T1 on behalf of T2 via proofs of consensus.
+1. **Author Management**\
+The addition and removal of AvN "authors" - nodes which perform block creation on T2 and can interact with T1 via proof of consensus.
 
-2. The periodic checkpointing (*publishing*) by authors of Merkle roots encoding all transaction calls that have occurred on T2.
+2. **Root publishing**\
+The periodic checkpointing on T1, by authors, of all transaction calls having occurred on T2, recorded in the form of Merkle Roots.
 
-3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between T1 Ethereum and the T2 AVN sidechain by the following processes:
-- *Lifting* - locking tokens received in T1 and recreating the equivalent amount on T2 in the specified T2 recipient account
-- *Lowering* - destroying tokens on T2 and unlocking and transferring the equivalent amount on T1 to the specified T1 recipient account
+3. **Bridging funds**\
+The secure movement of fungible tokens (any ERC20 or ERC777 compliant token, or ETH) between T1 Ethereum and T2 AVN via:
+   - **Lifting** - Locking tokens sent to the T1 contract and authorising the generation of an identical amount in the designated recipient's account on T2.
+   - **Lowering** - Unlocking tokens from the contract and transferring them to the specified T1 recipient, based on having received proof of their destruction on T2.
 
-4. *Triggering Growth* - a special form of lifting which periodically inflates the core token supply according to the staking reward data from T2.
+4. **Triggering Growth**\
+Inflating the core token's total supply according to T2 staking and reward cycles data provided to T1 by authors.
 
 ## Development
 
