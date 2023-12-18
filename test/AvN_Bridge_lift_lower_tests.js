@@ -541,6 +541,23 @@ describe('Lifting and lowering', async () => {
         expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(owner));
       });
 
+      it('in lowering ERC777 tokens to a non-compliant contract via ERC20 transfer backwards compatability', async () => {
+        // lift
+        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
+        // record pre-lower balances
+        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+        const senderBalBefore = await token777.balanceOf(token20.address);
+
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, token20.address);
+
+        // lower and confirm values
+        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
+          .to.emit(avnBridge, 'LogLowerClaimed')
+          .withArgs(lowerId);
+        expect(avnBalanceBefore.sub(lowerAmount)).to.equal(await token777.balanceOf(avnBridge.address));
+        expect(senderBalBefore.add(lowerAmount)).to.equal(await token777.balanceOf(token20.address));
+      });
+
       it('in lowering ERC777 to the avn bridge itself without accidentally triggering a subsequent lift', async () => {
         // lift
         await token777.send(avnBridge.address, liftAmount, someT2PubKey);
