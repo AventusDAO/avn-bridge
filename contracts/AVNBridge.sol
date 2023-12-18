@@ -334,7 +334,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Enables T2 to publish a Merkle tree root hashes representing the latest set of transactions to have occurred on T2.
+   * @dev Enables T2 to publish a Merkle tree root hash representing the latest set of calls to have been made on T2.
    */
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations)
     onlyWhenAuthorsEnabled
@@ -349,7 +349,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Enables anyone to move an amount of ERC20 tokens to the specified T2 public key of the recipient on T2.
+   * @dev Enables anyone to move an amount of ERC20 tokens to the specified 32 byte public key of the recipient on T2.
    * Tokens must first be approved for use by this contract. Fails if it will cause the total amount of the
    * tokens currently lifted to exceed 340282366920938463463374607431768211455 (T2 constraint).
    */
@@ -381,16 +381,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /**
    * @dev ERC777 hook, triggered when anyone sends ERC777 tokens to this contract with a data payload containing
-   * the 32 byte public key of the T2 recipient. Cannot be called directly. Fails if the recipient is not supplied.
-   * Fails if it will cause the total amount of the tokens currently lifted to exceed
-   * 340282366920938463463374607431768211455 (T2 constraint).
+   * the 32 byte public key of the T2 recipient. Fails if the recipient is not supplied. Fails if it will cause the
+   * total amount of the tokens currently lifted to exceed 340282366920938463463374607431768211455 (T2 constraint).
    */
   function tokensReceived(address operator, address /* from */, address to, uint256 amount, bytes calldata data,
       bytes calldata /* operatorData */)
     onlyWhenLiftingEnabled
     external
   {
-    if (operator == address(this)) return; // internally triggered by calling transferFrom in a lift so we don't lift again here
+    if (operator == address(this)) return; // triggered by calling transferFrom in a lift call-chain so we don't lift again here
     if (_lock == LOCKED) revert Locked();
     if (amount == 0) revert AmountIsZero();
     if (to != address(this)) revert InvalidRecipient();
@@ -459,7 +458,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Enables anyone to claim the amount of funds specified in the T2-supplied proof for the intended recipient.
+   * @dev Enables anyone to claim the amount of funds specified in the T2-supplied proof, for the intended recipient.
    */
   function claimLower(bytes calldata proof)
     onlyWhenLoweringEnabled
@@ -535,7 +534,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Enables anyone to check the current status of any author transaction. Intended for use by T2 authors.
+   * @dev Enables anyone to check the current status of any author transaction. Helper function, intended for use by T2 authors.
    */
   function corroborate(uint32 t2TxId, uint256 expiry)
     external
@@ -689,7 +688,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (isLower) { // For lowers all confirmations are explicit so the first authorId is extracted from the first confirmation
       authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
-    } else { // For non-lowers there is a high likelihood the sender is an author and their confirmation is taken to be implicit
+    } else { // For non-lowers there is a high likelihood the sender is an author, so their confirmation is taken to be implicit
       authorId = t1AddressToId[msg.sender];
       unchecked { ++numConfirmations; }
     }

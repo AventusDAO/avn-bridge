@@ -9,10 +9,10 @@ The system is underwritten by its core token (in the case of Aventus: [AVT](http
 ### Key Functions
 
 1. **Author Management**\
-The addition and removal of AvN "authors" - nodes which perform block creation on T2 and can interact with T1 via proof of consensus.
+The addition and removal of AvN "authors" - nodes which perform block creation on T2 and can interact with T1 on behalf of T2 via proof of consensus.
 
 2. **Root publishing**\
-The periodic checkpointing on T1, by authors, of all transaction calls having occurred on T2, recorded in the form of Merkle Roots.
+The periodic checkpointing on T1 of all transaction calls having occurred on T2, recorded in the form of Merkle Roots by T2.
 
 3. **Bridging funds**\
 The secure movement of fungible tokens (any ERC20 or ERC777 compliant token, or ETH) between T1 Ethereum and T2 AVN via:
@@ -20,7 +20,7 @@ The secure movement of fungible tokens (any ERC20 or ERC777 compliant token, or 
    - **Lowering** - Unlocking tokens from the contract and transferring them to the specified T1 recipient, based on having received proof of their destruction on T2.
 
 4. **Triggering Growth**\
-Inflating the core token's total supply according to T2 staking and reward cycles data provided to T1 by authors.
+Inflating the core token's total supply according to the T2 staking and reward cycle data provided to T1 by T2.
 
 ## Development
 
