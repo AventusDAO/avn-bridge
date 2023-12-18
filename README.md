@@ -8,15 +8,15 @@ The system is underwritten by its constructor-specified core token (in the case 
 
 #### The AVN Bridge has 4 main responsibilities:
 
-1. Management of *Authors* - AvN nodes responsible for block creation on T2 and the publishing of their proofs to T1.
+1. Management of *Authors* - AvN nodes responsible for block creation on T2 and interacting with T1 on behalf of T2 via proofs of consensus.
 
-2. The periodic checkpointing (*publishing*) by authors of Merkle roots encoding all transactions that have occurred on T2.
+2. The periodic checkpointing (*publishing*) by authors of Merkle roots encoding all transaction calls that have occurred on T2.
 
 3. Securely moving fungible tokens (any token adhering to ERC20 or ERC777 specification) or ETH between T1 Ethereum and the T2 AVN sidechain by the following processes:
-- *Lifting* - locking tokens received by T1 and recreating the equivalent amount in the specified T2 recipient account
-- *Lowering* - destroying tokens on T2 and unlocking and transferring the equivalent amount to the specified T1 recipient account
+- *Lifting* - locking tokens received in T1 and recreating the equivalent amount on T2 in the specified T2 recipient account
+- *Lowering* - destroying tokens on T2 and unlocking and transferring the equivalent amount on T1 to the specified T1 recipient account
 
-4. *Triggering Growth* - a special form of lifting which inflates the core token supply according to the reward mechanisms of T2.
+4. *Triggering Growth* - a special form of lifting which periodically inflates the core token supply according to the staking reward data from T2.
 
 ## Development
 
@@ -50,7 +50,7 @@ The values in config.json can also be set as environment variables.
 
 The deployment will automatically publish and verify the contracts.\
 \
-The following manual steps are then required to interact with the AVN contract on Etherscan:
+The following manual steps may then be required to interact with the AVN contract on Etherscan:
 - Visit the Etherscan page for the ERC1967Proxy address from the deployment
 - Under More Options select "Is this a proxy?"
 - Click Verify and Save
