@@ -36,8 +36,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 constant private LOWER_DATA_LENGTH = 20 + 32 + 20 + 4; // token address + amount + recipient address + lower ID
   uint256 constant private SIGNATURE_LENGTH = 65;
   uint256 constant private MINIMUM_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
-  uint256 constant private UNLOCKED = 1;
-  uint256 constant private LOCKED = 2;
+  uint256 constant private UNLOCKED = 0;
+  uint256 constant private LOCKED = 1;
   int8 constant private TX_SUCCEEDED = 1;
   int8 constant private TX_PENDING = 0;
   int8 constant private TX_FAILED = -1;
@@ -138,7 +138,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     nextAuthorId = 1;
     growthDelay = 2 days;
     _initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
-    _lock = UNLOCKED;
   }
 
   modifier onlyWhenLiftingEnabled() {
