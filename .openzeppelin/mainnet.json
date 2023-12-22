@@ -1197,6 +1197,352 @@
         },
         "namespaces": {}
       }
+    },
+    "686a74533a44d3df799f67a829833e908abe4e5ba9207c30c2a8604524ae469f": {
+      "address": "0x57e8c0568e4F6889Ae209162F2Beec069202d172",
+      "txHash": "0x1a2db20d9c0d2ed7f1ec5bb6071d4b8c3ece5390999d233135b3c35c96566401",
+      "layout": {
+        "solcVersion": "0.8.23",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:63",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:68"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ERC1967UpgradeUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\ERC1967\\ERC1967UpgradeUpgradeable.sol:169"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "UUPSUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\UUPSUpgradeable.sol:111"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\utils\\ContextUpgradeable.sol:36"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "151",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "152",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "isAuthor",
+            "offset": 0,
+            "slot": "201",
+            "type": "t_mapping(t_uint256,t_bool)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:46",
+            "renamedFrom": "isRegisteredValidator"
+          },
+          {
+            "label": "authorIsActive",
+            "offset": 0,
+            "slot": "202",
+            "type": "t_mapping(t_uint256,t_bool)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:48",
+            "renamedFrom": "isActiveValidator"
+          },
+          {
+            "label": "t1AddressToId",
+            "offset": 0,
+            "slot": "203",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:49"
+          },
+          {
+            "label": "t2PubKeyToId",
+            "offset": 0,
+            "slot": "204",
+            "type": "t_mapping(t_bytes32,t_uint256)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:51",
+            "renamedFrom": "t2PublicKeyToId"
+          },
+          {
+            "label": "idToT1Address",
+            "offset": 0,
+            "slot": "205",
+            "type": "t_mapping(t_uint256,t_address)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:52"
+          },
+          {
+            "label": "idToT2PubKey",
+            "offset": 0,
+            "slot": "206",
+            "type": "t_mapping(t_uint256,t_bytes32)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:54",
+            "renamedFrom": "idToT2PublicKey"
+          },
+          {
+            "label": "numBytesToLowerData",
+            "offset": 0,
+            "slot": "207",
+            "type": "t_mapping(t_bytes2,t_uint256)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:55"
+          },
+          {
+            "label": "isPublishedRootHash",
+            "offset": 0,
+            "slot": "208",
+            "type": "t_mapping(t_bytes32,t_bool)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:56"
+          },
+          {
+            "label": "isUsedT2TxId",
+            "offset": 0,
+            "slot": "209",
+            "type": "t_mapping(t_uint256,t_bool)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:58",
+            "renamedFrom": "isUsedT2TransactionId"
+          },
+          {
+            "label": "hasLowered",
+            "offset": 0,
+            "slot": "210",
+            "type": "t_mapping(t_bytes32,t_bool)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:59"
+          },
+          {
+            "label": "growthTriggered",
+            "offset": 0,
+            "slot": "211",
+            "type": "t_mapping(t_uint32,t_uint256)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:61",
+            "renamedFrom": "growthRelease"
+          },
+          {
+            "label": "growthAmount",
+            "offset": 0,
+            "slot": "212",
+            "type": "t_mapping(t_uint32,t_uint128)",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:62"
+          },
+          {
+            "label": "_unused1_",
+            "offset": 0,
+            "slot": "213",
+            "type": "t_array(t_uint256)2_storage",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:65",
+            "renamedFrom": "quorum"
+          },
+          {
+            "label": "numActiveAuthors",
+            "offset": 0,
+            "slot": "215",
+            "type": "t_uint256",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:67",
+            "renamedFrom": "numActiveValidators"
+          },
+          {
+            "label": "nextAuthorId",
+            "offset": 0,
+            "slot": "216",
+            "type": "t_uint256",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:69",
+            "renamedFrom": "nextValidatorId"
+          },
+          {
+            "label": "growthDelay",
+            "offset": 0,
+            "slot": "217",
+            "type": "t_uint256",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:70"
+          },
+          {
+            "label": "coreToken",
+            "offset": 0,
+            "slot": "218",
+            "type": "t_address",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:71"
+          },
+          {
+            "label": "_unused2_",
+            "offset": 0,
+            "slot": "219",
+            "type": "t_address",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:73",
+            "renamedFrom": "priorInstance"
+          },
+          {
+            "label": "authorsEnabled",
+            "offset": 20,
+            "slot": "219",
+            "type": "t_bool",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:75",
+            "renamedFrom": "validatorFunctionsAreEnabled"
+          },
+          {
+            "label": "liftingEnabled",
+            "offset": 21,
+            "slot": "219",
+            "type": "t_bool",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:77",
+            "renamedFrom": "liftingIsEnabled"
+          },
+          {
+            "label": "loweringEnabled",
+            "offset": 22,
+            "slot": "219",
+            "type": "t_bool",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:79",
+            "renamedFrom": "loweringIsEnabled"
+          },
+          {
+            "label": "pendingOwner",
+            "offset": 0,
+            "slot": "220",
+            "type": "t_address",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:80"
+          },
+          {
+            "label": "_lock",
+            "offset": 0,
+            "slot": "221",
+            "type": "t_uint256",
+            "contract": "AVNBridge",
+            "src": "contracts\\AVNBridge.sol:81"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)2_storage": {
+            "label": "uint256[2]",
+            "numberOfBytes": "64"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes2": {
+            "label": "bytes2",
+            "numberOfBytes": "2"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes2,t_uint256)": {
+            "label": "mapping(bytes2 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_bool)": {
+            "label": "mapping(bytes32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_uint256)": {
+            "label": "mapping(bytes32 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_address)": {
+            "label": "mapping(uint256 => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bool)": {
+            "label": "mapping(uint256 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bytes32)": {
+            "label": "mapping(uint256 => bytes32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint128)": {
+            "label": "mapping(uint32 => uint128)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint256)": {
+            "label": "mapping(uint32 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_uint128": {
+            "label": "uint128",
+            "numberOfBytes": "16"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {}
+      }
     }
   }
 }
