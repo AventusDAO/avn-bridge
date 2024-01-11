@@ -8,7 +8,7 @@ require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('hardhat-erc1820');
 
-const { INFURA_API_KEY, ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
+const { INFURA_API_KEY, ETHERSCAN_API_KEY, SEPOLIA_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
 const axios = require('axios');
 const fs = require('fs');
 
@@ -34,7 +34,7 @@ task('deploy', 'deploy a new avn-bridge contract')
     const [deployer] = await hre.ethers.getSigners();
     console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
     // delete any existing OZ manifests as we want to deploy anew, not upgrade
-    if (fs.existsSync('./.openzeppelin/goerli.json')) fs.unlinkSync('./.openzeppelin/goerli.json');
+    if (fs.existsSync('./.openzeppelin/sepolia.json')) fs.unlinkSync('./.openzeppelin/sepolia.json');
 
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
@@ -131,7 +131,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     } catch (e) {
       if (e.toString().includes('use the forceImport function')) {
         console.log(
-          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network goerli prepare-manifest --bridge ${args.bridge}`
+          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network sepolia prepare-manifest --bridge ${args.bridge}`
         );
         process.exit(0);
       } else {
@@ -153,7 +153,7 @@ task('prepare-manifest', 'prepares the openzeppelin mainfest')
     mainnetCheck(hre);
 
     const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
-    const url = `https://api-goerli.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
+    const url = `https://api-sepolia.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await axios.get(url);
     const sources = JSON.parse(response.data.result[0].SourceCode.slice(1, -1)).sources;
     const interfaceCode = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
@@ -219,11 +219,11 @@ module.exports = {
     ]
   },
   networks: {
-    goerli: {
-      url: getWeb3Url(`goerli`),
-      accounts: [process.env.GOERLI_PRIVATE_KEY || GOERLI_PRIVATE_KEY],
-      maxFeePerGas: 10000000000, // 10 gwei in wei
-      maxPriorityFeePerGas: 2000000000 // 2 gwei in wei
+    sepolia: {
+      url: getWeb3Url(`sepolia`),
+      accounts: [process.env.SEPOLIA_PRIVATE_KEY || SEPOLIA_PRIVATE_KEY],
+      maxFeePerGas: 10000000000,
+      maxPriorityFeePerGas: 2000000000
     },
     hardhat: {
       accounts: {
