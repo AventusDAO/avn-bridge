@@ -36,20 +36,24 @@ task('deploy', 'deploy a new avn-bridge contract')
 
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, {
+      kind: 'uups',
+      txOverrides: { maxFeePerGas: 100e9, maxPriorityFeePerGas: 5e9 }
+    });
     await avnBridge.deployed();
     const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
     // output new contract address to file
     const outFile = './addresses.json';
     const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-    addresses[hre.network.name]['avn'] = avnBridge.address;
+    const key = hre.network.name + '_' + args.env;
+    addresses[key] = { avn: avnBridge.address, erc20token: args.token };
     fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
     await new Promise(r => setTimeout(r, 30000));
     try {
-      await hre.run('verify', { address: implementationAddress });
-      await hre.run('verify', { address: avnBridge.address });
+      await hre.run('verify:verify', { address: implementationAddress });
+      await hre.run('verify:verify', { address: avnBridge.address });
     } catch (e) {}
     console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
     console.log(`\nContract: ${avnBridge.address}`);
@@ -141,7 +145,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     await new Promise(r => setTimeout(r, 30000));
     try {
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.bridge);
-      await hre.run('verify', { address: implementationAddress });
+      await hre.run('verify:verify', { address: implementationAddress });
     } catch (e) {}
   });
 
