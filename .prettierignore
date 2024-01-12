@@ -4,6 +4,5 @@ artifacts/
 cache/
 contracts/
 coverage/
-*.json
 **/*.md
 *ignore
