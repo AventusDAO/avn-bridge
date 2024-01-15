@@ -1,7 +1,11 @@
 {
-  "sepolia": {
-    "avn": "0x8Fa6cD9A275506D719C434335c0C9FfD15e05A87",
+  "sepolia_dev": {
+    "avn": "0x0Dd31348e68b6400bf8BdE84a1AaF733D9fCBf9B",
     "erc20token": "0x93ba86eCfDDD9CaAAc29bE83aCE5A3188aC47730"
+  },
+  "sepolia_testnet": {
+    "avn": "0x2bb59e4f9Cd053779E5d6f6dB2724F5DF5e53ce6",
+    "erc20token": "0xb3594297e1F257AD2A90222F66393645C6622263"
   },
   "mainnet": {
     "avn": "0xF05Df39f745A240fb133cC4a11E42467FAB10f1F"

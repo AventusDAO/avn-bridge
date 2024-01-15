@@ -25,9 +25,10 @@ Inflating the core token's total supply according to the T2 staking and reward c
 ## Development
 
 ### Setup
-do `npm i`\
-fill in "config_.json" and save locally as "config.json"
-The values in config.json can also be set as environment variables.
+- do `npm i`\
+- populate `config_.json` and save as `config.json` (the values in `config.json` can also be set as environment variables)
+- ensure `authors.json` includes the correct authors for your AvN environment
+
 
 #### Run tests
 `npx hardhat test`
@@ -39,7 +40,7 @@ The values in config.json can also be set as environment variables.
 `npx hardhat size-contracts`
 
 #### Deploy
-`npx hardhat --network <network> deploy --token [core token address] --authors [authors json file]`
+`npx hardhat --network <network> deploy --token <core token address> --env <AvN environment name - eg: 'testnet' or 'dev'>`
 
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --bridge <contract address>`

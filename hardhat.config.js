@@ -16,13 +16,13 @@ const INTERFACE_PATH = 'contracts/interfaces/IAVNBridge.sol';
 const CONTRACT_PATH = 'contracts/AVNBridge.sol';
 
 task('deploy', 'deploy a new avn-bridge contract')
-  .addOptionalParam('token', 'optional core token address', '0x97d9b397189e8b771FfAc3Cb04cf26C780a93431')
-  .addOptionalParam('authors', 'optional filepath to initial author set', './authors.json')
+  .addParam('token', 'core token address')
+  .addParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
     mainnetCheck(hre);
     await hre.run('compile');
 
-    const authors = require(args.authors);
+    const authors = require('./authors.json')[args.env];
     const initArgs = [args.token, [], [], [], []];
     authors.forEach(author => {
       initArgs[1].push(author.ethAddress);
@@ -33,25 +33,27 @@ task('deploy', 'deploy a new avn-bridge contract')
 
     const [deployer] = await hre.ethers.getSigners();
     console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
-    // delete any existing OZ manifests as we want to deploy anew, not upgrade
-    if (fs.existsSync('./.openzeppelin/sepolia.json')) fs.unlinkSync('./.openzeppelin/sepolia.json');
 
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, {
+      kind: 'uups',
+      txOverrides: { maxFeePerGas: 100e9, maxPriorityFeePerGas: 5e9 }
+    });
     await avnBridge.deployed();
     const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
 
     // output new contract address to file
     const outFile = './addresses.json';
     const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-    addresses[hre.network.name]['avn'] = avnBridge.address;
+    const key = hre.network.name + '_' + args.env;
+    addresses[key] = { avn: avnBridge.address, erc20token: args.token };
     fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 
-    await new Promise(r => setTimeout(r, 20000));
+    await new Promise(r => setTimeout(r, 30000));
     try {
-      await hre.run('verify', { address: implementationAddress });
-      await hre.run('verify', { address: avnBridge.address });
+      await hre.run('verify:verify', { address: implementationAddress });
+      await hre.run('verify:verify', { address: avnBridge.address });
     } catch (e) {}
     console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
     console.log(`\nContract: ${avnBridge.address}`);
@@ -107,7 +109,7 @@ task('publishToken', 'deploy a new erc20 test token and publish it').setAction(a
   const Token20 = await hre.ethers.getContractFactory('Token20');
   const token20 = await Token20.deploy(supply);
   await token20.deployed();
-  await new Promise(r => setTimeout(r, 10000));
+  await new Promise(r => setTimeout(r, 30000));
   await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
 
   const outFile = './addresses.json';
@@ -143,7 +145,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
     await new Promise(r => setTimeout(r, 30000));
     try {
       const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.bridge);
-      await hre.run('verify', { address: implementationAddress });
+      await hre.run('verify:verify', { address: implementationAddress });
     } catch (e) {}
   });
 

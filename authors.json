@@ -1,22 +1,57 @@
-[
-  {
-    "ethAddress": "0xE4ce55611f75de38d6ACDC08D1F1d8c9Af35cF71",
-    "ethUncompressedPublicKey": "0x04a2e1cf626313d269e0ab9e3153aeddc6d18ebcf25105e1478cee8307d854f7dc34165aa3f0d566914ac1dc630d666a027c267938d6da0a65b3c0b00ecc3ee676",
-    "t2PublicKey": "0x4c79bd0a61defa4af85ce636e9478503a9733608746a15820f3243c29dece319"
-  },
-  {
-    "ethAddress": "0x7d1E47be2677B13BCda306D919fA3F578239f774",
-    "ethUncompressedPublicKey": "0x04718ca6f257b752f7222920a8187d1af65c940bc8aee17129d29868e6eb79616295f4812940f6009901fa4191ea08fcaab44f4fd0e307d65f91dd0d8bf8558044",
-    "t2PublicKey": "0x9cf7d5f7fdc3ba67db080af4a23feed27bb763ab4ae8b04a1b92740d694c3d05"
-  },
-  {
-    "ethAddress": "0x87425F06FE628AB9c180c00E747Dc170c8eF1B34",
-    "ethUncompressedPublicKey": "0x04a51c9e4dab3516b44366978f5ec53f627cf506bfc9915530299dc2d793d169d48c9be8b07a013e5204b00358fe678b560d681de81a6068abdeeb68cf7eb54bd5",
-    "t2PublicKey": "0x5894ff7e13fc0169de4590fde7fc4f5d8f32e62da2f4ca81dc2e83dfe092a95f"
-  },
-  {
-    "ethAddress": "0xeda232860B30697d666d3ae44274C63f07592dc1",
-    "ethUncompressedPublicKey": "0x04cc53fb89f0422a38d2f4edce815cf7f329b14775a248d7b1960f595cd6c7c80cd53145de2fc7bfeddf8ef4691a811550bb61cf4fba1231af29c3e3cda86967fd",
-    "t2PublicKey": "0xee3c4d3ca354ceec7000e6b3f7274a62666673e24535090ca7f1e03594234907"
-  }
-]
+{
+  "dev": [
+    {
+      "ethAddress": "0x71A47DD69802E101b228DaE238b44aeFf479c187",
+      "ethUncompressedPublicKey": "0x0402881488d500e6bb2c667b1c68fee4d8ec0c0ccd39c0ab6796e163345dcb1083bd63e753873af4e1c9889513ff38357b51ee00dbcd28c5da139eff82261b82c3",
+      "t2PublicKey": "0x360266f4b3459999815e852baacfc9a407c1a622a648329a33f12f87158a156c"
+    },
+    {
+      "ethAddress": "0xC57aDE7FA3292A92DDc204E7C9DA34b1d15AF827",
+      "ethUncompressedPublicKey": "0x04314ec7f7195896c20d896f1632bfe08ef3eb8d487517fcdae7688952e74354de99101c82df30de49b5a1a8b6d40fbb517ef48f041b8fb5dbd33cd6b665e1e215",
+      "t2PublicKey": "0x04e6ed6c8781ed042fe630e120da380fb5210e46179904d7987e2e85c701fc0b"
+    },
+    {
+      "ethAddress": "0xc3165bBA3aafE03f3EDDDA186DA89563EBa154Cb",
+      "ethUncompressedPublicKey": "0x041d86d6fc4315fde389ba45618ed01146141933509b5118f6997c7ead767b689af98ce2c6a77951939a53420e55baeb0ad07014dfbea8db616e95a51f757cbb13",
+      "t2PublicKey": "0xbe4975ff88596c42528ef74dd41816692489966385c95a0c8c9fdebf6d9b9867"
+    },
+    {
+      "ethAddress": "0xDE67DAFbeD4c0204D523cc4cc19A5eaEBCE2A297",
+      "ethUncompressedPublicKey": "0x0445f9ddcd817ba8aeb0c343d7bc8b463051a3258538ef9c2a4c66588b8ec9a6d50d47b3de6456b868700add7475952868f2773ce7300e71ce507e6f7ee9cf0c86",
+      "t2PublicKey": "0x865f2b11569750318e4d1be1c5e3cc901c1552b1a6e47d5f3b635f0e70fdd976"
+    },
+    {
+      "ethAddress": "0x58FF87Ad0ef6aBC79b661071D543a673afE8bBE9",
+      "ethUncompressedPublicKey": "0x04c916035bfc3ad6f7234816d37307578d0f7d0b848f13b8c15d307c1856394b488e81dbf5c51c73694b8e0e3d4e86ad3325bf35912b269be009a5e0a80b00d2c6",
+      "t2PublicKey": "0xf628f84fe150472007ae73e7ee6e88cfc5337f21d23dfbf729a35e3c45273f5f"
+    }
+  ],
+
+  "testnet": [
+    {
+      "ethAddress": "0x29E63a286F37559f9BD6e7aC5fC47FA5E9fA54F1",
+      "ethUncompressedPublicKey": "0x041f21d300f707014f718f41c969c054936b7a105a478da74d37ec75fa0f831f872aeb02d6af6c098e3d523cdcca8e82c13672ff083b94f4a8fc3d265a3369db20",
+      "t2PublicKey": "0x4a9a2c1b8aa9d2a0cc948ae1c911e0640642f02dd638d32aa0d359899d69f63c"
+    },
+    {
+      "ethAddress": "0x6C233739E36Ec19069Bceab5eeeBD8ecE8bc8411",
+      "ethUncompressedPublicKey": "0x044b3e07593467cf4ac01f9c48a0a1e8f4d7056d79a322c8cfa13226c3333f5acd510bf4f71b5ee116a1574f7d34a272958669d461a1da25338019fb67b9d6b082",
+      "t2PublicKey": "0x3e3640703ce7db67f02bbbc717c4c46a067bc03db14982efff562d7fdee0977e"
+    },
+    {
+      "ethAddress": "0x3153795e441493B0E2dF285d52B945F2fdD93A7b",
+      "ethUncompressedPublicKey": "0x0417c85eb98798941224de6effaf37871e66ea255976df07ae2c4bf287cb1558020be34a95053d3bfef39115db3a681a227e534046dcd9e12df20be67967c755c7",
+      "t2PublicKey": "0xb2769f978892850e76283e784c9d3896720da08e38ddb75b813c9316ce516c10"
+    },
+    {
+      "ethAddress": "0xC53f162E5e7Aea001fE7c1cBcd4A793f6b8560C9",
+      "ethUncompressedPublicKey": "0x04727125c6793951ec4733a3f09ffcd011b721af4696e7ed290ee3428985ccbf2260c5f522c8a5ee77a92800ebf0d9c8b9f5863e3b6c88f12f8bfc07161facd33a",
+      "t2PublicKey": "0xb8b982a45579f8d5af80fc94fe5bea799e094418c3acb87afc550d090cd47a42"
+    },
+    {
+      "ethAddress": "0x835d71301Cf490401EA0c82eca8532ad0b08630a",
+      "ethUncompressedPublicKey": "0x048abc959e22fab9d554548b685cb03da0b08479d611c96c57c8cd2445ad6d12b29718cc3e2d1038426eff6982e2b195054c1b825dad4e7ca59323611d420304e8",
+      "t2PublicKey": "0x708d4d3e9252c88ce8a5b63c85b2d3cb17b8ff77b18b95e855744f8f2393bf4b"
+    }
+  ]
+}
