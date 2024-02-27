@@ -625,23 +625,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogGrowth(amount, period);
   }
 
-  // reference: https://docs.substrate.io/v3/advanced/scale-codec/#compactgeneral-integers
+  // reference: https://docs.substrate.io/reference/scale-codec/#fn-1
   function _getCompactIntegerByteSize(bytes1 checkByte) private pure returns (uint8 result) {
     result = uint8(checkByte);
     assembly {
       switch and(result, 3)
-      case 0 {
+      case 0 { // single-byte mode
         result := 1
-      } // single-byte mode
-      case 1 {
+      }
+      case 1 { // two-byte mode
         result := 2
-      } // two-byte mode
-      case 2 {
+      }
+      case 2 { // four-byte mode
         result := 4
-      } // four-byte mode
-      default {
+      }
+      default { // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
         result := add(shr(2, result), 5)
-      } // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
+      }
     }
   }
 
@@ -700,7 +700,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         confirmed[authorId] = 1;
       }
 
-      // Setup the next iteration of the loop:
+      // Setup the next iteration of the loop
       authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
       unchecked {
         ++confirmationsIndex;
