@@ -630,16 +630,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     result = uint8(checkByte);
     assembly {
       switch and(result, 3)
-      case 0 { // single-byte mode
+      case 0 {
+        // single-byte mode
         result := 1
       }
-      case 1 { // two-byte mode
+      case 1 {
+        // two-byte mode
         result := 2
       }
-      case 2 { // four-byte mode
+      case 2 {
+        // four-byte mode
         result := 4
       }
-      default { // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
+      default {
+        // upper 6 bits + 4 = number of bytes to follow + 1 for checkbyte
         result := add(shr(2, result), 5)
       }
     }
