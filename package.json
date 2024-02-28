@@ -25,10 +25,12 @@
     "keccak256": "^1.0.6",
     "merkletreejs": "^0.3.9",
     "prettier": "^3.0.2",
+    "prettier-plugin-solidity": "^1.3.1",
     "solidity-coverage": "^0.8.4"
   },
   "scripts": {
-    "format": "npm run pretty:fix",
-    "pretty:fix": "prettier --config ./.prettierrc.json --write \"**/*.{js,json}\""
+    "format": "npm run pretty:fix && npm run pretty:sol",
+    "pretty:fix": "prettier --config ./.prettierrc.json --write \"**/*.{js,json}\"",
+    "pretty:sol": "npx prettier --write --plugin=prettier-plugin-solidity contracts/**/*.sol"
   }
 }

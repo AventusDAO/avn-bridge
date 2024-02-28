@@ -25,7 +25,7 @@ Inflating the core token's total supply according to the T2 staking and reward c
 ## Development
 
 ### Setup
-- do `npm i`\
+- do `npm i`
 - populate `config_.json` and save as `config.json` (the values in `config.json` can also be set as environment variables)
 - ensure `authors.json` includes the correct authors for your AvN environment
 
