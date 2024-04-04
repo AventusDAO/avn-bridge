@@ -65,6 +65,23 @@ describe('Owner Functions', async () => {
     });
   });
 
+  context('Renouncing Ownership', async () => {
+    context('fails', async () => {
+      it('when the caller is the owner', async () => {
+        await expect(avnBridge.connect(owner).renounceOwnership()).to.be.revertedWithCustomError(
+          avnBridge,
+          'RenounceOwnershipDisabled'
+        );
+      });
+      it('when the caller is not the owner', async () => {
+        await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWithCustomError(
+          avnBridge,
+          'RenounceOwnershipDisabled'
+        );
+      });
+    });
+  });
+
   context('Setting the Core Owner', async () => {
     after(async () => {
       await token20.setOwner(avnBridge.address);

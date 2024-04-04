@@ -109,6 +109,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error PaymentFailed();
   error PendingOwnerOnly();
   error PeriodIsUsed();
+  error RenounceOwnershipDisabled();
   error RootHashIsUsed();
   error SetCoreOwnerFailed();
   error T2KeyInUse(bytes32 t2PubKey);
@@ -570,6 +571,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function transferOwnership(address newOwner) public override onlyOwner {
     pendingOwner = newOwner;
     emit OwnershipTransferStarted(owner(), newOwner);
+  }
+
+  /**
+   * @dev Disables the renounceOwnership function to prevent relinquishing ownership.
+   */
+  function renounceOwnership() public pure override {
+    revert RenounceOwnershipDisabled();
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner {}
