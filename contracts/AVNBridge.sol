@@ -112,6 +112,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error RenounceOwnershipDisabled();
   error RootHashIsUsed();
   error SetCoreOwnerFailed();
+  error T1AddressInUse(address t1Address);
   error T2KeyInUse(bytes32 t2PubKey);
   error TxIdIsUsed();
   error UnsignedTx();
@@ -124,10 +125,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   function initialize(
     address _coreToken,
-    address[] calldata t1Address,
-    bytes32[] calldata t1PubKeyLHS,
-    bytes32[] calldata t1PubKeyRHS,
-    bytes32[] calldata t2PubKey
+    address[] calldata t1Addresses,
+    bytes32[] calldata t1PubKeysLHS,
+    bytes32[] calldata t1PubKeysRHS,
+    bytes32[] calldata t2PubKeys
   ) public initializer {
     if (_coreToken == address(0)) revert MissingCore();
     __Ownable_init();
@@ -142,7 +143,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     loweringEnabled = true;
     nextAuthorId = 1;
     growthDelay = 2 days;
-    _initialiseAuthors(t1Address, t1PubKeyLHS, t1PubKeyRHS, t2PubKey);
+    _initialiseAuthors(t1Addresses, t1PubKeysLHS, t1PubKeysRHS, t2PubKeys);
   }
 
   modifier onlyWhenLiftingEnabled() {
@@ -280,20 +281,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TxId(t2TxId);
 
     if (id == 0) {
-      if (t2PubKeyToId[t2PubKey] != 0) revert T2KeyInUse(t2PubKey);
-      id = nextAuthorId;
-      idToT1Address[id] = t1Address;
-      t1AddressToId[t1Address] = id;
-      idToT2PubKey[id] = t2PubKey;
-      t2PubKeyToId[t2PubKey] = id;
-      unchecked {
-        ++nextAuthorId;
-      }
+      id = _addNewAuthor(t1Address, t2PubKey);
     } else {
       if (t2PubKey != idToT2PubKey[id]) revert CannotChangeT2Key(idToT2PubKey[id]);
+      isAuthor[id] = true;
     }
-
-    isAuthor[id] = true;
 
     emit LogAuthorAdded(t1Address, t2PubKey, t2TxId);
   }
@@ -583,36 +575,48 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
   function _initialiseAuthors(
-    address[] calldata t1Address,
-    bytes32[] calldata t1PubKeyLHS,
-    bytes32[] calldata t1PubKeyRHS,
-    bytes32[] calldata t2PubKey
+    address[] calldata t1Addresses,
+    bytes32[] calldata t1PubKeysLHS,
+    bytes32[] calldata t1PubKeysRHS,
+    bytes32[] calldata t2PubKeys
   ) private {
-    uint256 numAuth = t1Address.length;
+    uint256 numAuth = t1Addresses.length;
     if (numAuth < MINIMUM_NUMBER_OF_AUTHORS) revert NotEnoughAuthors();
-    if (t1PubKeyLHS.length != numAuth || t1PubKeyRHS.length != numAuth || t2PubKey.length != numAuth) revert MissingKeys();
-    bytes32 _t2PubKey;
-    address _t1Address;
+    if (t1PubKeysLHS.length != numAuth || t1PubKeysRHS.length != numAuth || t2PubKeys.length != numAuth) revert MissingKeys();
+
     bytes memory t1PubKey;
+    address t1Address;
     uint256 i;
 
     do {
-      _t1Address = t1Address[i];
-      _t2PubKey = t2PubKey[i];
-      t1PubKey = abi.encode(t1PubKeyLHS[i], t1PubKeyRHS[i]);
-      if (address(uint160(uint256(keccak256(t1PubKey)))) != _t1Address) revert AddressMismatch();
-      idToT1Address[nextAuthorId] = _t1Address;
-      idToT2PubKey[nextAuthorId] = _t2PubKey;
-      t1AddressToId[_t1Address] = nextAuthorId;
-      t2PubKeyToId[_t2PubKey] = nextAuthorId;
-      isAuthor[nextAuthorId] = true;
-      authorIsActive[nextAuthorId] = true;
+      t1Address = t1Addresses[i];
+      t1PubKey = abi.encode(t1PubKeysLHS[i], t1PubKeysRHS[i]);
+      if (address(uint160(uint256(keccak256(t1PubKey)))) != t1Address) revert AddressMismatch();
+      if (t1AddressToId[t1Address] != 0) revert T1AddressInUse(t1Address);
+      _activateAuthor(_addNewAuthor(t1Address, t2PubKeys[i]));
       unchecked {
-        ++numActiveAuthors;
-        ++nextAuthorId;
         ++i;
       }
     } while (i < numAuth);
+  }
+
+  function _addNewAuthor(address t1Address, bytes32 t2PubKey) private returns (uint256 id) {
+    unchecked {
+      id = nextAuthorId++;
+    }
+    if (t2PubKeyToId[t2PubKey] != 0) revert T2KeyInUse(t2PubKey);
+    idToT1Address[id] = t1Address;
+    idToT2PubKey[id] = t2PubKey;
+    t1AddressToId[t1Address] = id;
+    t2PubKeyToId[t2PubKey] = id;
+    isAuthor[id] = true;
+  }
+
+  function _activateAuthor(uint256 id) private {
+    authorIsActive[id] = true;
+    unchecked {
+      ++numActiveAuthors;
+    }
   }
 
   function _releaseFunds(address token, uint256 amount, address recipient) private {
@@ -694,10 +698,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     do {
       if (!authorIsActive[authorId]) {
         if (isAuthor[authorId]) {
-          // Here we activate any previously added but as yet unactivated authors
-          authorIsActive[authorId] = true;
+          _activateAuthor(authorId);
           unchecked {
-            ++numActiveAuthors;
             ++validConfirmations;
           }
           requiredConfirmations = _requiredConfirmations();

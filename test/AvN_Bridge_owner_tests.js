@@ -193,6 +193,18 @@ describe('Owner Functions', async () => {
       await deployAndCatchInitError('MissingKeys');
     });
 
+    it('fails if any t1 addresses are duplicated', async () => {
+      initVals.t1Addresses[0] = initVals.t1Addresses[2];
+      initVals.t1PubKeysLHS[0] = initVals.t1PubKeysLHS[2];
+      initVals.t1PubKeysRHS[0] = initVals.t1PubKeysRHS[2];
+      await deployAndCatchInitError('T1AddressInUse');
+    });
+
+    it('fails if any t2 addresses are duplicated', async () => {
+      initVals.t2PubKeys[1] = initVals.t2PubKeys[3];
+      await deployAndCatchInitError('T2KeyInUse');
+    });
+
     it('fails when there are too few authors', async () => {
       initVals.t1Addresses.pop();
       initVals.t1PubKeysLHS.pop();
