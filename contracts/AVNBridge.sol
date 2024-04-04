@@ -281,7 +281,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TxId(t2TxId);
 
     if (id == 0) {
-      id = _addNewAuthor(t1Address, t2PubKey);
+      _addNewAuthor(t1Address, t2PubKey);
     } else {
       if (t2PubKey != idToT2PubKey[id]) revert CannotChangeT2Key(idToT2PubKey[id]);
       isAuthor[id] = true;
