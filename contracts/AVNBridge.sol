@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.25;
 
 /**
  * @dev Aventus Network Services bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains.
