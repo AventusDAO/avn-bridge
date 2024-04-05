@@ -205,7 +205,8 @@ module.exports = {
             enabled: true,
             runs: 2000,
             details: { yul: true }
-          }
+          },
+          evmVersion: 'cancun'
         }
       }
     ]
