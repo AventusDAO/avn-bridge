@@ -576,7 +576,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Disables the renounceOwnership function to prevent relinquishing ownership.
    */
-  function renounceOwnership() public pure override {
+  function renounceOwnership() public view override onlyOwner {
     revert RenounceOwnershipDisabled();
   }
 

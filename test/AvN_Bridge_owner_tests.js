@@ -74,9 +74,8 @@ describe('Owner Functions', async () => {
         );
       });
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWithCustomError(
-          avnBridge,
-          'RenounceOwnershipDisabled'
+        await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith(
+          'Ownable: caller is not the owner'
         );
       });
     });
