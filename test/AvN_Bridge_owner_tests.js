@@ -66,17 +66,19 @@ describe('Owner Functions', async () => {
   });
 
   context('Renouncing Ownership', async () => {
-    context('fails', async () => {
-      it('when the caller is the owner', async () => {
-        await expect(avnBridge.connect(owner).renounceOwnership()).to.be.revertedWithCustomError(
-          avnBridge,
-          'RenounceOwnershipDisabled'
-        );
+    context('succeeds', async () => {
+      it('does nothing when the caller is the owner', async () => {
+        expect(owner).to.equal(await avnBridge.owner());
+        await avnBridge.renounceOwnership();
+        expect(owner).to.equal(await avnBridge.owner());
       });
-      it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
+
+      context('fails', async () => {
+        it('when the caller is not the owner', async () => {
+          await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith(
+            'Ownable: caller is not the owner'
+          );
+        });
       });
     });
   });
