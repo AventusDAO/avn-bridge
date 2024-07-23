@@ -9,5 +9,9 @@
   },
   "mainnet": {
     "avn": "0xF05Df39f745A240fb133cC4a11E42467FAB10f1F"
+  },
+  "sepolia_paseo": {
+    "avn": "0x83359eCb73E869174B09221F4460b68FD8B0a42F",
+    "erc20token": "0x608156959E3a2192a870b4BaC660200afB4c649F"
   }
 }
