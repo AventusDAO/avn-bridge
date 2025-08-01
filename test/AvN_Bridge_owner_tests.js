@@ -11,11 +11,14 @@ describe('Owner Functions', async () => {
     await helper.init();
     AVNBridge = await ethers.getContractFactory('AVNBridge');
     const Token777 = await ethers.getContractFactory('Token777');
-    token777 = await Token777.deploy(10000000);
+    token777 = await Token777.deploy(10000000n);
+    token777.address = await token777.getAddress();
     const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10000000);
+    token20 = await Token20.deploy(10000000n);
+    token20.address = await token20.getAddress();
     const numAuthors = 10;
     avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
+    avnBridge.address = await avnBridge.getAddress();
     accounts = helper.accounts();
     owner = helper.owner();
     someOtherAccount = accounts[1];
@@ -120,8 +123,8 @@ describe('Owner Functions', async () => {
   context('Setting the growth delay', async () => {
     context('succeeds', async () => {
       it('when called by the owner', async () => {
-        const oldGrowthDelay = (await avnBridge.growthDelay()).toNumber();
-        expect(60 * 60 * 24 * 2).to.equal(oldGrowthDelay);
+        const oldGrowthDelay = await avnBridge.growthDelay();
+        expect(60n * 60n * 24n * 2n).to.equal(oldGrowthDelay);
         const newGrowthDelay = helper.GROWTH_DELAY;
         await expect(avnBridge.setGrowthDelay(newGrowthDelay))
           .to.emit(avnBridge, 'LogGrowthDelayUpdated')
@@ -131,7 +134,7 @@ describe('Owner Functions', async () => {
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5)).to.be.revertedWith(
+        await expect(avnBridge.connect(someOtherAccount).setGrowthDelay(5n)).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
@@ -143,12 +146,11 @@ describe('Owner Functions', async () => {
 
     async function deployAndCatchInitError(expectedError) {
       const initArgs = [initVals.token, initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
-      try {
-        await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
-      } catch (error) {
-        const customError = error.reason.split('custom error ')[1].split('(')[0].replace(/'/g, '');
-        expect(customError).to.equal(expectedError);
-      }
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
+      await expect(upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' })).to.be.revertedWithCustomError(
+        AVNBridge,
+        expectedError
+      );
     }
 
     beforeEach(async () => {

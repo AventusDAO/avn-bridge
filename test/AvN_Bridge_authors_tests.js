@@ -10,9 +10,11 @@ describe('Author Functions', async () => {
   before(async () => {
     await helper.init();
     const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10000000);
+    token20 = await Token20.deploy(10000000n);
+    token20.address = await token20.getAddress();
     const numAuthors = 6;
     avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
+    avnBridge.address = await avnBridge.getAddress();
     accounts = helper.accounts();
     someOtherAccount = accounts[1];
     authors = helper.authors();
@@ -35,8 +37,8 @@ describe('Author Functions', async () => {
     beforeEach(async () => {
       const randomRewards = Math.floor(Math.random() * 1000000 + 1);
       const randomAvgStaked = Math.floor(Math.random() * 1000000 + 1);
-      rewards = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(randomRewards));
-      avgStaked = helper.ONE_AVT_IN_ATTO.mul(ethers.BigNumber.from(randomAvgStaked));
+      rewards = helper.ONE_AVT_IN_ATTO * ethers.toBigInt(randomRewards);
+      avgStaked = helper.ONE_AVT_IN_ATTO * ethers.toBigInt(randomAvgStaked);
       period++;
       t2TxId++;
       expiry = await helper.getValidExpiry();
@@ -59,7 +61,7 @@ describe('Author Functions', async () => {
         it('in triggering growth', async () => {
           const avtSupplyBefore = await token20.totalSupply();
           const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-          const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+          const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
           await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
             .withArgs(expectedGrowthAmount, period, t2TxId);
@@ -71,7 +73,7 @@ describe('Author Functions', async () => {
         it('in triggering growth (when not sent by an author but with an additional confirmation)', async () => {
           const avtSupplyBefore = await token20.totalSupply();
           const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId, 1);
-          const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+          const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
           await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
             .to.emit(avnBridge, 'LogGrowthTriggered')
             .withArgs(expectedGrowthAmount, period, t2TxId);
@@ -155,8 +157,8 @@ describe('Author Functions', async () => {
               .to.emit(avnBridge, 'LogGrowth')
               .withArgs(growthAmountForPeriod, usedGrowthPeriod);
 
-            expect(avnBalanceBefore.add(growthAmountForPeriod), await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore.add(growthAmountForPeriod), await token20.totalSupply());
+            expect(avnBalanceBefore + growthAmountForPeriod, await token20.balanceOf(avnBridge.address));
+            expect(avtSupplyBefore + growthAmountForPeriod, await token20.totalSupply());
           });
         });
 
@@ -172,7 +174,7 @@ describe('Author Functions', async () => {
           it('to release growth for a period that has since been denied by the owner', async () => {
             const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
             const avtSupplyBefore = await token20.totalSupply();
-            const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked); // recalculate this as it will have changed
+            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked; // recalculate this as it will have changed
             const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
 
             await expect(
@@ -193,7 +195,7 @@ describe('Author Functions', async () => {
           it('to release growth before its release time', async () => {
             const avtSupplyBefore = await token20.totalSupply();
             const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-            const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
             const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
 
             await avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations);
@@ -204,14 +206,14 @@ describe('Author Functions', async () => {
             await helper.increaseBlockTimestamp(helper.GROWTH_DELAY);
             await avnBridge.releaseGrowth(period);
 
-            expect(avnBalanceBefore.add(expectedGrowthAmount), await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore.add(expectedGrowthAmount), await token20.totalSupply());
+            expect(avnBalanceBefore + expectedGrowthAmount, await token20.balanceOf(avnBridge.address));
+            expect(avtSupplyBefore + expectedGrowthAmount, await token20.totalSupply());
           });
 
           it('in triggering and releasing immediate growth', async () => {
             const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
             const avtSupplyBefore = await token20.totalSupply();
-            const expectedGrowthAmount = rewards.mul(avtSupplyBefore).div(avgStaked);
+            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
             const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
 
             await avnBridge.setGrowthDelay(0);
@@ -225,8 +227,8 @@ describe('Author Functions', async () => {
               .to.emit(avnBridge, 'LogGrowth')
               .withArgs(expectedGrowthAmount, period);
 
-            expect(avnBalanceBefore.add(expectedGrowthAmount)).to.equal(await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore.add(expectedGrowthAmount)).to.equal(await token20.totalSupply());
+            expect(avnBalanceBefore + expectedGrowthAmount).to.equal(await token20.balanceOf(avnBridge.address));
+            expect(avtSupplyBefore + expectedGrowthAmount).to.equal(await token20.totalSupply());
           });
         });
       });
@@ -408,7 +410,7 @@ describe('Author Functions', async () => {
         const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
         await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
 
-        expect(numActiveAuthorsBefore.add(ethers.BigNumber.from(1))).to.equal(await avnBridge.numActiveAuthors());
+        expect(numActiveAuthorsBefore + ethers.toBigInt(1)).to.equal(await avnBridge.numActiveAuthors());
         expect(await avnBridge.authorIsActive(nextAuthorId)).to.equal(true);
         nextAuthorId++;
         numActiveAuthors++;
@@ -588,7 +590,7 @@ describe('Author Functions', async () => {
         );
         const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
         await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
-        expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition.add(1));
+        expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition + 1n);
 
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
@@ -738,7 +740,7 @@ describe('Author Functions', async () => {
 
       it('if it takes the number of authors below the minimum threshold', async () => {
         const numActiveAuthors = await avnBridge.numActiveAuthors();
-        let authorIndex = (await avnBridge.numActiveAuthors()) - 1;
+        let authorIndex = (await avnBridge.numActiveAuthors()) - 1n;
 
         for (authorIndex; authorIndex >= helper.MIN_AUTHORS; authorIndex--) {
           let expiry = await helper.getValidExpiry();

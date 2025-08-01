@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.30;
 
 /**
  * @dev Aventus Network Services bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains.
@@ -220,6 +220,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function toggleLowering(bool state) external onlyOwner {
     loweringEnabled = state;
     emit LogLoweringEnabled(state);
+  }
+
+  function rotateT1(address[] calldata t1Addresses, uint256 startID, uint256 endID) external onlyOwner {
+    uint256 numToRotate = endID - startID + 1;
+    if (numToRotate != t1Addresses.length) revert();
+
+    for (uint256 i; i < numToRotate; i++) {
+      uint256 currentID = startID + i;
+      address newAddress = t1Addresses[i];
+      idToT1Address[currentID] = newAddress;
+      t1AddressToId[newAddress] = currentID;
+    }
   }
 
   /**
