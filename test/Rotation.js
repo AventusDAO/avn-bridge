@@ -35,7 +35,7 @@ describe('Rotation', async () => {
           .removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
       }
 
-      it('when called by the owner', async () => {
+      it('when called by the owner to rotate all the T1 addresses', async () => {
         expect(await avnBridge.numActiveAuthors()).to.equal(NUM_AUTHORS);
 
         await removeAuthor(6);
@@ -58,6 +58,11 @@ describe('Rotation', async () => {
         const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
         await avnBridge.rotateT1(newT1Addresses, startID, endID);
 
+        for (const oldAddress of oldT1Addresses) {
+          const mappedId = await avnBridge.t1AddressToId(oldAddress);
+          expect(mappedId).to.equal(0);
+        }
+
         for (let i = 0; i < newT1Addresses.length; i++) {
           const id = startID + i;
           const expectedNewAddress = newT1Addresses[i];
@@ -74,6 +79,22 @@ describe('Rotation', async () => {
         expect(await avnBridge.authorIsActive(6)).to.equal(false);
         expect(await avnBridge.authorIsActive(7)).to.equal(true);
         expect(await avnBridge.authorIsActive(8)).to.equal(false);
+      });
+
+      it('when rotating a single T1 address', async () => {
+        const id = 7;
+
+        const oldAddress = await avnBridge.idToT1Address(id);
+        expect(oldAddress).to.not.equal(ethers.ZeroAddress);
+        const oldMappedId = await avnBridge.t1AddressToId(oldAddress);
+        expect(oldMappedId).to.equal(id);
+
+        const newAddress = ethers.Wallet.createRandom().address;
+        await avnBridge.rotateT1([newAddress], id, id);
+
+        expect(await avnBridge.t1AddressToId(oldAddress)).to.equal(0);
+        expect(await avnBridge.idToT1Address(id)).to.equal(newAddress);
+        expect(await avnBridge.t1AddressToId(newAddress)).to.equal(id);
       });
     });
 

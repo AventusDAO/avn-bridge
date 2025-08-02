@@ -222,13 +222,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLoweringEnabled(state);
   }
 
-  function rotateT1(address[] calldata t1Addresses, uint256 startID, uint256 endID) external onlyOwner {
+  function rotateT1(address[] calldata newT1Addresses, uint256 startID, uint256 endID) external onlyOwner {
     uint256 numToRotate = endID - startID + 1;
-    if (numToRotate != t1Addresses.length) revert();
+    if (numToRotate != newT1Addresses.length) revert();
 
     for (uint256 i; i < numToRotate; i++) {
       uint256 currentID = startID + i;
-      address newAddress = t1Addresses[i];
+      address oldAddress = idToT1Address[currentID];
+      t1AddressToId[oldAddress] = 0;
+      address newAddress = newT1Addresses[i];
       idToT1Address[currentID] = newAddress;
       t1AddressToId[newAddress] = currentID;
     }
