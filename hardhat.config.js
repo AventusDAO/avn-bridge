@@ -1,14 +1,13 @@
 require('@nomicfoundation/hardhat-toolbox');
 require('@nomicfoundation/hardhat-chai-matchers');
-require('@nomiclabs/hardhat-etherscan');
-require('@nomiclabs/hardhat-ethers');
+require('@nomicfoundation/hardhat-ledger');
 require('@openzeppelin/hardhat-upgrades');
 require('hardhat-contract-sizer');
 require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('hardhat-erc1820');
 
-const { INFURA_API_KEY, ETHERSCAN_API_KEY, SEPOLIA_PRIVATE_KEY, MAINNET_PRIVATE_KEY } = require('./config');
+const { INFURA_API_KEY, ETHERSCAN_API_KEY, SEPOLIA_PRIVATE_KEY, MAINNET_DEPLOYER_LEDGER_ADDRESS } = require('./config');
 const axios = require('axios');
 const fs = require('fs');
 
@@ -177,12 +176,40 @@ task('prepare-manifest', 'prepares the openzeppelin mainfest')
     console.log('Done');
   });
 
+task('validate')
+  .addPositionalParam('proxyAddress', 'proxy address')
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
+    await hre.run('compile');
+
+    const contractFactory = await ethers.getContractFactory('AVNBridge');
+    console.log(`\nValidating new AVNBridge implementation...`);
+    await upgrades.validateImplementation(contractFactory);
+
+    console.log(`\nValidating upgrade safety for proxy at ${args.proxyAddress}...`);
+    await upgrades.validateUpgrade(args.proxyAddress, contractFactory);
+
+    console.log('\nResult: Safe for upgrade');
+  });
+
+task('implementation', 'release new implementation contract').setAction(async (_, hre) => {
+  const { ethers, network } = hre;
+  await hre.run('compile');
+  const [signer] = await ethers.getSigners();
+  const initialBalance = await ethers.provider.getBalance(signer.address);
+  console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
+  const contractFactory = await ethers.getContractFactory(CONTRACT);
+  const implementation = await contractFactory.deploy();
+  await implementation.waitForDeployment();
+  const impAddress = await implementation.getAddress();
+
+  const finalBalance = await ethers.provider.getBalance(signer.address);
+  const cost = ethers.formatEther(initialBalance - finalBalance);
+  console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
+});
+
 function getWeb3Url(networkName) {
-  if (!process.env.WEB3_URL_OVERRIDE) {
-    return `https://${networkName}.infura.io/v3/${process.env.INFURA_API_KEY || INFURA_API_KEY}`;
-  } else {
-    return process.env.WEB3_URL_OVERRIDE;
-  }
+  return `https://${networkName}.infura.io/v3/${INFURA_API_KEY}`;
 }
 
 function mainnetCheck() {
@@ -199,14 +226,13 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: '0.8.25',
+        version: '0.8.30',
         settings: {
           optimizer: {
             enabled: true,
             runs: 2000,
             details: { yul: true }
-          },
-          evmVersion: 'cancun'
+          }
         }
       }
     ]
@@ -214,7 +240,7 @@ module.exports = {
   networks: {
     sepolia: {
       url: getWeb3Url(`sepolia`),
-      accounts: [process.env.SEPOLIA_PRIVATE_KEY || SEPOLIA_PRIVATE_KEY],
+      accounts: [SEPOLIA_PRIVATE_KEY],
       maxFeePerGas: 10000000000,
       maxPriorityFeePerGas: 2000000000
     },
@@ -229,15 +255,16 @@ module.exports = {
     },
     mainnet: {
       url: getWeb3Url(`mainnet`),
-      accounts: [
-        process.env.MAINNET_PRIVATE_KEY ||
-          MAINNET_PRIVATE_KEY ||
-          '0000000000000000000000000000000000000000000000000000000000000000'
-      ]
+      ledgerAccounts: [MAINNET_DEPLOYER_LEDGER_ADDRESS],
+      type: 2,
+      maxFeePerGas: 30 * 1e9,
+      maxPriorityFeePerGas: 2 * 1e9,
+      timeout: 1200000,
+      pollingInterval: 4000
     }
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || ETHERSCAN_API_KEY
+    apiKey: ETHERSCAN_API_KEY
   },
   gasReporter: {
     enabled: true
