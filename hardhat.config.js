@@ -131,9 +131,7 @@ task('upgrade', 'upgrade existing avn-bridge contract')
       await upgrades.upgradeProxy(args.bridge, AVNBridge);
     } catch (e) {
       if (e.toString().includes('use the forceImport function')) {
-        console.log(
-          `\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network sepolia prepare-manifest --bridge ${args.bridge}`
-        );
+        console.log(`\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network sepolia prepare-manifest --bridge ${args.bridge}`);
         process.exit(0);
       } else {
         console.log(e);

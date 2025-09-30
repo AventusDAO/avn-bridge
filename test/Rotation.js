@@ -23,16 +23,8 @@ describe('Rotation', async () => {
       async function removeAuthor(id) {
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey],
-          expiry,
-          t2TxId
-        );
-        await avnBridge
-          .connect(authors[0].account)
-          .removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey], expiry, t2TxId);
+        await avnBridge.connect(authors[0].account).removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
       }
 
       it('when called by the owner to rotate all the T1 addresses', async () => {
@@ -101,9 +93,7 @@ describe('Rotation', async () => {
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
         const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
-        await expect(avnBridge.connect(unauthorizedAccount).rotateT1(newT1Addresses, 1, NUM_AUTHORS)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
+        await expect(avnBridge.connect(unauthorizedAccount).rotateT1(newT1Addresses, 1, NUM_AUTHORS)).to.be.revertedWith('Ownable: caller is not the owner');
       });
 
       it('with the wrong number of addresses', async () => {

@@ -15,7 +15,7 @@
     "@openzeppelin/contracts-upgradeable": "^4.9.6",
     "@openzeppelin/hardhat-upgrades": "^3.9.1",
     "axios": "^1.11.0",
-    "hardhat": "^2.26.1",
+    "hardhat": "^2.26.3",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-erc1820": "^0.1.0",
     "keccak256": "^1.0.6",
@@ -27,6 +27,8 @@
   "scripts": {
     "format": "npm run pretty:fix && npm run pretty:sol",
     "pretty:fix": "prettier --config ./.prettierrc.json --write \"**/*.{js,json}\"",
-    "pretty:sol": "npx prettier --write --plugin=prettier-plugin-solidity contracts/**/*.sol"
+    "pretty:sol": "npx prettier --write --plugin=prettier-plugin-solidity contracts/**/*.sol",
+    "test": "npx hardhat test",
+    "coverage": "npx hardhat coverage"
   }
 }

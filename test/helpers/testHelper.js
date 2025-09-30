@@ -8,12 +8,7 @@ const abi = new AbiCoder();
 const ONE_AVT_IN_ATTO = 1000000000000000000n;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PSEUDO_ETH_ADDRESS = ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
-const PROXY_LOWER_PROOF_LENGTH = 131;
-const PROXY_LOWER_ID = '0x5900';
 const LOWER_ID = '0x5702';
-const DIRECT_LOWER_NUM_BYTES = 2;
-const PROXY_LOWER_NUM_BYTES = 133;
-const GROWTH_DELAY = 100;
 const EXPIRY_WINDOW = 60;
 const MIN_AUTHORS = 4;
 
@@ -125,47 +120,18 @@ async function getSingleConfirmation(contract, method, data, expiry, t2TxId, aut
   return await author.account.signMessage(ethers.getBytes(confirmationHash));
 }
 
-async function createTreeAndPublishRoot(bridge, tokenAddress, amount, isProxyLower, id) {
-  id = id ? id : isProxyLower ? PROXY_LOWER_ID : LOWER_ID;
-  const proxyProof = isProxyLower ? strip_0x(randomHex(PROXY_LOWER_PROOF_LENGTH)) : '';
+async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   const t2FromPubKey = strip_0x(randomBytes32());
   const token = strip_0x(tokenAddress);
   const amountBytes = toLittleEndianBytesStr(amount);
   const t1Address = strip_0x(owner.address);
-  const encodedLeaf = getTxLeafMetadata() + strip_0x(LOWER_ID) + proxyProof + t2FromPubKey + token + amountBytes + t1Address;
+  const encodedLeaf = getTxLeafMetadata() + strip_0x(LOWER_ID) + t2FromPubKey + token + amountBytes + t1Address;
   const leaves = [encodedLeaf].concat(additionalTx);
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
   const t2TxId = randomT2TxId();
   const confirmations = await getConfirmations(bridge, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
   await bridge.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
-  return merkleTree;
-}
-
-async function createTreeAndPublishRootWithLoweree(contract, loweree, tokenAddress, amount, isProxyLower, id) {
-  id = id ? id : isProxyLower ? PROXY_LOWER_ID : LOWER_ID;
-  const proxyProof = isProxyLower ? strip_0x(randomHex(PROXY_LOWER_PROOF_LENGTH)) : '';
-  const t2FromPubKey = strip_0x(someT2PubKey);
-  const token = strip_0x(tokenAddress);
-  const amountBytes = toLittleEndianBytesStr(amount);
-  const t1Address = strip_0x(loweree);
-  const encodedLeaf = getTxLeafMetadata() + strip_0x(id) + proxyProof + t2FromPubKey + token + amountBytes + t1Address;
-  const leaves = [encodedLeaf].concat(additionalTx);
-  const merkleTree = createMerkleTree(leaves);
-  const expiry = await getValidExpiry();
-  const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
-  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
-  return merkleTree;
-}
-
-async function createTreeAndPublishRootFromTestLeaf(contract, testLeaf) {
-  const leaves = [testLeaf, randomBytes32()];
-  const merkleTree = await createMerkleTree(leaves);
-  const expiry = await getValidExpiry();
-  const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(contract, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
-  await contract.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
 
@@ -188,10 +154,7 @@ const toConfirmationHash = {
     return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
   },
   triggerGrowth: function (data, expiry, t2TxId) {
-    const encodedParams = abi.encode(
-      ['uint128', 'uint128', 'uint32', 'uint256', 'uint32'],
-      [data[0], data[1], data[2], expiry, t2TxId]
-    );
+    const encodedParams = abi.encode(['uint128', 'uint128', 'uint32', 'uint256', 'uint32'], [data[0], data[1], data[2], expiry, t2TxId]);
     return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
   }
 };
@@ -264,12 +227,8 @@ module.exports = {
   accounts: () => accounts,
   authors: () => authors,
   createLowerProof,
-  createMerkleTree,
   createTreeAndPublishRoot,
-  createTreeAndPublishRootFromTestLeaf,
-  createTreeAndPublishRootWithLoweree,
   deployAVNBridge,
-  DIRECT_LOWER_NUM_BYTES,
   EXPIRY_WINDOW,
   generateInitArgs,
   getConfirmations,
@@ -277,16 +236,12 @@ module.exports = {
   getNumRequiredConfirmations,
   getSingleConfirmation,
   getValidExpiry,
-  GROWTH_DELAY,
   increaseBlockTimestamp,
   init,
   keccak256,
-  LOWER_ID,
   MIN_AUTHORS,
   ONE_AVT_IN_ATTO,
   owner: () => owner,
-  PROXY_LOWER_ID,
-  PROXY_LOWER_NUM_BYTES,
   PSEUDO_ETH_ADDRESS,
   randomBytes32,
   randomHex,
