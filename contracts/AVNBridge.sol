@@ -159,6 +159,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _lock = UNLOCKED;
   }
 
+  function migrate(address avt, address newOwner) external onlyOwner {
+    (bool success, ) = avt.call(abi.encodeWithSignature('setOwner(address)', newOwner));
+    if (!success) revert();
+  }
+
   /**
    * @dev Allows the owner to enable/disable author functionality.
    */
@@ -181,11 +186,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function toggleLowering(bool state) external onlyOwner {
     loweringEnabled = state;
     emit LogLoweringEnabled(state);
-  }
-
-  function migrate(address avt, address newOwner) external onlyOwner {
-    (bool success, ) = avt.call(abi.encodeWithSignature('setOwner(address)', newOwner));
-    if (!success) revert();
   }
 
   function rotateT1(address[] calldata newT1Addresses, uint256 startID, uint256 endID) external onlyOwner {
