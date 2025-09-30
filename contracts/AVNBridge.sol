@@ -70,7 +70,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 public nextAuthorId;
   /// @custom:oz-renamed-from growthDelay
   uint256 private _unused6_;
-  address public coreToken;
+  /// @custom:oz-renamed-from coreToken
+  address private _unused7_;
   /// @custom:oz-renamed-from priorInstance
   address private _unused2_;
   /// @custom:oz-renamed-from validatorFunctionsAreEnabled
@@ -99,7 +100,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error Locked();
   error LowerDisabled();
   error LowerIsUsed();
-  error MissingCore();
   error MissingKeys();
   error NotAnAuthor();
   error NotEnoughAuthors();
@@ -117,16 +117,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function initialize(
-    address _coreToken,
     address[] calldata t1Addresses,
     bytes32[] calldata t1PubKeysLHS,
     bytes32[] calldata t1PubKeysRHS,
     bytes32[] calldata t2PubKeys
   ) public initializer {
-    if (_coreToken == address(0)) revert MissingCore();
     __Ownable_init();
     __UUPSUpgradeable_init();
-    coreToken = _coreToken;
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
     authorsEnabled = true;
     liftingEnabled = true;

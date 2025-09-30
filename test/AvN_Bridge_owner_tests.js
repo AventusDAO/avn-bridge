@@ -17,7 +17,7 @@ describe('Owner Functions', async () => {
     token20 = await Token20.deploy(10000000n);
     token20.address = await token20.getAddress();
     const numAuthors = 10;
-    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
+    avnBridge = await helper.deployAVNBridge(numAuthors);
     avnBridge.address = await avnBridge.getAddress();
     accounts = helper.accounts();
     owner = helper.owner();
@@ -82,13 +82,13 @@ describe('Owner Functions', async () => {
     let initVals = {};
 
     async function deployAndCatchInitError(expectedError) {
-      const initArgs = [initVals.token, initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
       const AVNBridge = await ethers.getContractFactory('AVNBridge');
       await expect(upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' })).to.be.revertedWithCustomError(AVNBridge, expectedError);
     }
 
     beforeEach(async () => {
-      initVals = { token: token20.address, t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
+      initVals = { t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
 
       for (i = 0; i < helper.MIN_AUTHORS; i++) {
         initVals.t1Addresses.push(authors[i].t1Address);
@@ -99,7 +99,7 @@ describe('Owner Functions', async () => {
     });
 
     it('succeeds', async () => {
-      const initArgs = [initVals.token, initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
       const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 
       for (i = 0; i < helper.MIN_AUTHORS; i++) {
@@ -114,11 +114,6 @@ describe('Owner Functions', async () => {
 
       expect(await newBridge.numActiveAuthors()).to.equal(helper.MIN_AUTHORS);
       expect(await newBridge.nextAuthorId()).to.equal(helper.MIN_AUTHORS + 1);
-    });
-
-    it('fails without a core token', async () => {
-      initVals.token = helper.ZERO_ADDRESS;
-      await deployAndCatchInitError('MissingCore');
     });
 
     it('fails when a T1 address does not correspond to its public key', async () => {
@@ -198,7 +193,7 @@ describe('Owner Functions', async () => {
 
   context('Initializer', async () => {
     it('Cannot reinitialize', async () => {
-      const initArgs = helper.generateInitArgs(token20.address, helper.MIN_AUTHORS);
+      const initArgs = helper.generateInitArgs(helper.MIN_AUTHORS);
       await expect(avnBridge.initialize(...initArgs)).to.be.reverted;
     });
   });

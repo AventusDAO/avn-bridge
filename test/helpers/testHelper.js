@@ -59,13 +59,13 @@ async function init(largeTree) {
   }
 }
 
-function generateInitArgs(coreToken, numAuthors) {
-  const initArgs = [coreToken, [], [], [], []];
+function generateInitArgs(numAuthors) {
+  const initArgs = [[], [], [], []];
   for (i = 0; i < numAuthors; i++) {
-    initArgs[1].push(authors[i].t1Address);
-    initArgs[2].push(authors[i].t1PubKeyLHS);
-    initArgs[3].push(authors[i].t1PubKeyRHS);
-    initArgs[4].push(authors[i].t2PubKey);
+    initArgs[0].push(authors[i].t1Address);
+    initArgs[1].push(authors[i].t1PubKeyLHS);
+    initArgs[2].push(authors[i].t1PubKeyRHS);
+    initArgs[3].push(authors[i].t2PubKey);
     authors[i].registered = true;
     authors[i].active = true;
   }
@@ -73,8 +73,8 @@ function generateInitArgs(coreToken, numAuthors) {
   return initArgs;
 }
 
-async function deployAVNBridge(coreToken, numAuthors) {
-  const initArgs = generateInitArgs(coreToken, numAuthors);
+async function deployAVNBridge(numAuthors) {
+  const initArgs = generateInitArgs(numAuthors);
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
   return await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 }
