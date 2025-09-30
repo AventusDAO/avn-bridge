@@ -183,6 +183,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogLoweringEnabled(state);
   }
 
+  function migrate(address avt, address newOwner) external onlyOwner {
+    (bool success, ) = avt.call(abi.encodeWithSignature('setOwner(address)', newOwner));
+    if (!success) revert();
+  }
+
   function rotateT1(address[] calldata newT1Addresses, uint256 startID, uint256 endID) external onlyOwner {
     uint256 numToRotate = endID - startID + 1;
     if (numToRotate != newT1Addresses.length) revert();

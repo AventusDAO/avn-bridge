@@ -2,7 +2,7 @@ const helper = require('./helpers/testHelper');
 const { expect } = require('chai');
 
 let avnBridge, token777, token20;
-let accounts, authors;
+let accounts;
 let owner, someOtherAccount, someT2PubKey;
 
 describe('Lifting and lowering', async () => {

@@ -2,8 +2,8 @@ const helper = require('./helpers/testHelper');
 const { expect } = require('chai');
 
 let avnBridge, token777, token20;
-let accounts, authors, numAuthors;
-let owner, someOtherAccount, someT2PubKey, unauthorizedAccount;
+let accounts, authors;
+let owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 let AVNBridge;
 
 describe('Owner Functions', async () => {
@@ -23,8 +23,10 @@ describe('Owner Functions', async () => {
     owner = helper.owner();
     someOtherAccount = accounts[1];
     unauthorizedAccount = accounts[2];
+    newTokenOwner = accounts[3];
     someT2PubKey = helper.someT2PubKey();
     authors = helper.authors();
+    await token20.transferOwnership(avnBridge.address);
   });
 
   context('Transferring Ownership', async () => {
@@ -195,6 +197,26 @@ describe('Owner Functions', async () => {
     it('Cannot reinitialize', async () => {
       const initArgs = helper.generateInitArgs(helper.MIN_AUTHORS);
       await expect(avnBridge.initialize(...initArgs)).to.be.reverted;
+    });
+  });
+
+  context('Migrate', async () => {
+    context('succeeds', async () => {
+      it('when called by the owner', async () => {
+        expect(await token20.owner()).to.equal(avnBridge.address);
+        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
+        expect(await token20.owner()).to.equal(newTokenOwner.address);
+      });
+    });
+    context('fails', async () => {
+      it('if the migration has already been run', async () => {
+        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
+      });
+      it('when the caller is not the owner', async () => {
+        await expect(avnBridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
+      });
     });
   });
 });

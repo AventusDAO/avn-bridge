@@ -3,7 +3,7 @@ const { expect } = require('chai');
 
 let avnBridge, token20;
 let accounts, authors;
-let someOtherAccount, activeAuthor;
+let activeAuthor;
 let numActiveAuthors, nextAuthorId;
 
 describe('Author Functions', async () => {
