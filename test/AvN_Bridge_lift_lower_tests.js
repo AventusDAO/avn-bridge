@@ -299,7 +299,7 @@ describe('Lifting and lowering', async () => {
     });
 
     context('fails when', async () => {
-      let lowerProof, lowerId;
+      let lowerProof;
       let lowerAmount = 100n;
 
       beforeEach(async () => {
@@ -322,21 +322,16 @@ describe('Lifting and lowering', async () => {
         await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.revertedWithCustomError(avnBridge, 'InvalidProof');
       });
 
-      it('a non-standard ERC20 triggers the re-entrancy check', async () => {
-        const ReentrantToken20 = await ethers.getContractFactory('ReentrantToken20');
-        const reentrantERC20 = await ReentrantToken20.deploy(10000000n, avnBridge.address);
-        reentrantERC20.address = await reentrantERC20.getAddress();
-        await reentrantERC20.approve(avnBridge.address, liftAmount);
-        await avnBridge.lift(reentrantERC20.address, someT2PubKey, liftAmount);
-        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, reentrantERC20, lowerAmount, owner);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'Locked');
-      });
-
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
         const addressCannotReceiveETH = token20;
         [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH, lowerAmount, addressCannotReceiveETH);
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+      });
+
+      it('the recipient address is missing', async () => {
+        [lowerProof] = await helper.createLowerProof(avnBridge, token20, lowerAmount, helper.ZERO_ADDRESS);
+        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'AddressIsZero');
       });
     });
   });
@@ -379,17 +374,57 @@ describe('Lifting and lowering', async () => {
     });
 
     it('results are as expected for a completely invalid proof', async () => {
+      const emptyAddress = helper.ZERO_ADDRESS.address;
       const shortProof = helper.randomBytes32();
       const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await avnBridge.checkLower(shortProof);
-      expect(token).to.equal(helper.ZERO_ADDRESS);
+      expect(token).to.equal(emptyAddress);
       expect(amount).to.equal(0);
-      expect(recipient).to.equal(helper.ZERO_ADDRESS);
+      expect(recipient).to.equal(emptyAddress);
       expect(lowerId).to.equal(0);
       expect(confirmationsRequired).to.equal(0);
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
       expect(lowerIsClaimed).to.equal(false);
+    });
+  });
+
+  context('Reentrancy prevention', function () {
+    const reentryPoint = {
+      ClaimLower: 0,
+      ETHLift: 1,
+      ERC20Lift: 2,
+      ERC777Lift: 3
+    };
+
+    const amount = 100n;
+    let reentrantToken;
+
+    before(async () => {
+      const contract = await ethers.getContractFactory('ReentrantToken');
+      reentrantToken = await contract.deploy(avnBridge.address);
+      reentrantToken.address = await reentrantToken.getAddress();
+      await reentrantToken.approve(avnBridge.address, amount * 5n);
+    });
+
+    it('the claimLower re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.ClaimLower);
+      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+    });
+
+    it('the ETH lift re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.ERC20Lift);
+      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+    });
+
+    it('the ERC20 lift re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.ERC777Lift);
+      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+    });
+
+    it('the ERC777 lift re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.ETHLift);
+      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
     });
   });
 

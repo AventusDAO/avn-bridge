@@ -211,6 +211,18 @@ describe('Author Functions', async () => {
         );
       });
 
+      it('the T2 public key is empty', async () => {
+        const prospectAuthor = authors[nextAuthorId];
+        const emptyKey = helper.EMPTY_BYTES_32;
+        const expiry = await helper.getValidExpiry();
+        const t2TxId = helper.randomT2TxId();
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'InvalidT2Key'
+        );
+      });
+
       it('the expiry time has passed', async () => {
         const prospectAuthor = authors[nextAuthorId];
         const expiry = (await helper.getCurrentBlockTimestamp()) - 1;

@@ -5,7 +5,7 @@ const { ethers } = require('hardhat');
 
 const ONE_AVT_IN_ATTO = 1000000000000000000n;
 const EMPTY_BYTES_32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ZERO_ADDRESS = { address: ethers.getAddress('0x0000000000000000000000000000000000000000') };
 const PSEUDO_ETH = { address: ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') };
 const LOWER_ID = '0x5702';
 const EXPIRY_WINDOW = 60;
@@ -118,8 +118,6 @@ function generateInitArgs(numAuthors) {
     initArgs[1].push(authors[i].t1PubKeyLHS);
     initArgs[2].push(authors[i].t1PubKeyRHS);
     initArgs[3].push(authors[i].t2PubKey);
-    authors[i].registered = true;
-    authors[i].active = true;
   }
 
   return initArgs;
