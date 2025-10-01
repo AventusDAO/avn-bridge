@@ -104,15 +104,7 @@ describe('Lifting and lowering', async () => {
       });
 
       it('attempting to lift ETH without supplying a public key', async () => {
-        await expect(avnBridge.liftETH('0x', { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
-      });
-
-      it('attempting to lift ETH with an incorrect T2 public key (too short)', async () => {
-        await expect(avnBridge.liftETH(helper.randomHex(16), { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
-      });
-
-      it('attempting to lift ETH with an incorrect T2 public key(too long)', async () => {
-        await expect(avnBridge.liftETH(helper.randomHex(48), { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await expect(avnBridge.liftETH(helper.EMPTY_BYTES_32, { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
       });
 
       it('attempting to lift 0 ERC20 tokens', async () => {
@@ -122,17 +114,7 @@ describe('Lifting and lowering', async () => {
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
         await token20.approve(avnBridge.address, 1n);
-        await expect(avnBridge.lift(token20.address, '0x', 1n)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
-      });
-
-      it('attempting to lift ERC-20 tokens with an incorrect T2 public key (too short)', async () => {
-        await token20.approve(avnBridge.address, 1);
-        await expect(avnBridge.lift(token20.address, helper.randomHex(16), 1)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
-      });
-
-      it('attempting to lift ERC-20 tokens with an incorrect T2 public key(too long)', async () => {
-        await token20.approve(avnBridge.address, 1);
-        await expect(avnBridge.lift(token20.address, helper.randomHex(48), 1n)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await expect(avnBridge.lift(token20.address, helper.EMPTY_BYTES_32, 1n)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
       });
 
       it('attempting to lift 0 ERC777 tokens', async () => {

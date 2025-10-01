@@ -25,8 +25,8 @@ interface IAVNBridge {
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
 
   // Public
-  function lift(address token, bytes calldata t2PubKey, uint256 amount) external;
-  function liftETH(bytes calldata t2PubKey) external payable;
+  function lift(address token, bytes32 t2PubKey, uint256 amount) external;
+  function liftETH(bytes32 t2PubKey) external payable;
   function claimLower(bytes calldata proof) external;
   function checkLower(
     bytes calldata proof

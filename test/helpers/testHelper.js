@@ -2,10 +2,9 @@ const { MerkleTree } = require('merkletreejs');
 const { time } = require('@nomicfoundation/hardhat-network-helpers');
 const keccak256 = require('keccak256');
 const { ethers } = require('hardhat');
-const { AbiCoder } = require('ethers');
-const abi = new AbiCoder();
 
 const ONE_AVT_IN_ATTO = 1000000000000000000n;
+const EMPTY_BYTES_32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PSEUDO_ETH = { address: ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') };
 const LOWER_ID = '0x5702';
@@ -85,6 +84,7 @@ async function getDomain(contract) {
 }
 
 async function init(largeTree) {
+  // printErrorCodes();
   const [funder] = await ethers.getSigners();
   [owner] = await ethers.getSigners();
 
@@ -263,6 +263,39 @@ async function createLowerProof(bridge, token, amount, recipient) {
   return [lowerProof, lowerId];
 }
 
+function printErrorCodes() {
+  [
+    'AddressIsZero()',
+    'AddressMismatch()',
+    'AlreadyAdded()',
+    'AmountIsZero()',
+    'AuthorsDisabled()',
+    'BadConfirmations()',
+    'CannotChangeT2Key(bytes32)',
+    'InvalidERC777()',
+    'InvalidProof()',
+    'InvalidRecipient()',
+    'InvalidT1Key()',
+    'InvalidT2Key()',
+    'LiftFailed()',
+    'LiftDisabled()',
+    'LiftLimitHit()',
+    'Locked()',
+    'LowerDisabled()',
+    'LowerIsUsed()',
+    'MissingKeys()',
+    'NotAnAuthor()',
+    'NotEnoughAuthors()',
+    'PaymentFailed()',
+    'PendingOwnerOnly()',
+    'RootHashIsUsed()',
+    'T1AddressInUse(address)',
+    'T2KeyInUse(bytes32)',
+    'TxIdIsUsed()',
+    'WindowExpired()'
+  ].forEach(error => console.log(`error ${error}; // ${ethers.keccak256(ethers.toUtf8Bytes(error)).slice(0, 10)}`));
+}
+
 // Keep exports alphabetical.
 module.exports = {
   accounts: () => accounts,
@@ -270,6 +303,7 @@ module.exports = {
   createLowerProof,
   createTreeAndPublishRoot,
   deployAVNBridge,
+  EMPTY_BYTES_32,
   EXPIRY_WINDOW,
   generateInitArgs,
   getConfirmations,

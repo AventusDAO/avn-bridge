@@ -37,7 +37,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
   address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  uint256 private constant T2_TOKEN_LIMIT = type(uint128).max;
+  uint256 private constant LIFT_LIMIT = type(uint128).max;
   uint256 private constant MINIMUM_AUTHOR_SET = 4;
   uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4; // token address + amount + recipient address + lower ID
   uint256 private constant SIGNATURE_LENGTH = 65;
@@ -90,34 +90,34 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
-  error AddressIsZero();
-  error AddressMismatch();
-  error AlreadyAdded();
-  error AmountIsZero();
-  error AuthorsDisabled();
-  error BadConfirmations();
-  error CannotChangeT2Key(bytes32);
-  error InvalidERC777();
-  error InvalidProof();
-  error InvalidRecipient();
-  error InvalidT1Key();
-  error InvalidT2Key();
-  error LiftDisabled();
-  error LiftFailed();
-  error LiftLimitHit();
-  error Locked();
-  error LowerDisabled();
-  error LowerIsUsed();
-  error MissingKeys();
-  error NotAnAuthor();
-  error NotEnoughAuthors();
-  error PaymentFailed();
-  error PendingOwnerOnly();
-  error RootHashIsUsed();
-  error T1AddressInUse(address);
-  error T2KeyInUse(bytes32);
-  error TxIdIsUsed();
-  error WindowExpired();
+  error AddressIsZero(); // 0x867915ab
+  error AddressMismatch(); // 0x4cd87fb5
+  error AlreadyAdded(); // 0xf411c327
+  error AmountIsZero(); // 0x43ad20fc
+  error AuthorsDisabled(); // 0x7b465238
+  error BadConfirmations(); // 0x409c8aac
+  error CannotChangeT2Key(bytes32); // 0x140c6815
+  error InvalidERC777(); // 0x0e9dcbf6
+  error InvalidProof(); // 0x09bde339
+  error InvalidRecipient(); // 0x9c8d2cd2
+  error InvalidT1Key(); // 0x4b0218a8
+  error InvalidT2Key(); // 0xf4fc87a4
+  error LiftDisabled(); // 0xb63d2c8c
+  error LiftFailed(); // 0xb19ed519
+  error LiftLimitHit(); // 0xc36d2830
+  error Locked(); // 0x0f2e5b6c
+  error LowerDisabled(); // 0x499e8c3a
+  error LowerIsUsed(); // 0x24c1c1ce
+  error MissingKeys(); // 0x097ec09e
+  error NotAnAuthor(); // 0x157b0512
+  error NotEnoughAuthors(); // 0x3a6a875c
+  error PaymentFailed(); // 0xf499da20
+  error PendingOwnerOnly(); // 0x306bd3d7
+  error RootHashIsUsed(); // 0x2c8a3b6e
+  error T1AddressInUse(address); // 0x78f22dd1
+  error T2KeyInUse(bytes32); // 0x02f3935c
+  error TxIdIsUsed(); // 0x7edd16f0
+  error WindowExpired(); // 0x7bbfb6fe
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -299,21 +299,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * Tokens must first be approved for use by this contract. Fails if it will cause the total amount of the
    * tokens currently lifted to exceed 340282366920938463463374607431768211455 (T2 constraint).
    */
-  function lift(address token, bytes calldata t2PubKey, uint256 amount) external onlyWhenLiftingEnabled lock {
+  function lift(address token, bytes32 t2PubKey, uint256 amount) external onlyWhenLiftingEnabled lock {
+    if (t2PubKey == bytes32(0)) revert InvalidT2Key();
     uint256 existingBalance = IERC20(token).balanceOf(address(this));
     IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
     uint256 newBalance = IERC20(token).balanceOf(address(this));
     if (newBalance <= existingBalance) revert LiftFailed();
-    if (newBalance > T2_TOKEN_LIMIT) revert LiftLimitHit();
-    emit LogLifted(token, _checkT2PubKey(t2PubKey), newBalance - existingBalance);
+    if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
+    emit LogLifted(token, t2PubKey, newBalance - existingBalance);
   }
 
   /**
    * @dev Enables anyone to lift an amount of ETH to the specified 32 byte public key of the T2 recipient.
    */
-  function liftETH(bytes calldata t2PubKey) external payable onlyWhenLiftingEnabled lock {
+  function liftETH(bytes32 t2PubKey) external payable onlyWhenLiftingEnabled lock {
+    if (t2PubKey == bytes32(0)) revert InvalidT2Key();
     if (msg.value == 0) revert AmountIsZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, _checkT2PubKey(t2PubKey), msg.value);
+    emit LogLifted(PSEUDO_ETH_ADDRESS, t2PubKey, msg.value);
   }
 
   /**
@@ -334,8 +336,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (amount == 0) revert AmountIsZero();
     if (to != address(this)) revert InvalidRecipient();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
-    if (IERC777(msg.sender).balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
-    emit LogLifted(msg.sender, _checkT2PubKey(data), amount);
+    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
+    if (data.length != 32) revert InvalidT2Key();
+    emit LogLifted(msg.sender, bytes32(data), amount);
   }
 
   /**
@@ -385,7 +388,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       confirmationsOffset := add(lowerProof.offset, LOWER_DATA_LENGTH)
     }
 
-    for (uint256 i; i < numConfirmations; ++i) {
+    for (uint256 i = 0; i < numConfirmations; ++i) {
       uint256 id = _recoverAuthorId(proofHash, confirmationsOffset, i);
       if (authorIsActive[id] && !confirmed[id]) confirmed[id] = true;
       else confirmationsProvided--;
@@ -552,7 +555,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       authorId = _recoverAuthorId(msgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
     } else {
-      // For non-lowers there is a high chance the sender is an author and, if so, their confirmation is implicit
+      // For non-lowers there is a high likelihood the sender is an author, so their confirmation is taken to be implicit
       authorId = t1AddressToId[msg.sender];
       unchecked {
         ++numConfirmations;
@@ -636,10 +639,5 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _storeT2TxId(uint256 t2TxId) private {
     if (isUsedT2TxId[t2TxId]) revert TxIdIsUsed();
     isUsedT2TxId[t2TxId] = true;
-  }
-
-  function _checkT2PubKey(bytes calldata t2PubKey) private pure returns (bytes32 checkedT2PubKey) {
-    if (t2PubKey.length != 32) revert InvalidT2Key();
-    checkedT2PubKey = bytes32(t2PubKey);
   }
 }
