@@ -29,12 +29,19 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   // keccak256("ERC777TokensRecipient")
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = 0xb281fc8c12954d22544db45de3159a39272895b169a852b314f9cc762e44c53b;
   string private constant ESM_PREFIX = '\x19Ethereum Signed Message:\n32';
+  string private constant EIP712_PREFIX = '\x19\x01';
+  bytes32 private constant VERSION_HASH = keccak256('1');
+  bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
+  bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant LOWER_DATA_TYPEHASH = keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId)');
+  bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
   address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-  uint256 private constant LIFT_LIMIT = type(uint128).max;
+  uint256 private constant T2_TOKEN_LIMIT = type(uint128).max;
   uint256 private constant MINIMUM_AUTHOR_SET = 4;
   uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4; // token address + amount + recipient address + lower ID
   uint256 private constant SIGNATURE_LENGTH = 65;
-  uint256 private constant MINIMUM_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
+  uint256 private constant MINIMUM_LOWER_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
   uint256 private constant UNLOCKED = 0;
   uint256 private constant LOCKED = 1;
   int8 private constant TX_SUCCEEDED = 1;
@@ -83,12 +90,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
+  error AddressIsZero();
   error AddressMismatch();
   error AlreadyAdded();
   error AmountIsZero();
   error AuthorsDisabled();
   error BadConfirmations();
-  error CannotChangeT2Key(bytes32 existingT2PubKey);
+  error CannotChangeT2Key(bytes32);
   error InvalidERC777();
   error InvalidProof();
   error InvalidRecipient();
@@ -106,8 +114,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error PaymentFailed();
   error PendingOwnerOnly();
   error RootHashIsUsed();
-  error T1AddressInUse(address t1Address);
-  error T2KeyInUse(bytes32 t2PubKey);
+  error T1AddressInUse(address);
+  error T2KeyInUse(bytes32);
   error TxIdIsUsed();
   error WindowExpired();
 
@@ -164,6 +172,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (!success) revert();
   }
 
+  function name() public pure returns (string memory) {
+    return 'AVNBridge';
+  }
+
   /**
    * @dev Allows the owner to enable/disable author functionality.
    */
@@ -215,11 +227,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes calldata confirmations
   ) external onlyWhenAuthorsEnabled onlyWithinCallWindow(expiry) {
     if (t1PubKey.length != 64) revert InvalidT1Key();
-    address t1Address = address(uint160(uint256(keccak256(t1PubKey))));
+    if (t2PubKey == bytes32(0)) revert InvalidT2Key();
+    address t1Address = _toAddress(t1PubKey);
     uint256 id = t1AddressToId[t1Address];
     if (isAuthor[id]) revert AlreadyAdded();
-
-    _verifyConfirmations(false, keccak256(abi.encode(t1PubKey, t2PubKey, expiry, t2TxId)), confirmations);
+    bytes32 proofHash = _toAddAuthorProofHash(t1PubKey, t2PubKey, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
 
     if (id == 0) {
@@ -246,7 +259,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint256 id = t2PubKeyToId[t2PubKey];
     if (!isAuthor[id]) revert NotAnAuthor();
 
-    _verifyConfirmations(false, keccak256(abi.encode(t2PubKey, t1PubKey, expiry, t2TxId)), confirmations);
+    bytes32 proofHash = _toRemoveAuthorProofHash(t2PubKey, t1PubKey, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
 
     if (numActiveAuthors <= MINIMUM_AUTHOR_SET) revert NotEnoughAuthors();
     _storeT2TxId(t2TxId);
@@ -273,7 +287,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes calldata confirmations
   ) external onlyWhenAuthorsEnabled onlyWithinCallWindow(expiry) {
     if (isPublishedRootHash[rootHash]) revert RootHashIsUsed();
-    _verifyConfirmations(false, keccak256(abi.encode(rootHash, expiry, t2TxId)), confirmations);
+    bytes32 proofHash = _toPublishRootProofHash(rootHash, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TxId);
@@ -289,7 +304,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
     uint256 newBalance = IERC20(token).balanceOf(address(this));
     if (newBalance <= existingBalance) revert LiftFailed();
-    if (newBalance > LIFT_LIMIT) revert LiftLimitHit();
+    if (newBalance > T2_TOKEN_LIMIT) revert LiftLimitHit();
     emit LogLifted(token, _checkT2PubKey(t2PubKey), newBalance - existingBalance);
   }
 
@@ -319,33 +334,17 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (amount == 0) revert AmountIsZero();
     if (to != address(this)) revert InvalidRecipient();
     if (ERC1820_REGISTRY.getInterfaceImplementer(msg.sender, ERC777_TOKEN_HASH) != msg.sender) revert InvalidERC777();
-    if (IERC777(msg.sender).balanceOf(address(this)) > LIFT_LIMIT) revert LiftLimitHit();
+    if (IERC777(msg.sender).balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
     emit LogLifted(msg.sender, _checkT2PubKey(data), amount);
   }
 
   /**
-   * @dev Enables anyone to claim the amount of funds specified in the T2-supplied proof, for the intended recipient.
+   * @dev Enables anyone to claim the amount of funds specified in the T2-supplied lower proof, for the intended recipient.
    */
-  function claimLower(bytes calldata proof) external onlyWhenLoweringEnabled lock {
-    if (proof.length < MINIMUM_PROOF_LENGTH) revert InvalidProof();
-
-    address token;
-    uint256 amount;
-    address recipient;
-    uint32 lowerId;
-
-    assembly {
-      token := shr(96, calldataload(proof.offset))
-      amount := calldataload(add(proof.offset, 20))
-      recipient := shr(96, calldataload(add(proof.offset, 52)))
-      lowerId := shr(224, calldataload(add(proof.offset, 72)))
-    }
-
-    bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
-    if (hasLowered[lowerHash]) revert LowerIsUsed();
-    hasLowered[lowerHash] = true;
-
-    _verifyConfirmations(true, lowerHash, proof[LOWER_DATA_LENGTH:]);
+  function claimLower(bytes calldata lowerProof) external onlyWhenLoweringEnabled lock {
+    (address token, uint256 amount, address recipient, uint32 lowerId) = _extractLowerData(lowerProof);
+    if (recipient == address(0)) revert AddressIsZero();
+    _processLower(token, amount, recipient, lowerId, lowerProof);
     _releaseFunds(token, amount, recipient);
 
     emit LogLowerClaimed(lowerId);
@@ -356,7 +355,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * by T2 before claiming.
    */
   function checkLower(
-    bytes calldata proof
+    bytes calldata lowerProof
   )
     external
     view
@@ -371,27 +370,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       bool lowerIsClaimed
     )
   {
-    if (proof.length < MINIMUM_PROOF_LENGTH) return (address(0), 0, address(0), 0, 0, 0, false, false);
+    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) return (address(0), 0, address(0), 0, 0, 0, false, false);
 
-    token = address(bytes20(proof[0:20]));
-    amount = uint256(bytes32(proof[20:52]));
-    recipient = address(bytes20(proof[52:72]));
-    lowerId = uint32(bytes4(proof[72:LOWER_DATA_LENGTH]));
-    bytes32 lowerHash = keccak256(abi.encodePacked(token, amount, recipient, lowerId));
-    uint256 numConfirmations = (proof.length - LOWER_DATA_LENGTH) / SIGNATURE_LENGTH;
+    (token, amount, recipient, lowerId) = _extractLowerData(lowerProof);
+    bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId);
+    uint256 numConfirmations = (lowerProof.length - LOWER_DATA_LENGTH) / SIGNATURE_LENGTH;
     bool[] memory confirmed = new bool[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked(ESM_PREFIX, lowerHash));
     uint256 confirmationsOffset;
 
-    lowerIsClaimed = hasLowered[lowerHash];
+    lowerIsClaimed = hasLowered[proofHash];
     confirmationsProvided = numConfirmations;
     confirmationsRequired = _requiredConfirmations();
     assembly {
-      confirmationsOffset := add(proof.offset, LOWER_DATA_LENGTH)
+      confirmationsOffset := add(lowerProof.offset, LOWER_DATA_LENGTH)
     }
 
-    for (uint256 i = 0; i < numConfirmations; ++i) {
-      uint256 id = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, i);
+    for (uint256 i; i < numConfirmations; ++i) {
+      uint256 id = _recoverAuthorId(proofHash, confirmationsOffset, i);
       if (authorIsActive[id] && !confirmed[id]) confirmed[id] = true;
       else confirmationsProvided--;
     }
@@ -495,6 +490,27 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  function _domainSeparator() private view returns (bytes32) {
+    return keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name())), VERSION_HASH, block.chainid, address(this)));
+  }
+
+  function _extractLowerData(bytes calldata lowerProof) private pure returns (address token, uint256 amount, address recipient, uint32 lowerId) {
+    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) revert InvalidProof();
+    assembly {
+      token := shr(96, calldataload(lowerProof.offset))
+      amount := calldataload(add(lowerProof.offset, 20))
+      recipient := shr(96, calldataload(add(lowerProof.offset, 52)))
+      lowerId := shr(224, calldataload(add(lowerProof.offset, 72)))
+    }
+  }
+
+  function _processLower(address token, uint256 amount, address recipient, uint32 lowerId, bytes calldata lowerProof) private {
+    bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId);
+    if (hasLowered[proofHash]) revert LowerIsUsed();
+    hasLowered[proofHash] = true;
+    _verifyConfirmations(true, proofHash, lowerProof[LOWER_DATA_LENGTH:]);
+  }
+
   function _releaseFunds(address token, uint256 amount, address recipient) private {
     if (token == PSEUDO_ETH_ADDRESS) {
       (bool success, ) = payable(recipient).call{ value: amount }('');
@@ -513,9 +529,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  function _toAddress(bytes memory t1PubKey) private pure returns (address) {
+    return address(uint160(uint256(keccak256(t1PubKey))));
+  }
+
   function _verifyConfirmations(bool isLower, bytes32 msgHash, bytes calldata confirmations) private {
     uint256[] memory confirmed = new uint256[](nextAuthorId);
-    bytes32 ethSignedPrefixMsgHash = keccak256(abi.encodePacked(ESM_PREFIX, msgHash));
     uint256 requiredConfirmations = _requiredConfirmations();
     uint256 numConfirmations = confirmations.length / SIGNATURE_LENGTH;
     uint256 confirmationsOffset;
@@ -530,10 +549,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     // Setup the first iteration of the do-while loop:
     if (isLower) {
       // For lowers all confirmations are explicit so the first authorId is extracted from the first confirmation
-      authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
+      authorId = _recoverAuthorId(msgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
     } else {
-      // For non-lowers there is a high likelihood the sender is an author, so their confirmation is taken to be implicit
+      // For non-lowers there is a high chance the sender is an author and, if so, their confirmation is implicit
       authorId = t1AddressToId[msg.sender];
       unchecked {
         ++numConfirmations;
@@ -560,7 +579,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
 
       // Setup the next iteration of the loop
-      authorId = _recoverAuthorId(ethSignedPrefixMsgHash, confirmationsOffset, confirmationsIndex);
+      authorId = _recoverAuthorId(msgHash, confirmationsOffset, confirmationsIndex);
       unchecked {
         ++confirmationsIndex;
       }
@@ -590,6 +609,28 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
       ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
       : 0;
+  }
+
+  function _toAddAuthorProofHash(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 t1PubKeyHash = keccak256(t1PubKey);
+    bytes32 structHash = keccak256(abi.encode(ADD_AUTHOR_TYPEHASH, t1PubKeyHash, t2PubKey, expiry, t2TxId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toLowerDataProofHash(address token, uint256 amount, address recipient, uint32 lowerId) private view returns (bytes32) {
+    bytes32 structHash = keccak256(abi.encode(LOWER_DATA_TYPEHASH, token, amount, recipient, lowerId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toPublishRootProofHash(bytes32 rootHash, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 structHash = keccak256(abi.encode(PUBLISH_ROOT_TYPEHASH, rootHash, expiry, t2TxId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toRemoveAuthorProofHash(bytes32 t2PubKey, bytes calldata t1PubKey, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 t1PubKeyHash = keccak256(t1PubKey);
+    bytes32 structHash = keccak256(abi.encode(REMOVE_AUTHOR_TYPEHASH, t2PubKey, t1PubKeyHash, expiry, t2TxId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
 
   function _storeT2TxId(uint256 t2TxId) private {

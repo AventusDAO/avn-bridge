@@ -237,7 +237,7 @@ describe('Lifting and lowering', async () => {
         const avnEthBalanceBefore = await ethers.provider.getBalance(avnBridge.address);
         const lowererEthBalanceBefore = await ethers.provider.getBalance(owner);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, owner.address);
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH, lowerAmount, owner);
         const txResponse = await avnBridge.claimLower(lowerProof);
         const txReceipt = await txResponse.wait(1);
         const txCost = txReceipt.gasUsed * txResponse.gasPrice;
@@ -259,7 +259,7 @@ describe('Lifting and lowering', async () => {
         const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
         const senderBalBefore = await token20.balanceOf(owner);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner.address);
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token20, lowerAmount, owner);
 
         // lower and confirm values
         await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
@@ -274,7 +274,7 @@ describe('Lifting and lowering', async () => {
         const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
         const senderBalBefore = await token777.balanceOf(owner);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner.address);
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
 
         // lower and confirm values
         await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
@@ -289,7 +289,7 @@ describe('Lifting and lowering', async () => {
         const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
         const senderBalBefore = await token777.balanceOf(token20.address);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, token20.address);
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, token20);
 
         // lower and confirm values
         await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
@@ -304,7 +304,7 @@ describe('Lifting and lowering', async () => {
         const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
         const senderBalBefore = await token777.balanceOf(owner);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, avnBridge.address);
+        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, avnBridge);
 
         // lower and confirm values
         await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
@@ -321,7 +321,7 @@ describe('Lifting and lowering', async () => {
       let lowerAmount = 100n;
 
       beforeEach(async () => {
-        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner.address);
+        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
       });
 
       it('lowering is disabled', async () => {
@@ -346,14 +346,14 @@ describe('Lifting and lowering', async () => {
         reentrantERC20.address = await reentrantERC20.getAddress();
         await reentrantERC20.approve(avnBridge.address, liftAmount);
         await avnBridge.lift(reentrantERC20.address, someT2PubKey, liftAmount);
-        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, reentrantERC20.address, lowerAmount, owner.address);
+        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, reentrantERC20, lowerAmount, owner);
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'Locked');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
-        const addressCannotReceiveETH = token20.address;
-        [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH_ADDRESS, lowerAmount, addressCannotReceiveETH);
+        const addressCannotReceiveETH = token20;
+        [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH, lowerAmount, addressCannotReceiveETH);
         await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
       });
     });
@@ -362,18 +362,17 @@ describe('Lifting and lowering', async () => {
   context('Check lower', async () => {
     it('results are as expected for a valid, unused proof', async () => {
       const lowerAmount = 123n;
-      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token20.address, lowerAmount, owner.address);
+      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token20, lowerAmount, owner);
       const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
-      const numConfirmationsSent = Number(await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
       expect(token).to.equal(token20.address);
       expect(amount).to.equal(lowerAmount);
       expect(recipient).to.equal(owner);
       expect(lowerId).to.equal(expectedLowerId);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
-      expect(confirmationsProvided).to.equal(numConfirmationsSent);
+      expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
       expect(lowerIsClaimed).to.equal(false);
     });
@@ -381,19 +380,18 @@ describe('Lifting and lowering', async () => {
     it('results are as expected for a valid, used proof', async () => {
       const lowerAmount = 456n;
       await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
-      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token777.address, lowerAmount, owner.address);
+      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
       await avnBridge.claimLower(lowerProof);
       const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await avnBridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
-      const numConfirmationsSent = Number(await avnBridge.numActiveAuthors()) - numConfirmationsRequired;
       expect(token).to.equal(token777.address);
       expect(amount).to.equal(lowerAmount);
       expect(recipient).to.equal(owner);
       expect(lowerId).to.equal(expectedLowerId);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
-      expect(confirmationsProvided).to.equal(numConfirmationsSent);
+      expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
       expect(lowerIsClaimed).to.equal(true);
     });

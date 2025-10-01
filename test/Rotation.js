@@ -23,7 +23,7 @@ describe('Rotation', async () => {
       async function removeAuthor(id) {
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey], expiry, t2TxId);
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId]);
         await avnBridge.connect(authors[0].account).removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
       }
 
