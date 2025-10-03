@@ -40,25 +40,20 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 #### Check bytecode size
 `npx hardhat size-contracts`
 
-#### Deploy
+#### Deploy initial proxy
 `npx hardhat --network <network> deploy --env <AvN environment name - eg: 'testnet' or 'dev'>`
 
-#### Upgrade an existing avn-bridge contract
-`npx hardhat --network <network> upgrade --bridge <contract address>`
+#### Update OZ manifest
+`npx hardhat --network <network> update <bridge_address>`
 
-#### Publish a new test token
+#### Validate new implementation
+`npx hardhat --network <network> validate <bridge_address>`
+
+#### Deploy new implementation
+`npx hardhat --network <network> implementation`
+
+#### Publish a test token
 `npx hardhat --network <network> publishToken`
 
 #### Format the code (JS files only)
 `npm run format`
-
-### Interaction via Etherscan
-
-The deployment will automatically publish and verify the contracts.\
-\
-The following manual steps may then be required to interact with the AVN contract on Etherscan:
-- Visit the Etherscan page for the ERC1967Proxy address from the deployment
-- Under More Options select "Is this a proxy?"
-- Click Verify and Save
-- Return to the ERC1967Proxy page's Contract tab
-- Now you will be able to "Read as Proxy" or "Write as Proxy" to interact with the AVN contract
