@@ -4,7 +4,6 @@ const { expect } = require('chai');
 let avnBridge, token777, token20;
 let accounts, authors;
 let owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
-let AVNBridge;
 
 describe('Owner Functions', async () => {
   before(async () => {
@@ -43,7 +42,7 @@ describe('Owner Functions', async () => {
           .to.emit(avnBridge, 'OwnershipTransferred')
           .withArgs(owner, someOtherAccount.address);
 
-        expect(helper.ZERO_ADDRESS).to.equal(await avnBridge.pendingOwner());
+        expect(helper.ZERO_ADDRESS.address).to.equal(await avnBridge.pendingOwner());
         expect(someOtherAccount.address).to.equal(await avnBridge.owner());
 
         await avnBridge.connect(someOtherAccount).transferOwnership(owner);
@@ -82,6 +81,7 @@ describe('Owner Functions', async () => {
 
   context('Initialization', async () => {
     let initVals = {};
+    const numAuthors = helper.MIN_AUTHORS + 1;
 
     async function deployAndCatchInitError(expectedError) {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
@@ -92,7 +92,7 @@ describe('Owner Functions', async () => {
     beforeEach(async () => {
       initVals = { t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
 
-      for (i = 0; i < helper.MIN_AUTHORS; i++) {
+      for (i = 0; i < numAuthors; i++) {
         initVals.t1Addresses.push(authors[i].t1Address);
         initVals.t1PubKeysLHS.push(authors[i].t1PubKeyLHS);
         initVals.t1PubKeysRHS.push(authors[i].t1PubKeyRHS);
@@ -104,7 +104,7 @@ describe('Owner Functions', async () => {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
       const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 
-      for (i = 0; i < helper.MIN_AUTHORS; i++) {
+      for (i = 0; i < numAuthors; i++) {
         const authorId = i + 1;
         expect(await newBridge.t1AddressToId(initVals.t1Addresses[i])).to.equal(authorId);
         expect(await newBridge.t2PubKeyToId(initVals.t2PubKeys[i])).to.equal(authorId);
@@ -114,17 +114,32 @@ describe('Owner Functions', async () => {
         expect(await newBridge.idToT2PubKey(authorId)).to.equal(initVals.t2PubKeys[i]);
       }
 
-      expect(await newBridge.numActiveAuthors()).to.equal(helper.MIN_AUTHORS);
-      expect(await newBridge.nextAuthorId()).to.equal(helper.MIN_AUTHORS + 1);
+      expect(await newBridge.numActiveAuthors()).to.equal(numAuthors);
+      expect(await newBridge.nextAuthorId()).to.equal(numAuthors + 1);
     });
 
     it('fails when a T1 address does not correspond to its public key', async () => {
-      initVals.t1PubKeysLHS[0] = authors[helper.MIN_AUTHORS].t1PubKeyLHS;
+      initVals.t1PubKeysLHS[0] = authors[numAuthors].t1PubKeyLHS;
       await deployAndCatchInitError('AddressMismatch');
     });
 
-    it('fails when keys are missing', async () => {
-      initVals.t1Addresses.push(authors[helper.MIN_AUTHORS].t1Address);
+    it('when addresses are missing', async () => {
+      initVals.t1Addresses.pop();
+      await deployAndCatchInitError('MissingKeys');
+    });
+
+    it('when t1 key left halves are missing', async () => {
+      initVals.t1PubKeysLHS.pop();
+      await deployAndCatchInitError('MissingKeys');
+    });
+
+    it('when t1 key right halves are missing', async () => {
+      initVals.t1PubKeysRHS.pop();
+      await deployAndCatchInitError('MissingKeys');
+    });
+
+    it('when t2 keys are missing', async () => {
+      initVals.t2PubKeys.pop();
       await deployAndCatchInitError('MissingKeys');
     });
 
@@ -141,10 +156,10 @@ describe('Owner Functions', async () => {
     });
 
     it('fails when there are too few authors', async () => {
-      initVals.t1Addresses.pop();
-      initVals.t1PubKeysLHS.pop();
-      initVals.t1PubKeysRHS.pop();
-      initVals.t2PubKeys.pop();
+      initVals.t1Addresses.splice(helper.MIN_AUTHORS - 1);
+      initVals.t1PubKeysLHS.splice(helper.MIN_AUTHORS - 1);
+      initVals.t1PubKeysRHS.splice(helper.MIN_AUTHORS - 1);
+      initVals.t2PubKeys.splice(helper.MIN_AUTHORS - 1);
       await deployAndCatchInitError('NotEnoughAuthors');
     });
   });
@@ -214,6 +229,30 @@ describe('Owner Functions', async () => {
       });
       it('when the caller is not the owner', async () => {
         await expect(avnBridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
+      });
+    });
+  });
+
+  context('Upgrade', function () {
+    let upgradeContract;
+
+    before(async () => {
+      upgradeContract = await ethers.getContractFactory('AVNBridgeUpgrade');
+    });
+
+    context('succeeds', function () {
+      it('via Openzeppelin upgrades', async () => {
+        const upgradedBridge = await upgrades.upgradeProxy(avnBridge.address, upgradeContract);
+        expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
+      });
+    });
+
+    context('fails', function () {
+      it('when the caller is not the owner', async () => {
+        const newBridge = await upgradeContract.deploy();
+        await expect(avnBridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });

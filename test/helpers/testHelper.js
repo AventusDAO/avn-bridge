@@ -2,15 +2,57 @@ const { MerkleTree } = require('merkletreejs');
 const { time } = require('@nomicfoundation/hardhat-network-helpers');
 const keccak256 = require('keccak256');
 const { ethers } = require('hardhat');
-const { AbiCoder } = require('ethers');
-const abi = new AbiCoder();
 
 const ONE_AVT_IN_ATTO = 1000000000000000000n;
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const PSEUDO_ETH_ADDRESS = ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
+const EMPTY_BYTES_32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const ZERO_ADDRESS = { address: ethers.getAddress('0x0000000000000000000000000000000000000000') };
+const PSEUDO_ETH = { address: ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') };
 const LOWER_ID = '0x5702';
 const EXPIRY_WINDOW = 60;
 const MIN_AUTHORS = 4;
+
+const PROOF_TYPES = {
+  addAuthor: {
+    AddAuthor: [
+      { name: 't1PubKey', type: 'bytes' },
+      { name: 't2PubKey', type: 'bytes32' },
+      { name: 'expiry', type: 'uint256' },
+      { name: 't2TxId', type: 'uint32' }
+    ]
+  },
+  claimLower: {
+    LowerData: [
+      { name: 'token', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'recipient', type: 'address' },
+      { name: 'lowerId', type: 'uint32' }
+    ]
+  },
+  permit: {
+    Permit: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' }
+    ]
+  },
+  publishRoot: {
+    PublishRoot: [
+      { name: 'rootHash', type: 'bytes32' },
+      { name: 'expiry', type: 'uint256' },
+      { name: 't2TxId', type: 'uint32' }
+    ]
+  },
+  removeAuthor: {
+    RemoveAuthor: [
+      { name: 't2PubKey', type: 'bytes32' },
+      { name: 't1PubKey', type: 'bytes' },
+      { name: 'expiry', type: 'uint256' },
+      { name: 't2TxId', type: 'uint32' }
+    ]
+  }
+};
 
 let additionalTx = [];
 let accounts = [];
@@ -32,7 +74,17 @@ function toAuthorAccount(account) {
   };
 }
 
+async function getDomain(contract) {
+  return {
+    name: await contract.name(),
+    version: '1',
+    chainId: (await ethers.provider.getNetwork()).chainId,
+    verifyingContract: contract.address
+  };
+}
+
 async function init(largeTree) {
+  // printErrorCodes();
   const [funder] = await ethers.getSigners();
   [owner] = await ethers.getSigners();
 
@@ -66,8 +118,6 @@ function generateInitArgs(numAuthors) {
     initArgs[1].push(authors[i].t1PubKeyLHS);
     initArgs[2].push(authors[i].t1PubKeyRHS);
     initArgs[3].push(authors[i].t2PubKey);
-    authors[i].registered = true;
-    authors[i].active = true;
   }
 
   return initArgs;
@@ -102,22 +152,22 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function getConfirmations(contract, method, data, expiry, t2TxId, adjustment, startPos) {
-  startPos = startPos || 2;
-  adjustment = adjustment || 0;
-  const numConfirmations = (await getNumRequiredConfirmations(contract)) + adjustment;
+async function getConfirmations(bridge, method, args, adjustment = 0, startPos = 2) {
+  const numConfirmations = Number(await getNumRequiredConfirmations(bridge)) + adjustment;
+  const message = toEIP712Message[method](args);
+  const domain = await getDomain(bridge);
   let concatenatedConfirmations = '0x';
-  const confirmationHash = toConfirmationHash[method](data, expiry, t2TxId);
   for (i = startPos; i <= numConfirmations; i++) {
-    const confirmation = await authors[i].account.signMessage(ethers.getBytes(confirmationHash));
+    const confirmation = await authors[i].account.signTypedData(domain, PROOF_TYPES[method], message);
     concatenatedConfirmations += strip_0x(confirmation);
   }
   return concatenatedConfirmations;
 }
 
-async function getSingleConfirmation(contract, method, data, expiry, t2TxId, author) {
-  const confirmationHash = toConfirmationHash[method](data, expiry, t2TxId);
-  return await author.account.signMessage(ethers.getBytes(confirmationHash));
+async function getSingleConfirmation(bridge, author, method, args) {
+  const domain = await getDomain(bridge);
+  const message = toEIP712Message[method](args);
+  return await author.account.signTypedData(domain, PROOF_TYPES[method], message);
 }
 
 async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
@@ -130,33 +180,21 @@ async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   const merkleTree = createMerkleTree(leaves);
   const expiry = await getValidExpiry();
   const t2TxId = randomT2TxId();
-  const confirmations = await getConfirmations(bridge, 'publishRoot', merkleTree.rootHash, expiry, t2TxId);
+  const confirmations = await getConfirmations(bridge, 'publishRoot', [merkleTree.rootHash, expiry, t2TxId]);
   await bridge.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
   return merkleTree;
 }
 
-async function getNumRequiredConfirmations(contract) {
-  const numAuthors = Number(await contract.numActiveAuthors());
+async function getNumRequiredConfirmations(bridge) {
+  const numAuthors = Number(await bridge.numActiveAuthors());
   return numAuthors - Math.floor((numAuthors * 2) / 3);
 }
 
-const toConfirmationHash = {
-  publishRoot: function (data, expiry, t2TxId) {
-    const encodedParams = abi.encode(['bytes32', 'uint256', 'uint32'], [data, expiry, t2TxId]);
-    return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
-  },
-  addAuthor: function (data, expiry, t2TxId) {
-    const encodedParams = abi.encode(['bytes', 'bytes32', 'uint256', 'uint32'], [data[0], data[1], expiry, t2TxId]);
-    return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
-  },
-  removeAuthor: function (data, expiry, t2TxId) {
-    const encodedParams = abi.encode(['bytes32', 'bytes', 'uint256', 'uint32'], [data[0], data[1], expiry, t2TxId]);
-    return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
-  },
-  triggerGrowth: function (data, expiry, t2TxId) {
-    const encodedParams = abi.encode(['uint128', 'uint128', 'uint32', 'uint256', 'uint32'], [data[0], data[1], data[2], expiry, t2TxId]);
-    return ethers.solidityPackedKeccak256(['bytes'], [encodedParams]);
-  }
+const toEIP712Message = {
+  addAuthor: args => ({ t1PubKey: args[0], t2PubKey: args[1], expiry: args[2], t2TxId: args[3] }),
+  removeAuthor: args => ({ t2PubKey: args[0], t1PubKey: args[1], expiry: args[2], t2TxId: args[3] }),
+  publishRoot: args => ({ rootHash: args[0], expiry: args[1], t2TxId: args[2] }),
+  claimLower: args => ({ token: args[0], amount: args[1], recipient: args[2], lowerId: args[3] })
 };
 
 function randomHex(length) {
@@ -199,27 +237,61 @@ async function getValidExpiry() {
   return (await getCurrentBlockTimestamp()) + EXPIRY_WINDOW;
 }
 
-async function createLowerProof(bridge, tokenAddress, amount, recipientAddress) {
-  lowerId++;
+async function createLowerProof(bridge, token, amount, recipient) {
+  const confirmationsRequired = await getNumRequiredConfirmations(bridge);
 
-  const tokenBytes = ethers.getBytes(tokenAddress);
-  const amountBytes = ethers.toBeHex(amount, 32);
-  const recipientBytes = ethers.getBytes(recipientAddress);
-  const lowerIdBytes = ethers.toBeHex(lowerId, 4);
-  const lowerDataBytes = ethers.concat([tokenBytes, amountBytes, recipientBytes, lowerIdBytes]);
-  const lowerHash = ethers.keccak256(lowerDataBytes);
-  const numActiveAuthors = await bridge.numActiveAuthors();
-  const supermajorityConfirmations = Number(numActiveAuthors) - (await getNumRequiredConfirmations(bridge));
+  const domain = await getDomain(bridge);
+  const args = [token.address, amount, recipient.address, ++lowerId];
+  const message = toEIP712Message.claimLower(args);
 
   const confirmations = [];
-  for (let i = 1; i <= supermajorityConfirmations; i++) {
-    const confirmation = await authors[i].account.signMessage(ethers.getBytes(lowerHash));
+  for (let i = 1; i <= confirmationsRequired; i++) {
+    const confirmation = await authors[i].account.signTypedData(domain, PROOF_TYPES.claimLower, message);
     confirmations.push(ethers.getBytes(confirmation));
   }
 
   const confirmationsBytes = ethers.concat(confirmations);
+  const lowerDataBytes = ethers.concat([
+    ethers.getBytes(token.address),
+    ethers.toBeHex(amount, 32),
+    ethers.getBytes(recipient.address),
+    ethers.toBeHex(lowerId, 4)
+  ]);
   const lowerProof = ethers.concat([lowerDataBytes, confirmationsBytes]);
   return [lowerProof, lowerId];
+}
+
+function printErrorCodes() {
+  [
+    'AddressIsZero()',
+    'AddressMismatch()',
+    'AlreadyAdded()',
+    'AmountIsZero()',
+    'AuthorsDisabled()',
+    'BadConfirmations()',
+    'CannotChangeT2Key(bytes32)',
+    'InvalidERC777()',
+    'InvalidProof()',
+    'InvalidRecipient()',
+    'InvalidT1Key()',
+    'InvalidT2Key()',
+    'LiftFailed()',
+    'LiftDisabled()',
+    'LiftLimitHit()',
+    'Locked()',
+    'LowerDisabled()',
+    'LowerIsUsed()',
+    'MissingKeys()',
+    'NotAnAuthor()',
+    'NotEnoughAuthors()',
+    'PaymentFailed()',
+    'PendingOwnerOnly()',
+    'RootHashIsUsed()',
+    'T1AddressInUse(address)',
+    'T2KeyInUse(bytes32)',
+    'TxIdIsUsed()',
+    'WindowExpired()'
+  ].forEach(error => console.log(`error ${error}; // ${ethers.keccak256(ethers.toUtf8Bytes(error)).slice(0, 10)}`));
 }
 
 // Keep exports alphabetical.
@@ -229,6 +301,7 @@ module.exports = {
   createLowerProof,
   createTreeAndPublishRoot,
   deployAVNBridge,
+  EMPTY_BYTES_32,
   EXPIRY_WINDOW,
   generateInitArgs,
   getConfirmations,
@@ -242,12 +315,11 @@ module.exports = {
   MIN_AUTHORS,
   ONE_AVT_IN_ATTO,
   owner: () => owner,
-  PSEUDO_ETH_ADDRESS,
+  PSEUDO_ETH,
   randomBytes32,
   randomHex,
   randomT2TxId,
   someT2PubKey: () => someT2PubKey,
   strip_0x,
-  toConfirmationHash,
   ZERO_ADDRESS
 };
