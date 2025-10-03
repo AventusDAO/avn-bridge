@@ -18,11 +18,10 @@ task('deploy', 'deploy a new avn-bridge contract')
   .addParam('token', 'core token address')
   .addParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
-    mainnetCheck(hre);
     await hre.run('compile');
-
     const authors = require('./authors.json')[args.env];
     const initArgs = [args.token, [], [], [], []];
+
     authors.forEach(author => {
       initArgs[1].push(author.ethAddress);
       initArgs[2].push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
@@ -36,8 +35,7 @@ task('deploy', 'deploy a new avn-bridge contract')
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
     const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, {
-      kind: 'uups',
-      txOverrides: { maxFeePerGas: 100e9, maxPriorityFeePerGas: 5e9 }
+      kind: 'uups'
     });
     await avnBridge.deployed();
     const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
@@ -120,7 +118,6 @@ task('publishToken', 'deploy a new erc20 test token and publish it').setAction(a
 task('upgrade', 'upgrade existing avn-bridge contract')
   .addParam('bridge', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
-    mainnetCheck(hre);
     await hre.run('compile');
 
     const [upgrader] = await hre.ethers.getSigners();
@@ -149,7 +146,6 @@ task('upgrade', 'upgrade existing avn-bridge contract')
 task('prepare-manifest', 'prepares the openzeppelin mainfest')
   .addParam('bridge', 'existing AVN Bridge proxy address')
   .setAction(async (args, hre) => {
-    mainnetCheck(hre);
 
     const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
     const url = `https://api-sepolia.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
@@ -208,13 +204,6 @@ task('implementation', 'release new implementation contract').setAction(async (_
 
 function getWeb3Url(networkName) {
   return `https://${networkName}.infura.io/v3/${INFURA_API_KEY}`;
-}
-
-function mainnetCheck() {
-  if (hre.network.name === 'mainnet') {
-    console.log('MAINNET REQUIRES MANUAL OVERRIDE');
-    process.exit(0);
-  }
 }
 
 module.exports = {

@@ -121,6 +121,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _disableInitializers();
   }
 
+  modifier whenAuthorsEnabled() {
+    if (!authorsEnabled) revert AuthorsDisabled();
+    _;
+  }
+
   modifier whenLiftEnabled() {
     if (!liftingEnabled) revert LiftDisabled();
     _;
@@ -128,11 +133,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   modifier whenLowerEnabled() {
     if (!loweringEnabled) revert LowerDisabled();
-    _;
-  }
-
-  modifier whenAuthorsEnabled() {
-    if (!authorsEnabled) revert AuthorsDisabled();
     _;
   }
 

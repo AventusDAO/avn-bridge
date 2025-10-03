@@ -4,7 +4,11 @@ The purpose of the AVN Bridge (T1) contract is to provide a lightweight and gas-
 
 The contract utilises OpenZeppelin's implementation of the Universal Upgradeable Proxy Standard ([EIP-1822](https://eips.ethereum.org/EIPS/eip-1822)).
 
-The system is underwritten by its core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f))
+The system is underwritten by its core token (in the case of Aventus: [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f)).
+
+### Mainnet Address
+
+[0xF05Df39f745A240fb133cC4a11E42467FAB10f1F](https://etherscan.io/address/0xF05Df39f745A240fb133cC4a11E42467FAB10f1F) 
 
 ### Key Functions
 
@@ -37,7 +41,7 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 `npx hardhat size-contracts`
 
 #### Deploy
-`npx hardhat --network <network> deploy --token <core token address> --env <AvN environment name - eg: 'testnet' or 'dev'>`
+`npx hardhat --network <network> deploy --env <AvN environment name - eg: 'testnet' or 'dev'>`
 
 #### Upgrade an existing avn-bridge contract
 `npx hardhat --network <network> upgrade --bridge <contract address>`
@@ -58,7 +62,3 @@ The following manual steps may then be required to interact with the AVN contrac
 - Click Verify and Save
 - Return to the ERC1967Proxy page's Contract tab
 - Now you will be able to "Read as Proxy" or "Write as Proxy" to interact with the AVN contract
-
-### Mainnet Address
-
-0xF05Df39f745A240fb133cC4a11E42467FAB10f1F
