@@ -3,7 +3,7 @@ const { expect } = require('chai');
 
 let avnBridge, token20;
 let accounts, authors;
-let someOtherAccount, activeAuthor;
+let activeAuthor;
 let numActiveAuthors, nextAuthorId;
 
 describe('Author Functions', async () => {
@@ -13,7 +13,7 @@ describe('Author Functions', async () => {
     token20 = await Token20.deploy(10000000n);
     token20.address = await token20.getAddress();
     const numAuthors = 6;
-    avnBridge = await helper.deployAVNBridge(token20.address, numAuthors);
+    avnBridge = await helper.deployAVNBridge(numAuthors);
     avnBridge.address = await avnBridge.getAddress();
     accounts = helper.accounts();
     someOtherAccount = accounts[1];
@@ -21,218 +21,6 @@ describe('Author Functions', async () => {
     activeAuthor = authors[0].account;
     numActiveAuthors = numAuthors;
     nextAuthorId = numAuthors + 1;
-    await token20.setOwner(avnBridge.address);
-  });
-
-  context('Growth', async () => {
-    let rewards, avgStaked, period, expiry, t2TxId;
-    let usedGrowthPeriod, usedTxId;
-
-    before(async () => {
-      await avnBridge.setGrowthDelay(helper.GROWTH_DELAY);
-      period = 0;
-      t2TxId = 0;
-    });
-
-    beforeEach(async () => {
-      const randomRewards = Math.floor(Math.random() * 1000000 + 1);
-      const randomAvgStaked = Math.floor(Math.random() * 1000000 + 1);
-      rewards = helper.ONE_AVT_IN_ATTO * ethers.toBigInt(randomRewards);
-      avgStaked = helper.ONE_AVT_IN_ATTO * ethers.toBigInt(randomAvgStaked);
-      period++;
-      t2TxId++;
-      expiry = await helper.getValidExpiry();
-    });
-
-    async function getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId, additionalConfirmations) {
-      additionalConfirmations = additionalConfirmations || 0;
-      return await helper.getConfirmations(
-        avnBridge,
-        'triggerGrowth',
-        [rewards, avgStaked, period],
-        expiry,
-        t2TxId,
-        additionalConfirmations
-      );
-    }
-
-    context('trigger growth', async () => {
-      context('succeeds', async () => {
-        it('in triggering growth', async () => {
-          const avtSupplyBefore = await token20.totalSupply();
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-          const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
-          await expect(avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
-            .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(expectedGrowthAmount, period, t2TxId);
-          expect(await avnBridge.isUsedT2TxId(t2TxId), true);
-          usedGrowthPeriod = period;
-          usedTxId = t2TxId;
-        });
-
-        it('in triggering growth (when not sent by an author but with an additional confirmation)', async () => {
-          const avtSupplyBefore = await token20.totalSupply();
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId, 1);
-          const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
-          await expect(avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations))
-            .to.emit(avnBridge, 'LogGrowthTriggered')
-            .withArgs(expectedGrowthAmount, period, t2TxId);
-          expect(await avnBridge.isUsedT2TxId(t2TxId), true);
-          usedGrowthPeriod = period;
-          usedTxId = t2TxId;
-        });
-      });
-
-      context('fails', async () => {
-        it('when not sent by an author (and without an additional confirmation)', async () => {
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-          await expect(
-            avnBridge.triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
-        });
-
-        it('when author functions are disabled', async () => {
-          await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
-          await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
-        });
-
-        it('to trigger growth when rewards are zero', async () => {
-          const confirmations = await getGrowthConfirmations(0, avgStaked, period, expiry, t2TxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(0, avgStaked, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-        });
-
-        it('to trigger growth when average staked is zero', async () => {
-          const confirmations = await getGrowthConfirmations(rewards, 0, period, expiry, t2TxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, 0, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
-        });
-
-        it('to trigger growth with an invalid T2 transaction ID', async () => {
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, usedTxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, usedTxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
-        });
-
-        it('if the period is already used', async () => {
-          const usedPeriod = 1;
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, usedPeriod, expiry, t2TxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, usedPeriod, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'PeriodIsUsed');
-        });
-
-        it('to trigger growth when the expiry has has passed', async () => {
-          expiry = (await helper.getCurrentBlockTimestamp()) - 1;
-          const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
-        });
-
-        it('to trigger growth with invalid confirmations', async () => {
-          const confirmations = '0xbadd';
-          await expect(
-            avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-          ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
-        });
-      });
-
-      context('releasing growth', async () => {
-        context('succeeds', async () => {
-          it('in releasing growth for an existing period', async () => {
-            const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-            const avtSupplyBefore = await token20.totalSupply();
-            const growthAmountForPeriod = await avnBridge.growthAmount(usedGrowthPeriod);
-
-            await helper.increaseBlockTimestamp(helper.GROWTH_DELAY);
-            await expect(avnBridge.connect(someOtherAccount).releaseGrowth(usedGrowthPeriod))
-              .to.emit(avnBridge, 'LogGrowth')
-              .withArgs(growthAmountForPeriod, usedGrowthPeriod);
-
-            expect(avnBalanceBefore + growthAmountForPeriod, await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore + growthAmountForPeriod, await token20.totalSupply());
-          });
-        });
-
-        context('fails', async () => {
-          it('to release growth that has already been released', async () => {
-            await helper.increaseBlockTimestamp(helper.GROWTH_DELAY);
-            await expect(avnBridge.releaseGrowth(usedGrowthPeriod)).to.be.revertedWithCustomError(
-              avnBridge,
-              'GrowthUnavailable'
-            );
-          });
-
-          it('to release growth for a period that has since been denied by the owner', async () => {
-            const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-            const avtSupplyBefore = await token20.totalSupply();
-            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked; // recalculate this as it will have changed
-            const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-
-            await expect(
-              avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-            )
-              .to.emit(avnBridge, 'LogGrowthTriggered')
-              .withArgs(expectedGrowthAmount, period, t2TxId);
-
-            await avnBridge.denyGrowth(period);
-
-            await helper.increaseBlockTimestamp(helper.GROWTH_DELAY);
-            await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'GrowthUnavailable');
-
-            expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore).to.equal(await token20.totalSupply());
-          });
-
-          it('to release growth before its release time', async () => {
-            const avtSupplyBefore = await token20.totalSupply();
-            const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
-            const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-
-            await avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations);
-            await expect(avnBridge.releaseGrowth(period)).to.be.revertedWithCustomError(avnBridge, 'NotReady');
-            expect(avnBalanceBefore).to.equal(await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore).to.equal(await token20.totalSupply());
-
-            await helper.increaseBlockTimestamp(helper.GROWTH_DELAY);
-            await avnBridge.releaseGrowth(period);
-
-            expect(avnBalanceBefore + expectedGrowthAmount, await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore + expectedGrowthAmount, await token20.totalSupply());
-          });
-
-          it('in triggering and releasing immediate growth', async () => {
-            const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-            const avtSupplyBefore = await token20.totalSupply();
-            const expectedGrowthAmount = (rewards * avtSupplyBefore) / avgStaked;
-            const confirmations = await getGrowthConfirmations(rewards, avgStaked, period, expiry, t2TxId);
-
-            await avnBridge.setGrowthDelay(0);
-
-            const nextBlockTimestamp = (await helper.getCurrentBlockTimestamp()) + 1;
-            await expect(
-              avnBridge.connect(activeAuthor).triggerGrowth(rewards, avgStaked, period, expiry, t2TxId, confirmations)
-            )
-              .to.emit(avnBridge, 'LogGrowthTriggered')
-              .withArgs(expectedGrowthAmount, period, t2TxId)
-              .to.emit(avnBridge, 'LogGrowth')
-              .withArgs(expectedGrowthAmount, period);
-
-            expect(avnBalanceBefore + expectedGrowthAmount).to.equal(await token20.balanceOf(avnBridge.address));
-            expect(avtSupplyBefore + expectedGrowthAmount).to.equal(await token20.totalSupply());
-          });
-        });
-      });
-    });
   });
 
   context('Publishing Roots', async () => {
@@ -246,7 +34,7 @@ describe('Author Functions', async () => {
     context('succeeds', async () => {
       it('via authors', async () => {
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]);
         await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations))
           .to.emit(avnBridge, 'LogRootPublished')
           .withArgs(rootHash, t2TxId);
@@ -259,10 +47,11 @@ describe('Author Functions', async () => {
         const newt2TxId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, newt2TxId);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [newRootHash, expiry, newt2TxId]);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'AuthorsDisabled'
+        );
         await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
       });
 
@@ -270,70 +59,71 @@ describe('Author Functions', async () => {
         const newt2TxId = helper.randomT2TxId();
         const newRootHash = helper.randomBytes32();
         const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, newt2TxId);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [newRootHash, expiry, newt2TxId]);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, newt2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'WindowExpired'
+        );
       });
 
       it('the T2 transaction ID is not unique', async () => {
         const newRootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', newRootHash, expiry, t2TxId);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'TxIdIsUsed');
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [newRootHash, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(newRootHash, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'TxIdIsUsed'
+        );
       });
 
       it('the root has already been published', async () => {
         const newt2TxId = helper.randomT2TxId();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, newt2TxId);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, newt2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'RootHashIsUsed');
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, newt2TxId]);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, newt2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'RootHashIsUsed'
+        );
       });
 
       it('the confirmations are invalid', async () => {
         t2TxId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        let confirmations =
-          '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId));
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
-      });
-
-      it('there are no confirmations', async () => {
-        rootHash = helper.randomBytes32();
-        const expiry = await helper.getValidExpiry();
-        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, '0x')).to.be.revertedWithCustomError(
+        let confirmations = '0xbadd' + helper.strip_0x(await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]));
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           avnBridge,
           'BadConfirmations'
         );
       });
 
+      it('there are no confirmations', async () => {
+        rootHash = helper.randomBytes32();
+        const expiry = await helper.getValidExpiry();
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, '0x')).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+      });
+
       it('there are not enough confirmations', async () => {
         t2TxId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
-        const numRequiredConfirmations = await helper.getNumRequiredConfirmations(avnBridge);
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId, -1);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId], -1);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'BadConfirmations'
+        );
       });
 
       it('the confirmations are corrupted', async () => {
         t2TxId = helper.randomT2TxId();
         rootHash = helper.randomBytes32();
         const expiry = await helper.getValidExpiry();
-        let confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+        let confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]);
         confirmations = confirmations.replace(/1/g, '2');
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'BadConfirmations'
+        );
       });
 
       it('the confirmations are not signed by active authors', async () => {
@@ -341,18 +131,11 @@ describe('Author Functions', async () => {
         rootHash = helper.randomBytes32();
         const startFromNonAuthor = nextAuthorId;
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId], 0, startFromNonAuthor);
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           avnBridge,
-          'publishRoot',
-          rootHash,
-          expiry,
-          t2TxId,
-          0,
-          startFromNonAuthor
+          'BadConfirmations'
         );
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
       });
 
       it('the confirmations are not unique', async () => {
@@ -360,11 +143,12 @@ describe('Author Functions', async () => {
         rootHash = helper.randomBytes32();
         const halfSet = Math.round(numActiveAuthors / 2);
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId, -halfSet);
+        const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId], -halfSet);
         const duplicateConfirmations = confirmations + helper.strip_0x(confirmations);
-        await expect(
-          avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'BadConfirmations');
+        await expect(avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'BadConfirmations'
+        );
       });
     });
   });
@@ -376,16 +160,8 @@ describe('Author Functions', async () => {
         const newAuthor = authors[nextAuthorId];
         let t2TxId = helper.randomT2TxId();
         let expiry = await helper.getValidExpiry();
-        let confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [newAuthor.t1PubKey, newAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
-        await expect(
-          avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        )
+        let confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations))
           .to.emit(avnBridge, 'LogAuthorAdded')
           .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
         expect(await avnBridge.idToT1Address(nextAuthorId)).to.equal(newAuthor.t1Address);
@@ -398,15 +174,8 @@ describe('Author Functions', async () => {
         rootHash = helper.randomBytes32();
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
-        newAuthorConfirmation = await helper.getSingleConfirmation(
-          avnBridge,
-          'publishRoot',
-          rootHash,
-          expiry,
-          t2TxId,
-          newAuthor
-        );
+        confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]);
+        newAuthorConfirmation = await helper.getSingleConfirmation(avnBridge, newAuthor, 'publishRoot', [rootHash, expiry, t2TxId]);
         const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
         await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
 
@@ -423,17 +192,9 @@ describe('Author Functions', async () => {
         const prospectAuthor = authors[nextAuthorId];
         const expiry = await helper.getValidExpiry();
         const t2TxId = helper.randomT2TxId();
-        const confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
-          avnBridge
-            .connect(activeAuthor)
-            .addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          avnBridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
         await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
       });
@@ -443,33 +204,32 @@ describe('Author Functions', async () => {
         const emptyKey = '0x';
         const expiry = await helper.getValidExpiry();
         const t2TxId = helper.randomT2TxId();
-        const confirmations = await helper.getConfirmations(
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).addAuthor(emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           avnBridge,
-          'addAuthor',
-          [emptyKey, prospectAuthor.t2PubKey],
-          expiry,
-          t2TxId
+          'InvalidT1Key'
         );
-        await expect(
-          avnBridge.connect(activeAuthor).addAuthor(emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1Key');
+      });
+
+      it('the T2 public key is empty', async () => {
+        const prospectAuthor = authors[nextAuthorId];
+        const emptyKey = helper.EMPTY_BYTES_32;
+        const expiry = await helper.getValidExpiry();
+        const t2TxId = helper.randomT2TxId();
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'InvalidT2Key'
+        );
       });
 
       it('the expiry time has passed', async () => {
         const prospectAuthor = authors[nextAuthorId];
         const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
         const t2TxId = helper.randomT2TxId();
-        const confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
-          avnBridge
-            .connect(activeAuthor)
-            .addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          avnBridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
       });
 
@@ -477,17 +237,9 @@ describe('Author Functions', async () => {
         const existingAuthor = authors[1];
         const expiry = await helper.getValidExpiry();
         const t2TxId = helper.randomT2TxId();
-        const confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [existingAuthor.t1PubKey, existingAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
-          avnBridge
-            .connect(activeAuthor)
-            .addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          avnBridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AlreadyAdded');
       });
 
@@ -495,43 +247,21 @@ describe('Author Functions', async () => {
         const existingAuthor = authors[numActiveAuthors];
         let expiry = await helper.getValidExpiry();
         let t2TxId = helper.randomT2TxId();
-        let confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [existingAuthor.t2PubKey, existingAuthor.t1PubKey],
-          expiry,
-          t2TxId
-        );
-        await avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId, confirmations);
+        let confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId]);
+        await avnBridge.connect(activeAuthor).removeAuthor(existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId, confirmations);
         numActiveAuthors--;
 
         const newAuthor = authors[nextAuthorId];
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [existingAuthor.t1PubKey, newAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
           avnBridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'CannotChangeT2Key');
 
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [existingAuthor.t1PubKey, existingAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
-        await avnBridge
-          .connect(activeAuthor)
-          .addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations);
+        confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
+        await avnBridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations);
       });
 
       it('passing a T2 public key which is already in use', async () => {
@@ -539,17 +269,9 @@ describe('Author Functions', async () => {
         const existingAuthor = authors[1];
         const t2TxId = helper.randomT2TxId();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [prospectAuthor.t1PubKey, existingAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        const confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
-          avnBridge
-            .connect(activeAuthor)
-            .addAuthor(prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
+          avnBridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'T2KeyInUse');
       });
     });
@@ -563,13 +285,7 @@ describe('Author Functions', async () => {
         const newAuthor = authors[nextAuthorId];
         let expiry = await helper.getValidExpiry();
         let t2TxId = helper.randomT2TxId();
-        let confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [newAuthor.t1PubKey, newAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        let confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
         nextAuthorId++;
         expect(await avnBridge.nextAuthorId()).to.equal(nextAuthorId);
@@ -579,31 +295,16 @@ describe('Author Functions', async () => {
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
         const rootHash = helper.randomBytes32();
-        confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
-        const newAuthorConfirmation = await helper.getSingleConfirmation(
-          avnBridge,
-          'publishRoot',
-          rootHash,
-          expiry,
-          t2TxId,
-          newAuthor
-        );
+        confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]);
+        const newAuthorConfirmation = await helper.getSingleConfirmation(avnBridge, newAuthor, 'publishRoot', [rootHash, expiry, t2TxId]);
         const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
         await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmationsIncludingNewAuthor);
         expect(await avnBridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition + 1n);
 
         expiry = await helper.getValidExpiry();
         t2TxId = helper.randomT2TxId();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [newAuthor.t2PubKey, newAuthor.t1PubKey],
-          expiry,
-          t2TxId
-        );
-        await expect(
-          avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
-        )
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations))
           .to.emit(avnBridge, 'LogAuthorRemoved')
           .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
 
@@ -617,13 +318,7 @@ describe('Author Functions', async () => {
         const newAuthor = authors[nextAuthorId];
         let t2TxId = helper.randomT2TxId();
         let expiry = await helper.getValidExpiry();
-        let confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [newAuthor.t1PubKey, newAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        let confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
         nextAuthorId++;
         expect(await avnBridge.nextAuthorId()).to.equal(nextAuthorId);
@@ -631,16 +326,8 @@ describe('Author Functions', async () => {
 
         t2TxId = helper.randomT2TxId();
         expiry = await helper.getValidExpiry();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [newAuthor.t2PubKey, newAuthor.t1PubKey],
-          expiry,
-          t2TxId
-        );
-        await expect(
-          avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
-        )
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations))
           .to.emit(avnBridge, 'LogAuthorRemoved')
           .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
 
@@ -654,37 +341,17 @@ describe('Author Functions', async () => {
         const newAuthor = authors[nextAuthorId];
         let t2TxId = helper.randomT2TxId();
         let expiry = await helper.getValidExpiry();
-        let confirmations = await helper.getConfirmations(
-          avnBridge,
-          'addAuthor',
-          [newAuthor.t1PubKey, newAuthor.t2PubKey],
-          expiry,
-          t2TxId
-        );
+        let confirmations = await helper.getConfirmations(avnBridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await avnBridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
         nextAuthorId++;
         t2TxId = helper.randomT2TxId();
         expiry = await helper.getValidExpiry();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [newAuthor.t2PubKey, newAuthor.t1PubKey],
-          expiry,
-          t2TxId
-        );
-        await avnBridge
-          .connect(activeAuthor)
-          .removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
+        await avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
         numActiveAuthors--;
         t2TxId = helper.randomT2TxId();
         expiry = await helper.getValidExpiry();
-        confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [newAuthor.t2PubKey, newAuthor.t1PubKey],
-          expiry,
-          t2TxId
-        );
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
         await expect(
           avnBridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'NotAnAuthor');
@@ -694,13 +361,7 @@ describe('Author Functions', async () => {
         await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
         const t2TxId = helper.randomT2TxId();
         const expiry = await helper.getValidExpiry();
-        const confirmations = await helper.getConfirmations(
-          avnBridge,
-          'removeAuthor',
-          [authors[0].t2PubKey, authors[0].t1PubKey],
-          expiry,
-          t2TxId
-        );
+        const confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId]);
         await expect(
           avnBridge.connect(activeAuthor).removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(avnBridge, 'AuthorsDisabled');
@@ -711,35 +372,24 @@ describe('Author Functions', async () => {
         const expiry = await helper.getValidExpiry();
         const t2TxId = helper.randomT2TxId();
         const badT1PublicKey = helper.randomHex(17);
-        const confirmations = await helper.getConfirmations(
+        const confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId]);
+        await expect(avnBridge.removeAuthor(authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           avnBridge,
-          'removeAuthor',
-          [authors[0].t2PubKey, badT1PublicKey],
-          expiry,
-          t2TxId
+          'InvalidT1Key'
         );
-        await expect(
-          avnBridge.removeAuthor(authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'InvalidT1Key');
       });
 
       it('the expiry time for the call has passed', async () => {
         const expiry = (await helper.getCurrentBlockTimestamp()) - 1;
         const t2TxId = helper.randomT2TxId();
-        const confirmations = await helper.getConfirmations(
+        const confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId]);
+        await expect(avnBridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           avnBridge,
-          'removeAuthor',
-          [authors[0].t2PubKey, authors[0].t1PubKey],
-          expiry,
-          t2TxId
+          'WindowExpired'
         );
-        await expect(
-          avnBridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'WindowExpired');
       });
 
       it('if it takes the number of authors below the minimum threshold', async () => {
-        const numActiveAuthors = await avnBridge.numActiveAuthors();
         let authorIndex = (await avnBridge.numActiveAuthors()) - 1n;
 
         for (authorIndex; authorIndex >= helper.MIN_AUTHORS; authorIndex--) {
@@ -747,7 +397,7 @@ describe('Author Functions', async () => {
           let t2TxId = helper.randomT2TxId();
           let t1Key = authors[authorIndex].t1PubKey;
           let t2Key = authors[authorIndex].t2PubKey;
-          let confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
+          let confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key, expiry, t2TxId]);
           await avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations);
         }
 
@@ -755,10 +405,11 @@ describe('Author Functions', async () => {
         t2TxId = helper.randomT2TxId();
         t1Key = authors[authorIndex].t1PubKey;
         t2Key = authors[authorIndex].t2PubKey;
-        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key], expiry, t2TxId);
-        await expect(
-          avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(avnBridge, 'NotEnoughAuthors');
+        confirmations = await helper.getConfirmations(avnBridge, 'removeAuthor', [t2Key, t1Key, expiry, t2TxId]);
+        await expect(avnBridge.connect(activeAuthor).removeAuthor(t2Key, t1Key, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          avnBridge,
+          'NotEnoughAuthors'
+        );
       });
     });
   });
@@ -773,7 +424,7 @@ describe('Author Functions', async () => {
 
     async function publishRoot() {
       const rootHash = helper.randomBytes32();
-      const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', rootHash, expiry, t2TxId);
+      const confirmations = await helper.getConfirmations(avnBridge, 'publishRoot', [rootHash, expiry, t2TxId]);
       await avnBridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, confirmations);
     }
 

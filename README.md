@@ -19,9 +19,6 @@ The secure movement of fungible tokens (any ERC20 or ERC777 compliant token, or 
    - **Lifting** - Locking tokens sent to the T1 contract and authorising the generation of an identical amount in the designated recipient's account on T2.
    - **Lowering** - Unlocking tokens from the contract and transferring them to the specified T1 recipient, based on having received proof of their destruction on T2.
 
-4. **Triggering Growth**\
-Inflating the core token's total supply according to the T2 staking and reward cycle data provided to T1 by T2.
-
 ## Development
 
 ### Setup

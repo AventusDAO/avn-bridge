@@ -10,11 +10,6 @@ contract Token20 is ERC20, Ownable {
     _mint(msg.sender, supply * 10 ** 18);
   }
 
-  // Mimic existing AVT token mint
-  function mint(uint128 amount) public onlyOwner {
-    _mint(msg.sender, amount);
-  }
-
   // Mimic existing AVT token setOwner
   event LogSetOwner(address indexed owner);
   function setOwner(address owner_) public onlyOwner {
