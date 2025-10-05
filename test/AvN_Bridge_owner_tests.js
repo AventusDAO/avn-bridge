@@ -1,14 +1,10 @@
-const helper = require('./helpers/testHelper');
-const { expect } = require('chai');
+const { deployBridge, expect, generateInitArgs, getAccounts, getAuthors, init, MIN_AUTHORS, ZERO_ADDRESS, randomBytes32 } = require('./helpers/testHelper');
 
-let avnBridge, token777, token20;
-let accounts, authors;
-let owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
+let accounts, authors, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 
 describe('Owner Functions', async () => {
   before(async () => {
-    await helper.init();
-    AVNBridge = await ethers.getContractFactory('AVNBridge');
+    await init();
     const Token777 = await ethers.getContractFactory('Token777');
     token777 = await Token777.deploy(10000000n);
     token777.address = await token777.getAddress();
@@ -16,49 +12,45 @@ describe('Owner Functions', async () => {
     token20 = await Token20.deploy(10000000n);
     token20.address = await token20.getAddress();
     const numAuthors = 10;
-    avnBridge = await helper.deployAVNBridge(numAuthors);
-    avnBridge.address = await avnBridge.getAddress();
-    accounts = helper.accounts();
-    owner = helper.owner();
+    bridge = await deployBridge(numAuthors);
+    bridge.address = await bridge.getAddress();
+    accounts = getAccounts();
+    owner = accounts[0];
     someOtherAccount = accounts[1];
     unauthorizedAccount = accounts[2];
     newTokenOwner = accounts[3];
-    someT2PubKey = helper.someT2PubKey();
-    authors = helper.authors();
-    await token20.transferOwnership(avnBridge.address);
+    someT2PubKey = randomBytes32();
+    authors = getAuthors();
+    await token20.transferOwnership(bridge.address);
   });
 
   context('Transferring Ownership', async () => {
     context('succeeds', async () => {
       it('when called by the owner', async () => {
-        await expect(avnBridge.transferOwnership(someOtherAccount.address))
-          .to.emit(avnBridge, 'OwnershipTransferStarted')
-          .withArgs(owner, someOtherAccount.address);
+        await expect(bridge.transferOwnership(someOtherAccount.address)).to.emit(bridge, 'OwnershipTransferStarted').withArgs(owner, someOtherAccount.address);
 
-        expect(someOtherAccount.address).to.equal(await avnBridge.pendingOwner());
-        expect(owner).to.equal(await avnBridge.owner());
+        expect(someOtherAccount.address).to.equal(await bridge.pendingOwner());
+        expect(owner).to.equal(await bridge.owner());
 
-        await expect(avnBridge.connect(someOtherAccount).acceptOwnership())
-          .to.emit(avnBridge, 'OwnershipTransferred')
-          .withArgs(owner, someOtherAccount.address);
+        await expect(bridge.connect(someOtherAccount).acceptOwnership()).to.emit(bridge, 'OwnershipTransferred').withArgs(owner, someOtherAccount.address);
 
-        expect(helper.ZERO_ADDRESS.address).to.equal(await avnBridge.pendingOwner());
-        expect(someOtherAccount.address).to.equal(await avnBridge.owner());
+        expect(ZERO_ADDRESS.address).to.equal(await bridge.pendingOwner());
+        expect(someOtherAccount.address).to.equal(await bridge.owner());
 
-        await avnBridge.connect(someOtherAccount).transferOwnership(owner);
-        await avnBridge.acceptOwnership();
-        expect(owner).to.equal(await avnBridge.owner());
+        await bridge.connect(someOtherAccount).transferOwnership(owner);
+        await bridge.acceptOwnership();
+        expect(owner).to.equal(await bridge.owner());
       });
     });
 
     context('fails', async () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).transferOwnership(unauthorizedAccount.address)).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(bridge.connect(someOtherAccount).transferOwnership(unauthorizedAccount.address)).to.be.revertedWith('Ownable: caller is not the owner');
       });
 
       it('when an unauthorised account attempts to accept ownership', async () => {
-        avnBridge.transferOwnership(someOtherAccount.address);
-        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(avnBridge, 'PendingOwnerOnly');
+        bridge.transferOwnership(someOtherAccount.address);
+        await expect(bridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(bridge, 'PendingOwnerOnly');
       });
     });
   });
@@ -66,14 +58,14 @@ describe('Owner Functions', async () => {
   context('Renouncing Ownership', async () => {
     context('succeeds', async () => {
       it('does nothing when the caller is the owner', async () => {
-        expect(owner).to.equal(await avnBridge.owner());
-        await avnBridge.renounceOwnership();
-        expect(owner).to.equal(await avnBridge.owner());
+        expect(owner).to.equal(await bridge.owner());
+        await bridge.renounceOwnership();
+        expect(owner).to.equal(await bridge.owner());
       });
 
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith('Ownable: caller is not the owner');
         });
       });
     });
@@ -81,7 +73,7 @@ describe('Owner Functions', async () => {
 
   context('Initialization', async () => {
     let initVals = {};
-    const numAuthors = helper.MIN_AUTHORS + 1;
+    const numAuthors = MIN_AUTHORS + 1;
 
     async function deployAndCatchInitError(expectedError) {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
@@ -102,6 +94,7 @@ describe('Owner Functions', async () => {
 
     it('succeeds', async () => {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
       const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 
       for (i = 0; i < numAuthors; i++) {
@@ -156,10 +149,10 @@ describe('Owner Functions', async () => {
     });
 
     it('fails when there are too few authors', async () => {
-      initVals.t1Addresses.splice(helper.MIN_AUTHORS - 1);
-      initVals.t1PubKeysLHS.splice(helper.MIN_AUTHORS - 1);
-      initVals.t1PubKeysRHS.splice(helper.MIN_AUTHORS - 1);
-      initVals.t2PubKeys.splice(helper.MIN_AUTHORS - 1);
+      initVals.t1Addresses.splice(MIN_AUTHORS - 1);
+      initVals.t1PubKeysLHS.splice(MIN_AUTHORS - 1);
+      initVals.t1PubKeysRHS.splice(MIN_AUTHORS - 1);
+      initVals.t2PubKeys.splice(MIN_AUTHORS - 1);
       await deployAndCatchInitError('NotEnoughAuthors');
     });
   });
@@ -168,13 +161,13 @@ describe('Owner Functions', async () => {
     context('Toggle Authors', async () => {
       context('succeeds', async () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
+          await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
         });
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
         });
       });
     });
@@ -182,13 +175,13 @@ describe('Owner Functions', async () => {
     context('Toggle Lifting', async () => {
       context('succeeds', async () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(false);
+          await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
         });
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
         });
       });
     });
@@ -196,13 +189,13 @@ describe('Owner Functions', async () => {
     context('Toggle Lowering', async () => {
       context('succeeds', async () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
+          await expect(bridge.toggleLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
         });
       });
       context('fails', async () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.toggleLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
         });
       });
     });
@@ -210,25 +203,25 @@ describe('Owner Functions', async () => {
 
   context('Initializer', async () => {
     it('Cannot reinitialize', async () => {
-      const initArgs = helper.generateInitArgs(helper.MIN_AUTHORS);
-      await expect(avnBridge.initialize(...initArgs)).to.be.reverted;
+      const initArgs = generateInitArgs(MIN_AUTHORS);
+      await expect(bridge.initialize(...initArgs)).to.be.reverted;
     });
   });
 
   context('Migrate', async () => {
     context('succeeds', async () => {
       it('when called by the owner', async () => {
-        expect(await token20.owner()).to.equal(avnBridge.address);
-        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
+        expect(await token20.owner()).to.equal(bridge.address);
+        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
         expect(await token20.owner()).to.equal(newTokenOwner.address);
       });
     });
     context('fails', async () => {
       it('if the migration has already been run', async () => {
-        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
+        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
       });
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
+        await expect(bridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
@@ -244,7 +237,7 @@ describe('Owner Functions', async () => {
 
     context('succeeds', function () {
       it('via Openzeppelin upgrades', async () => {
-        const upgradedBridge = await upgrades.upgradeProxy(avnBridge.address, upgradeContract);
+        const upgradedBridge = await upgrades.upgradeProxy(bridge.address, upgradeContract);
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
       });
     });
@@ -252,7 +245,7 @@ describe('Owner Functions', async () => {
     context('fails', function () {
       it('when the caller is not the owner', async () => {
         const newBridge = await upgradeContract.deploy();
-        await expect(avnBridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
