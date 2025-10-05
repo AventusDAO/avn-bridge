@@ -186,7 +186,6 @@ describe('Author Functions', () => {
           .withArgs(newAuthor.t1Address, newAuthor.t2PubKey, t2TxId);
 
         expect(await bridge.idToT1Address(nextAuthorId)).to.equal(newAuthor.t1Address);
-
         // The author has been added but is not active
         expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
         expect(await bridge.authorIsActive(nextAuthorId)).to.equal(false);
