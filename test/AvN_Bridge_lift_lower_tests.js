@@ -1,352 +1,354 @@
-const helper = require('./helpers/testHelper');
-const { expect } = require('chai');
+const {
+  createLowerProof,
+  createTreeAndPublishRoot,
+  deployBridge,
+  EMPTY_BYTES_32,
+  expect,
+  getAccounts,
+  getNumRequiredConfirmations,
+  init,
+  PSEUDO_ETH,
+  randomBytes32,
+  randomHex,
+  ZERO_ADDRESS
+} = require('./helpers/testHelper');
 
-let avnBridge, token777, token20;
-let accounts;
-let owner, someOtherAccount, someT2PubKey;
+let accounts, bridge, token777, token20, owner, someOtherAccount, someT2PubKey;
 
-describe('Lifting and lowering', async () => {
+describe('Lifting and lowering', () => {
   before(async () => {
-    await helper.init();
+    await init();
+
     const Token777 = await ethers.getContractFactory('Token777');
-    token777 = await Token777.deploy(10000000n);
+    token777 = await Token777.deploy(10_000_000n);
     token777.address = await token777.getAddress();
+
     const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10000000n);
+    token20 = await Token20.deploy(10_000_000n);
     token20.address = await token20.getAddress();
-    const numAuthors = 10n;
-    avnBridge = await helper.deployAVNBridge(numAuthors);
-    avnBridge.address = await avnBridge.getAddress();
-    accounts = helper.accounts();
-    owner = helper.owner();
+
+    const numAuthors = 10;
+    bridge = await deployBridge(numAuthors);
+    bridge.address = await bridge.getAddress();
+
+    accounts = getAccounts();
+    owner = accounts[0];
     someOtherAccount = accounts[1];
-    someT2PubKey = helper.someT2PubKey();
-    authors = helper.authors();
+    someT2PubKey = randomBytes32();
   });
 
-  context('Lifting', async () => {
-    context('succeeds', async () => {
+  context('Lifting', () => {
+    context('succeeds', () => {
       it('in lifting ETH', async () => {
-        const avnEthBalanceBefore = await ethers.provider.getBalance(avnBridge.address);
-        const lifterEthBalanceBefore = await ethers.provider.getBalance(owner);
+        const avnEthBalanceBefore = await ethers.provider.getBalance(bridge.address);
+        const lifterEthBalanceBefore = await ethers.provider.getBalance(owner.address);
         const liftAmount = 123n;
 
-        const txResponse = await avnBridge.liftETH(someT2PubKey, { value: liftAmount });
-        const txReceipt = await txResponse.wait(1);
-        const txCost = txReceipt.gasUsed * txResponse.gasPrice;
+        const txResponse = await bridge.liftETH(someT2PubKey, { value: liftAmount });
+        const receipt = await txResponse.wait();
+        const txCost = receipt.gasUsed * receipt.gasPrice;
 
-        const avnEthBalanceAfter = await ethers.provider.getBalance(avnBridge.address);
-        const lifterEthBalanceAfter = await ethers.provider.getBalance(owner);
+        const avnEthBalanceAfter = await ethers.provider.getBalance(bridge.address);
+        const lifterEthBalanceAfter = await ethers.provider.getBalance(owner.address);
 
-        expect(avnEthBalanceBefore + liftAmount).to.equal(avnEthBalanceAfter);
-        expect(lifterEthBalanceBefore - liftAmount - txCost).to.equal(lifterEthBalanceAfter);
+        expect(avnEthBalanceAfter).to.equal(avnEthBalanceBefore + liftAmount);
+        expect(lifterEthBalanceAfter).to.equal(lifterEthBalanceBefore - liftAmount - txCost);
       });
 
       it('in lifting ERC777 tokens', async () => {
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const liftAmount = 100n;
-        await expect(token777.send(avnBridge.address, liftAmount, someT2PubKey))
-          .to.emit(avnBridge, 'LogLifted')
+
+        await expect(token777.send(bridge.address, liftAmount, someT2PubKey))
+          .to.emit(bridge, 'LogLifted')
           .withArgs(token777.address, someT2PubKey, liftAmount);
-        expect(avnBalanceBefore + liftAmount, await token777.balanceOf(avnBridge.address));
+
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore + liftAmount);
       });
 
       it('in lifting ERC777 tokens via operatorSend', async () => {
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const liftAmount = 100n;
         const otherOperatorData = '0x1234';
-        await expect(token777.operatorSend(owner, avnBridge.address, liftAmount, someT2PubKey, otherOperatorData))
-          .to.emit(avnBridge, 'LogLifted')
+
+        await expect(token777.operatorSend(owner.address, bridge.address, liftAmount, someT2PubKey, otherOperatorData))
+          .to.emit(bridge, 'LogLifted')
           .withArgs(token777.address, someT2PubKey, liftAmount);
-        expect(avnBalanceBefore + liftAmount, await token777.balanceOf(avnBridge.address));
+
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore + liftAmount);
       });
 
-      it('in lifting ERC777 tokens via ERC20 backwards compatability', async () => {
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
+      it('in lifting ERC777 tokens via ERC20 backwards compatibility', async () => {
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const liftAmount = 100n;
-        await token777.approve(avnBridge.address, liftAmount);
-        await expect(avnBridge.lift(token777.address, someT2PubKey, liftAmount))
-          .to.emit(avnBridge, 'LogLifted')
+
+        await token777.approve(bridge.address, liftAmount);
+        await expect(bridge.lift(token777.address, someT2PubKey, liftAmount))
+          .to.emit(bridge, 'LogLifted')
           .withArgs(token777.address, someT2PubKey, liftAmount);
-        expect(avnBalanceBefore + liftAmount, await token777.balanceOf(avnBridge.address));
+
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore + liftAmount);
       });
 
       it('in lifting ERC20 tokens', async () => {
-        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
+        const avnBalanceBefore = await token20.balanceOf(bridge.address);
         const liftAmount = 200n;
-        await token20.approve(avnBridge.address, liftAmount);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, liftAmount))
-          .to.emit(avnBridge, 'LogLifted')
+
+        await token20.approve(bridge.address, liftAmount);
+        await expect(bridge.lift(token20.address, someT2PubKey, liftAmount))
+          .to.emit(bridge, 'LogLifted')
           .withArgs(token20.address, someT2PubKey, liftAmount);
-        expect(avnBalanceBefore + liftAmount, await token20.balanceOf(avnBridge.address));
+
+        expect(await token20.balanceOf(bridge.address)).to.equal(avnBalanceBefore + liftAmount);
       });
     });
 
-    context('fails when', async () => {
+    context('fails when', () => {
       let massiveERC20, massiveERC777, maxLiftAmount;
 
       before(async () => {
         const massiveTotalSupply = 2n ** 192n;
         maxLiftAmount = 2n ** 128n - 1n;
+
         const Token777 = await ethers.getContractFactory('Token777');
         massiveERC777 = await Token777.deploy(massiveTotalSupply);
         massiveERC777.address = await massiveERC777.getAddress();
-        await massiveERC777.send(avnBridge.address, maxLiftAmount, someT2PubKey);
+        await massiveERC777.send(bridge.address, maxLiftAmount, someT2PubKey);
+
         const Token20 = await ethers.getContractFactory('Token20');
         massiveERC20 = await Token20.deploy(massiveTotalSupply);
         massiveERC20.address = await massiveERC20.getAddress();
-        await massiveERC20.approve(avnBridge.address, maxLiftAmount);
-        await avnBridge.lift(massiveERC20.address, someT2PubKey, maxLiftAmount);
+        await massiveERC20.approve(bridge.address, maxLiftAmount);
+        await bridge.lift(massiveERC20.address, someT2PubKey, maxLiftAmount);
       });
 
       it('attempting to lift 0 ETH', async () => {
-        await expect(avnBridge.liftETH(someT2PubKey)).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+        await expect(bridge.liftETH(someT2PubKey)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
       });
 
       it('attempting to lift ETH without supplying a public key', async () => {
-        await expect(avnBridge.liftETH(helper.EMPTY_BYTES_32, { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await expect(bridge.liftETH(EMPTY_BYTES_32, { value: 100n })).to.be.revertedWithCustomError(bridge, 'InvalidT2Key');
       });
 
       it('attempting to lift 0 ERC20 tokens', async () => {
-        await token20.approve(avnBridge.address, 0);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 0n)).to.be.revertedWithCustomError(avnBridge, 'LiftFailed');
+        await token20.approve(bridge.address, 0n);
+        await expect(bridge.lift(token20.address, someT2PubKey, 0n)).to.be.revertedWithCustomError(bridge, 'LiftFailed');
       });
 
       it('attempting to lift ERC-20 tokens without supplying a T2 public key', async () => {
-        await token20.approve(avnBridge.address, 1n);
-        await expect(avnBridge.lift(token20.address, helper.EMPTY_BYTES_32, 1n)).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await token20.approve(bridge.address, 1n);
+        await expect(bridge.lift(token20.address, EMPTY_BYTES_32, 1n)).to.be.revertedWithCustomError(bridge, 'InvalidT2Key');
       });
 
       it('attempting to lift 0 ERC777 tokens', async () => {
-        await expect(token777.send(avnBridge.address, 0n, someT2PubKey)).to.be.revertedWithCustomError(avnBridge, 'AmountIsZero');
+        await expect(token777.send(bridge.address, 0n, someT2PubKey)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
       });
 
       it('attempting to lift ERC777 tokens without supplying a T2 public key', async () => {
-        await expect(token777.send(avnBridge.address, 1n, '0x')).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await expect(token777.send(bridge.address, 1n, '0x')).to.be.revertedWithCustomError(bridge, 'InvalidT2Key');
       });
 
       it('attempting to lift ERC777 tokens with an incorrect T2 public key (too short)', async () => {
-        await expect(token777.send(avnBridge.address, 1n, helper.randomHex(16))).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+        await expect(token777.send(bridge.address, 1n, randomHex(16))).to.be.revertedWithCustomError(bridge, 'InvalidT2Key');
       });
 
-      it('attempting to lift ERC777 tokens with an incorrect T2 public key(too long)', async () => {
-        await expect(token777.send(avnBridge.address, 1n, helper.randomHex(48))).to.be.revertedWithCustomError(avnBridge, 'InvalidT2Key');
+      it('attempting to lift ERC777 tokens with an incorrect T2 public key (too long)', async () => {
+        await expect(token777.send(bridge.address, 1n, randomHex(48))).to.be.revertedWithCustomError(bridge, 'InvalidT2Key');
       });
 
       it('attempting to lift more ERC777 tokens to T2 than its supported limit', async () => {
-        await expect(massiveERC777.send(avnBridge.address, 1n, someT2PubKey)).to.be.revertedWithCustomError(avnBridge, 'LiftLimitHit');
+        await expect(massiveERC777.send(bridge.address, 1n, someT2PubKey)).to.be.revertedWithCustomError(bridge, 'LiftLimitHit');
       });
 
       it('attempting to lift more ERC20 tokens to T2 than its supported limit', async () => {
-        await massiveERC20.approve(avnBridge.address, 1n);
-        await expect(avnBridge.lift(massiveERC20.address, someT2PubKey, 1n)).to.be.revertedWithCustomError(avnBridge, 'LiftLimitHit');
+        await massiveERC20.approve(bridge.address, 1n);
+        await expect(bridge.lift(massiveERC20.address, someT2PubKey, 1n)).to.be.revertedWithCustomError(bridge, 'LiftLimitHit');
       });
 
       it('attempting to lift ETH when lift is disabled', async () => {
-        await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(false);
-        await expect(avnBridge.liftETH(someT2PubKey, { value: 100n })).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
-        await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
-        await avnBridge.liftETH(someT2PubKey, { value: 100n });
+        await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
+        await expect(bridge.liftETH(someT2PubKey, { value: 100n })).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
+        await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
+        await bridge.liftETH(someT2PubKey, { value: 100n });
       });
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
-        await avnBridge.toggleLifting(false);
-        await expect(token777.send(avnBridge.address, 1, someT2PubKey)).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
-        await avnBridge.toggleLifting(true);
-        await token777.send(avnBridge.address, 1n, someT2PubKey);
+        await bridge.toggleLifting(false);
+        await expect(token777.send(bridge.address, 1n, someT2PubKey)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
+        await bridge.toggleLifting(true);
+        await token777.send(bridge.address, 1n, someT2PubKey);
       });
 
       it('attempting to lift ERC20 tokens when lift is disabled', async () => {
-        await avnBridge.toggleLifting(false);
-        await token20.approve(avnBridge.address, 1n);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 1n)).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
-        await avnBridge.toggleLifting(true);
-        await avnBridge.lift(token20.address, someT2PubKey, 1n);
+        await bridge.toggleLifting(false);
+        await token20.approve(bridge.address, 1n);
+        await expect(bridge.lift(token20.address, someT2PubKey, 1n)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
+        await bridge.toggleLifting(true);
+        await bridge.lift(token20.address, someT2PubKey, 1n);
       });
 
       it('attempting to lift ERC777 tokens using ERC20 backwards compatibility without setting approval', async () => {
         const amount = 2n;
-        await expect(avnBridge.lift(token777.address, someT2PubKey, amount)).to.be.revertedWith('ERC777: insufficient allowance');
-      });
-
-      it('attempting to lift ERC777 tokens when lift is disabled', async () => {
-        await avnBridge.toggleLifting(false);
-        await expect(token777.send(avnBridge.address, 1, someT2PubKey)).to.be.revertedWithCustomError(avnBridge, 'LiftDisabled');
-        await avnBridge.toggleLifting(true);
-        await token777.send(avnBridge.address, 1, someT2PubKey);
+        await expect(bridge.lift(token777.address, someT2PubKey, amount)).to.be.revertedWith('ERC777: insufficient allowance');
       });
 
       it('attempting to lift more ERC20 tokens than are approved', async () => {
-        await token20.approve(avnBridge.address, 100n);
-        await expect(avnBridge.lift(token20.address, someT2PubKey, 200n)).to.be.rejectedWith(token20, 'ERC20: insufficient allowance');
+        await token20.approve(bridge.address, 100n);
+        await expect(bridge.lift(token20.address, someT2PubKey, 200n)).to.be.revertedWith('ERC20: insufficient allowance');
       });
 
       it('attempting to lift more ERC20 tokens than are available in sender balance', async () => {
-        await expect(avnBridge.connect(someOtherAccount).lift(token20.address, someT2PubKey, 1)).to.be.rejectedWith(token20, 'ERC20: insufficient allowance');
+        await expect(bridge.connect(someOtherAccount).lift(token20.address, someT2PubKey, 1n)).to.be.revertedWith('ERC20: insufficient allowance');
       });
 
       it('attempting to lift more ERC777 tokens than are available in sender balance', async () => {
-        await expect(token777.connect(someOtherAccount).send(avnBridge.address, 1, someT2PubKey)).to.be.rejectedWith(
-          token777,
-          'ERC777: transfer amount exceeds balance'
-        );
+        await expect(token777.connect(someOtherAccount).send(bridge.address, 1n, someT2PubKey)).to.be.revertedWith('ERC777: transfer amount exceeds balance');
       });
 
-      it('calling FTSM tokensReceived hook directly with tokens not destined for the FTSM', async () => {
-        await expect(avnBridge.tokensReceived(owner, owner, someOtherAccount.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(
-          avnBridge,
+      it('calling bridge tokensReceived hook directly with tokens not destined for the bridge', async () => {
+        await expect(bridge.tokensReceived(owner.address, owner.address, someOtherAccount.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(
+          bridge,
           'InvalidRecipient'
         );
       });
 
-      it('calling FTSM tokensReceived hook directly and not a registered contract', async () => {
-        await expect(avnBridge.tokensReceived(owner, owner, avnBridge.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(
-          avnBridge,
+      it('calling bridge tokensReceived hook directly when not a registered contract', async () => {
+        await expect(bridge.tokensReceived(owner.address, owner.address, bridge.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(
+          bridge,
           'InvalidERC777'
         );
       });
     });
   });
 
-  context('Claiming lowers', async () => {
+  context('Claiming lowers', () => {
     const liftAmount = 100n;
     const lowerAmount = 50n;
 
-    context('succeeds', async () => {
+    context('succeeds', () => {
       it('in lowering ETH', async () => {
-        await avnBridge.liftETH(someT2PubKey, { value: liftAmount });
+        await bridge.liftETH(someT2PubKey, { value: liftAmount });
 
-        const avnEthBalanceBefore = await ethers.provider.getBalance(avnBridge.address);
-        const lowererEthBalanceBefore = await ethers.provider.getBalance(owner);
+        const avnEthBalanceBefore = await ethers.provider.getBalance(bridge.address);
+        const lowererEthBalanceBefore = await ethers.provider.getBalance(owner.address);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH, lowerAmount, owner);
-        const txResponse = await avnBridge.claimLower(lowerProof);
-        const txReceipt = await txResponse.wait(1);
-        const txCost = txReceipt.gasUsed * txResponse.gasPrice;
+        const [lowerProof, _] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmount, owner);
+        const txResponse = await bridge.claimLower(lowerProof);
+        const receipt = await txResponse.wait();
+        const txCost = receipt.gasUsed * receipt.gasPrice;
 
-        const avnEthBalanceAfter = await ethers.provider.getBalance(avnBridge.address);
-        const lowererEthBalanceAfter = await ethers.provider.getBalance(owner);
+        const avnEthBalanceAfter = await ethers.provider.getBalance(bridge.address);
+        const lowererEthBalanceAfter = await ethers.provider.getBalance(owner.address);
 
-        expect(avnEthBalanceBefore - lowerAmount).to.equal(avnEthBalanceAfter);
-        expect(lowererEthBalanceBefore + lowerAmount - txCost).to.equal(lowererEthBalanceAfter);
-
-        await avnBridge.filters.LogLowerClaimed(lowerId);
+        expect(avnEthBalanceAfter).to.equal(avnEthBalanceBefore - lowerAmount);
+        expect(lowererEthBalanceAfter).to.equal(lowererEthBalanceBefore + lowerAmount - txCost);
       });
 
       it('in lowering ERC20 tokens', async () => {
-        // lift
-        await token20.approve(avnBridge.address, liftAmount);
-        await avnBridge.lift(token20.address, someT2PubKey, liftAmount);
-        // record pre-lower balances
-        const avnBalanceBefore = await token20.balanceOf(avnBridge.address);
-        const senderBalBefore = await token20.balanceOf(owner);
+        await token20.approve(bridge.address, liftAmount);
+        await bridge.lift(token20.address, someT2PubKey, liftAmount);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token20, lowerAmount, owner);
+        const avnBalanceBefore = await token20.balanceOf(bridge.address);
+        const senderBalBefore = await token20.balanceOf(owner.address);
 
-        // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
-        expect(avnBalanceBefore - lowerAmount).to.equal(await token20.balanceOf(avnBridge.address));
-        expect(senderBalBefore + lowerAmount).to.equal(await token20.balanceOf(owner));
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, owner);
+
+        await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        expect(await token20.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
+        expect(await token20.balanceOf(owner.address)).to.equal(senderBalBefore + lowerAmount);
       });
 
       it('in lowering ERC777 tokens', async () => {
-        // lift
-        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
-        // record pre-lower balances
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
-        const senderBalBefore = await token777.balanceOf(owner);
+        await token777.send(bridge.address, liftAmount, someT2PubKey);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
+        const senderBalBefore = await token777.balanceOf(owner.address);
 
-        // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
-        expect(avnBalanceBefore - lowerAmount).to.equal(await token777.balanceOf(avnBridge.address));
-        expect(senderBalBefore + lowerAmount).to.equal(await token777.balanceOf(owner));
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, owner);
+
+        await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
+        expect(await token777.balanceOf(owner.address)).to.equal(senderBalBefore + lowerAmount);
       });
 
-      it('in lowering ERC777 tokens to a non-compliant contract via ERC20 transfer backwards compatability', async () => {
-        // lift
-        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
-        // record pre-lower balances
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
-        const senderBalBefore = await token777.balanceOf(token20.address);
+      it('in lowering ERC777 tokens to a non-compliant contract via ERC20 transfer backwards compatibility', async () => {
+        await token777.send(bridge.address, liftAmount, someT2PubKey);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, token20);
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
+        const recipientBalBefore = await token777.balanceOf(token20.address);
 
-        // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(avnBridge, 'LogLowerClaimed').withArgs(lowerId);
-        expect(avnBalanceBefore - lowerAmount).to.equal(await token777.balanceOf(avnBridge.address));
-        expect(senderBalBefore + lowerAmount).to.equal(await token777.balanceOf(token20.address));
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, token20);
+
+        await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
+        expect(await token777.balanceOf(token20.address)).to.equal(recipientBalBefore + lowerAmount);
       });
 
-      it('in lowering ERC777 to the avn bridge itself without accidentally triggering a subsequent lift', async () => {
-        // lift
-        await token777.send(avnBridge.address, liftAmount, someT2PubKey);
-        // record pre-lower balances
-        const avnBalanceBefore = await token777.balanceOf(avnBridge.address);
-        const senderBalBefore = await token777.balanceOf(owner);
+      it('in lowering ERC777 to the bridge itself without accidentally triggering a subsequent lift', async () => {
+        await token777.send(bridge.address, liftAmount, someT2PubKey);
 
-        const [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, avnBridge);
+        const avnBalanceBefore = await token777.balanceOf(bridge.address);
+        const senderBalBefore = await token777.balanceOf(owner.address);
 
-        // lower and confirm values
-        await expect(avnBridge.connect(someOtherAccount).claimLower(lowerProof))
-          .to.emit(avnBridge, 'LogLowerClaimed')
-          .withArgs(lowerId)
-          .to.not.emit(avnBridge, 'LogLifted');
-        expect(avnBalanceBefore).to.equal(await token777.balanceOf(avnBridge.address));
-        expect(senderBalBefore).to.equal(await token777.balanceOf(owner));
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, bridge);
+
+        const tx = bridge.connect(someOtherAccount).claimLower(lowerProof);
+        await expect(tx).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        await expect(tx).to.not.emit(bridge, 'LogLifted');
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore);
+        expect(await token777.balanceOf(owner.address)).to.equal(senderBalBefore);
       });
     });
 
-    context('fails when', async () => {
+    context('fails when', () => {
       let lowerProof;
-      let lowerAmount = 100n;
+      let lowerAmountLocal = 100n;
 
       beforeEach(async () => {
-        [lowerProof, lowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
+        [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmountLocal, owner);
       });
 
       it('lowering is disabled', async () => {
-        await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerDisabled');
-        await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
-        await avnBridge.claimLower(lowerProof);
+        await expect(bridge.toggleLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
+        await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerDisabled');
+        await expect(bridge.toggleLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
+        await bridge.claimLower(lowerProof);
       });
 
       it('the proof has already been used', async () => {
-        await avnBridge.claimLower(lowerProof);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'LowerIsUsed');
+        await bridge.claimLower(lowerProof);
+        await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
       });
 
       it('the proof is invalid', async () => {
-        await expect(avnBridge.claimLower(helper.randomBytes32())).to.be.revertedWithCustomError(avnBridge, 'InvalidProof');
+        await expect(bridge.claimLower(randomBytes32())).to.be.revertedWithCustomError(bridge, 'InvalidProof');
       });
 
       it('attempting to lower ETH to an address which cannot receive it', async () => {
-        await avnBridge.liftETH(someT2PubKey, { value: lowerAmount });
+        await bridge.liftETH(someT2PubKey, { value: lowerAmountLocal });
         const addressCannotReceiveETH = token20;
-        [lowerProof, _] = await helper.createLowerProof(avnBridge, helper.PSEUDO_ETH, lowerAmount, addressCannotReceiveETH);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'PaymentFailed');
+        [lowerProof] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmountLocal, addressCannotReceiveETH);
+        await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'PaymentFailed');
       });
 
       it('the recipient address is missing', async () => {
-        [lowerProof] = await helper.createLowerProof(avnBridge, token20, lowerAmount, helper.ZERO_ADDRESS);
-        await expect(avnBridge.claimLower(lowerProof)).to.be.revertedWithCustomError(avnBridge, 'AddressIsZero');
+        [lowerProof] = await createLowerProof(bridge, token20, lowerAmountLocal, ZERO_ADDRESS);
+        await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'AddressIsZero');
       });
     });
   });
 
-  context('Check lower', async () => {
+  context('Check lower', () => {
     it('results are as expected for a valid, unused proof', async () => {
-      const lowerAmount = 123n;
-      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token20, lowerAmount, owner);
-      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await avnBridge.checkLower(lowerProof);
+      const amount = 123n;
+      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token20, amount, owner);
+      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+        await bridge.checkLower(lowerProof);
 
-      const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
       expect(token).to.equal(token20.address);
-      expect(amount).to.equal(lowerAmount);
-      expect(recipient).to.equal(owner);
+      expect(checkedAmount).to.equal(amount);
+      expect(recipient).to.equal(owner.address);
       expect(lowerId).to.equal(expectedLowerId);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
@@ -355,17 +357,18 @@ describe('Lifting and lowering', async () => {
     });
 
     it('results are as expected for a valid, used proof', async () => {
-      const lowerAmount = 456n;
-      await token777.send(avnBridge.address, lowerAmount, someT2PubKey);
-      const [lowerProof, expectedLowerId] = await helper.createLowerProof(avnBridge, token777, lowerAmount, owner);
-      await avnBridge.claimLower(lowerProof);
-      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await avnBridge.checkLower(lowerProof);
+      const amount = 456n;
+      await token777.send(bridge.address, amount, someT2PubKey);
+      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token777, amount, owner);
+      await bridge.claimLower(lowerProof);
 
-      const numConfirmationsRequired = await helper.getNumRequiredConfirmations(avnBridge);
+      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+        await bridge.checkLower(lowerProof);
+
+      const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
       expect(token).to.equal(token777.address);
-      expect(amount).to.equal(lowerAmount);
-      expect(recipient).to.equal(owner);
+      expect(checkedAmount).to.equal(amount);
+      expect(recipient).to.equal(owner.address);
       expect(lowerId).to.equal(expectedLowerId);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
@@ -374,10 +377,11 @@ describe('Lifting and lowering', async () => {
     });
 
     it('results are as expected for a completely invalid proof', async () => {
-      const emptyAddress = helper.ZERO_ADDRESS.address;
-      const shortProof = helper.randomBytes32();
+      const emptyAddress = ZERO_ADDRESS.address;
+      const shortProof = randomBytes32();
       const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await avnBridge.checkLower(shortProof);
+        await bridge.checkLower(shortProof);
+
       expect(token).to.equal(emptyAddress);
       expect(amount).to.equal(0);
       expect(recipient).to.equal(emptyAddress);
@@ -389,7 +393,7 @@ describe('Lifting and lowering', async () => {
     });
   });
 
-  context('Reentrancy prevention', function () {
+  context('Reentrancy prevention', () => {
     const reentryPoint = {
       ClaimLower: 0,
       ETHLift: 1,
@@ -401,39 +405,39 @@ describe('Lifting and lowering', async () => {
     let reentrantToken;
 
     before(async () => {
-      const contract = await ethers.getContractFactory('ReentrantToken');
-      reentrantToken = await contract.deploy(avnBridge.address);
+      const Contract = await ethers.getContractFactory('ReentrantToken');
+      reentrantToken = await Contract.deploy(bridge.address);
       reentrantToken.address = await reentrantToken.getAddress();
-      await reentrantToken.approve(avnBridge.address, amount * 5n);
+      await reentrantToken.approve(bridge.address, amount * 5n);
     });
 
     it('the claimLower re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ClaimLower);
-      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
 
     it('the ETH lift re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ERC20Lift);
-      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
 
     it('the ERC20 lift re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ERC777Lift);
-      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
 
     it('the ERC777 lift re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ETHLift);
-      await expect(avnBridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(avnBridge, 'Locked');
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
   });
 
-  context('Confirming T2 transactions on T1', async () => {
-    context('succeeds', async () => {
+  context('Confirming T2 transactions on T1', () => {
+    context('succeeds', () => {
       it('in confirming a T2 tx leaf exists in a published root', async () => {
-        const tree = await helper.createTreeAndPublishRoot(avnBridge, token777.address, 0n);
-        expect(await avnBridge.confirmTransaction(tree.leafHash, tree.merklePath)).to.equal(true);
-        expect(await avnBridge.confirmTransaction(helper.randomBytes32(), tree.merklePath)).to.equal(false);
+        const tree = await createTreeAndPublishRoot(bridge, token777.address, 0n);
+        expect(await bridge.confirmTransaction(tree.leafHash, tree.merklePath)).to.equal(true);
+        expect(await bridge.confirmTransaction(randomBytes32(), tree.merklePath)).to.equal(false);
       });
     });
   });

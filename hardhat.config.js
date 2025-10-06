@@ -15,19 +15,17 @@ const INTERFACE_PATH = 'contracts/interfaces/IAVNBridge.sol';
 const CONTRACT_PATH = 'contracts/AVNBridge.sol';
 
 task('deploy', 'deploy a new avn-bridge contract')
-  .addParam('token', 'core token address')
   .addParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
-    mainnetCheck(hre);
     await hre.run('compile');
-
     const authors = require('./authors.json')[args.env];
-    const initArgs = [args.token, [], [], [], []];
+    const initArgs = [[], [], [], []];
+
     authors.forEach(author => {
-      initArgs[1].push(author.ethAddress);
-      initArgs[2].push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
-      initArgs[3].push('0x' + author.ethUncompressedPublicKey.slice(68, 132));
-      initArgs[4].push(author.t2PublicKey);
+      initArgs[0].push(author.ethAddress);
+      initArgs[1].push('0x' + author.ethUncompressedPublicKey.slice(4, 68));
+      initArgs[2].push('0x' + author.ethUncompressedPublicKey.slice(68, 132));
+      initArgs[3].push(author.t2PublicKey);
     });
 
     const [deployer] = await hre.ethers.getSigners();
@@ -36,13 +34,10 @@ task('deploy', 'deploy a new avn-bridge contract')
     const balanceBefore = await deployer.getBalance();
     const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
     const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, {
-      kind: 'uups',
-      txOverrides: { maxFeePerGas: 100e9, maxPriorityFeePerGas: 5e9 }
+      kind: 'uups'
     });
     await avnBridge.deployed();
     const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
-
-    // output new contract address to file
     const outFile = './addresses.json';
     const addresses = fs.existsSync(outFile) ? require(outFile) : {};
     const key = hre.network.name + '_' + args.env;
@@ -117,42 +112,12 @@ task('publishToken', 'deploy a new erc20 test token and publish it').setAction(a
   fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
 });
 
-task('upgrade', 'upgrade existing avn-bridge contract')
-  .addParam('bridge', 'existing AVN Bridge proxy address')
+task('update', 'updates the openzeppelin mainfest')
+  .addPositionalParam('bridge', 'proxy address')
   .setAction(async (args, hre) => {
-    mainnetCheck(hre);
-    await hre.run('compile');
-
-    const [upgrader] = await hre.ethers.getSigners();
-    const balanceBefore = await upgrader.getBalance();
-    console.log(`\nUpgrading ${args.bridge} on ${hre.network.name} network using account ${upgrader.address}...`);
-    const AVNBridge = await ethers.getContractFactory('AVNBridge');
-    try {
-      await upgrades.upgradeProxy(args.bridge, AVNBridge);
-    } catch (e) {
-      if (e.toString().includes('use the forceImport function')) {
-        console.log(`\nInvalid manifest. First prepare the manifest by running:\n\nnpx hardhat --network sepolia prepare-manifest --bridge ${args.bridge}`);
-        process.exit(0);
-      } else {
-        console.log(e);
-        process.exit(1);
-      }
-    }
-    console.log(`\nCost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await upgrader.getBalance()))} ETH`);
-    await new Promise(r => setTimeout(r, 30000));
-    try {
-      const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(args.bridge);
-      await hre.run('verify:verify', { address: implementationAddress });
-    } catch (e) {}
-  });
-
-task('prepare-manifest', 'prepares the openzeppelin mainfest')
-  .addParam('bridge', 'existing AVN Bridge proxy address')
-  .setAction(async (args, hre) => {
-    mainnetCheck(hre);
-
+    const chainId = hre.network.name === 'sepolia' ? 11155111n : 1n;
     const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
-    const url = `https://api-sepolia.etherscan.io/api?module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await axios.get(url);
     const sources = JSON.parse(response.data.result[0].SourceCode.slice(1, -1)).sources;
     const interfaceCode = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
@@ -175,7 +140,7 @@ task('prepare-manifest', 'prepares the openzeppelin mainfest')
   });
 
 task('validate')
-  .addPositionalParam('proxyAddress', 'proxy address')
+  .addPositionalParam('bridge', 'proxy address')
   .setAction(async (args, hre) => {
     const { ethers } = hre;
     await hre.run('compile');
@@ -184,8 +149,8 @@ task('validate')
     console.log(`\nValidating new AVNBridge implementation...`);
     await upgrades.validateImplementation(contractFactory);
 
-    console.log(`\nValidating upgrade safety for proxy at ${args.proxyAddress}...`);
-    await upgrades.validateUpgrade(args.proxyAddress, contractFactory);
+    console.log(`\nValidating upgrade safety for proxy at ${args.bridge}...`);
+    await upgrades.validateUpgrade(args.bridge, contractFactory);
 
     console.log('\nResult: Safe for upgrade');
   });
@@ -196,7 +161,7 @@ task('implementation', 'release new implementation contract').setAction(async (_
   const [signer] = await ethers.getSigners();
   const initialBalance = await ethers.provider.getBalance(signer.address);
   console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
-  const contractFactory = await ethers.getContractFactory(CONTRACT);
+  const contractFactory = await ethers.getContractFactory('AVNBridge');
   const implementation = await contractFactory.deploy();
   await implementation.waitForDeployment();
   const impAddress = await implementation.getAddress();
@@ -208,13 +173,6 @@ task('implementation', 'release new implementation contract').setAction(async (_
 
 function getWeb3Url(networkName) {
   return `https://${networkName}.infura.io/v3/${INFURA_API_KEY}`;
-}
-
-function mainnetCheck() {
-  if (hre.network.name === 'mainnet') {
-    console.log('MAINNET REQUIRES MANUAL OVERRIDE');
-    process.exit(0);
-  }
 }
 
 module.exports = {
@@ -246,10 +204,6 @@ module.exports = {
       accounts: {
         accountsBalance: '5000000000000000000000000' // 5,000,000 ETH TO COVER ACCOUNTS FOR COVERAGE
       }
-      // forking: {
-      //   url: getWeb3Url(`mainnet`),
-      // },
-      // allowUnlimitedContractSize: true
     },
     mainnet: {
       url: getWeb3Url(`mainnet`),
