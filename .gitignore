@@ -1,11 +1,9 @@
-# Node modules
 **/node_modules
-
 config.json
 coverage.json
 allFiredEvents
 .openzeppelin/unknown-1337.json
 cache/
 artifacts
-validators.json
 coverage/
+.env

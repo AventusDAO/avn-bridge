@@ -24,9 +24,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   using SafeERC20 for IERC20;
 
   IERC1820Registry private constant ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+  string private constant EIP712_PREFIX = '\x19\x01';
   bytes32 private constant ERC777_TOKEN_HASH = keccak256('ERC777Token');
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = keccak256('ERC777TokensRecipient');
-  string private constant EIP712_PREFIX = '\x19\x01';
   bytes32 private constant VERSION_HASH = keccak256('1');
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');

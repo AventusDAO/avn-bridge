@@ -1,7 +1,7 @@
 {
   "name": "avn-bridge",
   "version": "1.0.0",
-  "description": "AVN T1 standalone contract for AVN parachain and consoritium networks",
+  "description": "Aventus Network Ethereum Bridge",
   "author": "Aventus Network Services Ltd",
   "license": "GPL-3.0-only",
   "repository": {
@@ -15,6 +15,7 @@
     "@openzeppelin/contracts-upgradeable": "^4.9.6",
     "@openzeppelin/hardhat-upgrades": "^3.9.1",
     "axios": "^1.11.0",
+    "dotenv": "^17.2.3",
     "hardhat": "^2.26.3",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-erc1820": "^0.1.0",
@@ -28,7 +29,8 @@
     "format": "npm run pretty:fix && npm run pretty:sol",
     "pretty:fix": "prettier --config ./.prettierrc.json --write \"**/*.{js,json}\"",
     "pretty:sol": "npx prettier --write --plugin=prettier-plugin-solidity contracts/**/*.sol",
-    "test": "npx hardhat test",
-    "coverage": "npx hardhat coverage"
+    "coverage": "npx hardhat coverage",
+    "size": "npx hardhat size-contracts",
+    "test": "npx hardhat test"
   }
 }

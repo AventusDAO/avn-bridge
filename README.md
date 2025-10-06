@@ -26,28 +26,35 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 ## Development
 
 ### Setup
-- do `npm i`
-- populate `config_.json` and save as `config.json` (the values in `config.json` can also be set as environment variables)
-- ensure `authors.json` includes the correct authors for your AvN environment
 
+- do `npm i`
+- populate a `.env` file with the variables required by hardhat.config
+- ensure `authors.json` includes the correct set of authors for your environment
+
+### Testing
 
 #### Run tests
-`npx hardhat test`
+`npm run test`
 
-#### Run coverage report
-`npx hardhat coverage`
+#### Run coverage
+`npm run coverage`
+
+#### Format the code
+`npm run format`
 
 #### Check bytecode size
-`npx hardhat size-contracts`
+`npm run size`
+
+### Deployment
 
 #### Deploy initial proxy
-`npx hardhat --network <network> deploy --env <AvN environment name - eg: 'testnet' or 'dev'>`
+`npx hardhat --network <network> deploy --env <AvN environment - eg: 'testnet' or 'dev'> --token [optional associated token address]`
 
-#### Update OZ manifest
-`npx hardhat --network <network> update <bridge_address>`
+#### Prepare OZ manifest
+`npx hardhat --network <network> prepare <bridge address>`
 
 #### Validate new implementation
-`npx hardhat --network <network> validate <bridge_address>`
+`npx hardhat --network <network> validate <bridge address>`
 
 #### Deploy new implementation
 `npx hardhat --network <network> implementation`
@@ -55,5 +62,7 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 #### Publish a test token
 `npx hardhat --network <network> publishToken`
 
-#### Format the code (JS files only)
-`npm run format`
+#### Lift funds
+`npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
+
+
