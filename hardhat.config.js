@@ -8,6 +8,7 @@ require('hardhat-erc1820');
 require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 
 const { ETHERSCAN_API_KEY, MAINNET_DEPLOYER_LEDGER_ADDRESS, MAINNET_RPC_URL, SEPOLIA_DEPLOYER_PRIVATE_KEY, SEPOLIA_RPC_URL } = process.env;
 
@@ -63,7 +64,7 @@ task('prepare', 'prepares the openzeppelin manifest')
   .addPositionalParam('bridge', 'proxy address')
   .setAction(async (args, hre) => {
     const { ethers, network, run, upgrades } = hre;
-    await run('compile');
+    testContracts(false);
     const originalInterface = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
     const originalContract = fs.readFileSync('./' + CONTRACT_PATH, 'utf8');
 
@@ -82,6 +83,7 @@ task('prepare', 'prepares the openzeppelin manifest')
     } catch (e) {
       console.log(e);
     } finally {
+      testContracts(true);
       fs.writeFileSync('./' + INTERFACE_PATH, originalInterface);
       fs.writeFileSync('./' + CONTRACT_PATH, originalContract);
     }
@@ -179,6 +181,12 @@ async function verify(run, address, constructorArguments = []) {
   }
 }
 
+function testContracts(enabled) {
+  const dir = './contracts/test';
+  const extension = enabled ? 'sol' : 'xxx';
+  for (const f of fs.readdirSync(dir)) fs.renameSync(path.join(dir, f), path.join(dir, f.slice(0, -3) + extension));
+}
+
 module.exports = {
   mocha: {
     timeout: 300000
@@ -194,6 +202,16 @@ module.exports = {
             details: { yul: true }
           },
           viaIR: true
+        }
+      },
+      {
+        version: '0.8.25',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 2000,
+            details: { yul: true }
+          }
         }
       }
     ]
