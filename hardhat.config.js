@@ -96,9 +96,11 @@ task('validate')
   .setAction(async (args, hre) => {
     const { ethers, run, upgrades } = hre;
     await run('compile');
+    
     console.log(`\nValidating new implementation...`);
     const contract = await ethers.getContractFactory(CONTRACT_NAME);
     await upgrades.validateImplementation(contract);
+
     console.log(`\nValidating upgrade safety for proxy at ${args.bridge}...`);
     await upgrades.validateUpgrade(args.bridge, contract);
     console.log('\nResult: Safe for upgrade');
@@ -108,14 +110,21 @@ task('implementation', 'deploy new implementation contract').setAction(async (_,
   const { ethers, network, run } = hre;
   const [signer] = await ethers.getSigners();
   await run('compile');
+
   const initialBalance = await ethers.provider.getBalance(signer.address);
   console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
   const contract = await ethers.getContractFactory(CONTRACT_NAME);
   const implementation = await contract.deploy();
   await implementation.waitForDeployment();
+  const impAddress = await implementation.getAddress();
+
+  console.log('Waiting to verify...');
+  await delay(VERIFICATION_DELAY_SECONDS);
+  await verify(run, impAddress);
+
   const finalBalance = await ethers.provider.getBalance(signer.address);
   const cost = ethers.formatEther(initialBalance - finalBalance);
-  console.log(`\nDeployed AVNBridge implementation at ${await implementation.getAddress()} for ${cost} ETH`);
+  console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
 });
 
 task('lift', 'lift a token to the chain')
