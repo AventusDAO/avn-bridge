@@ -40,21 +40,22 @@ task('deploy', 'deploy a new avn-bridge proxy')
     const initialBalance = await ethers.provider.getBalance(signer.address);
     const contract = await ethers.getContractFactory(CONTRACT_NAME);
     const proxy = await upgrades.deployProxy(contract, initArgs, { kind: 'uups' });
-    await proxy.deployed();
-    const implementation = await upgrades.erc1967.getImplementationAddress(proxy.address);
+    await proxy.waitForDeployment();
+    const proxyAddress = await proxy.getAddress();
+    const impAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
     const addresses = fs.existsSync(ADDRESSES_PATH) ? require(ADDRESSES_PATH) : {};
     const key = network.name + '_' + args.env;
-    addresses[key].avn = proxy.address;
+    addresses[key].avn = proxyAddress;
     fs.writeFileSync(ADDRESSES_PATH, JSON.stringify(addresses, null, 2));
 
     console.log('Waiting to verify...');
     await delay(VERIFICATION_DELAY_SECONDS);
-    await verify(run, implementation);
-    await verify(run, proxy.address);
+    await verify(run, impAddress);
+    await verify(run, proxyAddress);
 
     const finalBalance = await ethers.provider.getBalance(signer.address);
     const cost = ethers.formatEther(initialBalance - finalBalance);
-    console.log(`\nDeployed ${CONTRACT_NAME} proxy at ${proxy.address} (impl: ${implementation}) for ${cost} ETH`);
+    console.log(`\nDeployed ${CONTRACT_NAME} proxy at ${proxyAddress} (impl: ${impAddress}) for ${cost} ETH`);
     console.log('\nDone');
   });
 
