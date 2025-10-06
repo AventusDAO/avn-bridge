@@ -48,7 +48,7 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 ### Deployment
 
 #### Deploy initial proxy
-`npx hardhat --network <network> deploy --env <AvN environment - eg: 'testnet' or 'dev'> --token [optional associated token address]`
+`npx hardhat --network <network> deploy --env <"dev" || "testnet" || "paseo" || "mainnet">`
 
 #### Prepare OZ manifest
 `npx hardhat --network <network> prepare <bridge address>`

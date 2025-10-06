@@ -21,7 +21,6 @@ const VERIFICATION_DELAY_SECONDS = 40;
 
 task('deploy', 'deploy a new avn-bridge proxy')
   .addParam('env', 'AvN environment name')
-  .addOptionalParam('token', 'token address')
   .setAction(async (args, hre) => {
     const { ethers, network, run, upgrades } = hre;
     const [signer] = await ethers.getSigners();
@@ -38,15 +37,14 @@ task('deploy', 'deploy a new avn-bridge proxy')
     });
 
     console.log(`\nDeploying to ${network.name} network using account ${signer.address}...`);
-    const initialBalance = await signer.getBalance();
+    const initialBalance = await ethers.provider.getBalance(signer.address);
     const contract = await ethers.getContractFactory(CONTRACT_NAME);
     const proxy = await upgrades.deployProxy(contract, initArgs, { kind: 'uups' });
     await proxy.deployed();
     const implementation = await upgrades.erc1967.getImplementationAddress(proxy.address);
     const addresses = fs.existsSync(ADDRESSES_PATH) ? require(ADDRESSES_PATH) : {};
-    const erc20token = args.token || '';
     const key = network.name + '_' + args.env;
-    addresses[key] = { avn: proxy.address, erc20token };
+    addresses[key].avn = proxy.address;
     fs.writeFileSync(ADDRESSES_PATH, JSON.stringify(addresses, null, 2));
 
     console.log('Waiting to verify...');
@@ -54,7 +52,7 @@ task('deploy', 'deploy a new avn-bridge proxy')
     await verify(run, implementation);
     await verify(run, proxy.address);
 
-    const finalBalance = await signer.getBalance();
+    const finalBalance = await ethers.provider.getBalance(signer.address);
     const cost = ethers.formatEther(initialBalance - finalBalance);
     console.log(`\nDeployed ${CONTRACT_NAME} proxy at ${proxy.address} (impl: ${implementation}) for ${cost} ETH`);
     console.log('\nDone');
@@ -107,12 +105,12 @@ task('implementation', 'deploy new implementation contract').setAction(async (_,
   const { ethers, network, run } = hre;
   const [signer] = await ethers.getSigners();
   await run('compile');
-  const initialBalance = await signer.getBalance();
+  const initialBalance = await ethers.provider.getBalance(signer.address);
   console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
   const contract = await ethers.getContractFactory(CONTRACT_NAME);
   const implementation = await contract.deploy();
   await implementation.waitForDeployment();
-  const finalBalance = await signer.getBalance();
+  const finalBalance = await ethers.provider.getBalance(signer.address);
   const cost = ethers.formatEther(initialBalance - finalBalance);
   console.log(`\nDeployed AVNBridge implementation at ${await implementation.getAddress()} for ${cost} ETH`);
 });
