@@ -18,6 +18,7 @@ interface IAVNBridge {
   function toggleAuthors(bool state) external;
   function toggleLifting(bool state) external;
   function toggleLowering(bool state) external;
+  function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external;
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;

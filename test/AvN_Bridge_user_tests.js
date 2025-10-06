@@ -376,6 +376,28 @@ describe('Lifting and lowering', () => {
       expect(lowerIsClaimed).to.equal(true);
     });
 
+    it('the expected result is returned for a valid proof with invalid confirmations', async () => {
+      const amount = 789n;
+      await token20.approve(bridge.address, amount);
+      await bridge.lift(token20.address, someT2PubKey, amount);
+      const [proofA, lowerIdA] = await createLowerProof(bridge, token20, amount, owner);
+      const [proofB] = await createLowerProof(bridge, token20, amount, owner);
+      const confirmationsStart = 154;
+      const invalidProof = ethers.concat([proofA.slice(0, confirmationsStart), '0x' + proofB.slice(confirmationsStart)]);
+      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+        await bridge.checkLower(invalidProof);
+      const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
+
+      expect(token).to.equal(token20.address);
+      expect(checkedAmount).to.equal(amount);
+      expect(recipient).to.equal(owner.address);
+      expect(lowerId).to.equal(lowerIdA);
+      expect(confirmationsRequired).to.equal(numConfirmationsRequired);
+      expect(confirmationsProvided).to.equal(0);
+      expect(proofIsValid).to.equal(false);
+      expect(lowerIsClaimed).to.equal(false);
+    });
+
     it('results are as expected for a completely invalid proof', async () => {
       const emptyAddress = ZERO_ADDRESS.address;
       const shortProof = randomBytes32();
