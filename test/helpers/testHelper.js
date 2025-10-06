@@ -2,6 +2,7 @@ const { MerkleTree } = require('merkletreejs');
 const { time } = require('@nomicfoundation/hardhat-network-helpers');
 const { ethers, upgrades } = require('hardhat');
 const keccak256 = require('keccak256');
+const { expect } = require('chai');
 
 const EMPTY_BYTES_32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const EXPIRY_WINDOW = 60;
@@ -59,7 +60,6 @@ let accounts = [];
 let authors = [];
 let owner;
 let lowerId = 0;
-const someT2PubKey = randomBytes32();
 
 function createMerkleTree(dataLeaves) {
   const leavesIn = Array.isArray(dataLeaves) ? dataLeaves.slice() : [dataLeaves];
@@ -122,7 +122,7 @@ async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   return merkleTree;
 }
 
-async function deployAVNBridge(numAuthors) {
+async function deployBridge(numAuthors) {
   const initArgs = generateInitArgs(numAuthors);
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
   return upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
@@ -301,16 +301,16 @@ function toLittleEndianBytesStr(amount) {
 }
 
 /* Keep exports alphabetical. */
-
 module.exports = {
-  accounts: () => accounts,
-  authors: () => authors,
   createLowerProof,
   createTreeAndPublishRoot,
-  deployAVNBridge,
+  deployBridge,
   EMPTY_BYTES_32,
+  expect,
   EXPIRY_WINDOW,
   generateInitArgs,
+  getAccounts: () => accounts,
+  getAuthors: () => authors,
   getConfirmations,
   getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
@@ -321,12 +321,10 @@ module.exports = {
   keccak256,
   MIN_AUTHORS,
   ONE_AVT_IN_ATTO,
-  owner: () => owner,
   PSEUDO_ETH,
   randomBytes32,
   randomHex,
   randomT2TxId,
-  someT2PubKey: () => someT2PubKey,
   strip_0x,
   ZERO_ADDRESS
 };

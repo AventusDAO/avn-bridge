@@ -1,87 +1,103 @@
-const helper = require('./helpers/testHelper');
-const { expect } = require('chai');
+const {
+  deployBridge,
+  expect,
+  generateInitArgs,
+  getAccounts,
+  getAuthors,
+  getConfirmations,
+  getValidExpiry,
+  init,
+  MIN_AUTHORS,
+  ZERO_ADDRESS,
+  randomT2TxId
+} = require('./helpers/testHelper');
 
-let avnBridge, token777, token20;
-let accounts, authors;
-let owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
+let accounts, authors, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 
-describe('Owner Functions', async () => {
+describe('Owner Functions', () => {
   before(async () => {
-    await helper.init();
-    AVNBridge = await ethers.getContractFactory('AVNBridge');
+    await init();
+
     const Token777 = await ethers.getContractFactory('Token777');
-    token777 = await Token777.deploy(10000000n);
+    token777 = await Token777.deploy(10_000_000n);
     token777.address = await token777.getAddress();
+
     const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10000000n);
+    token20 = await Token20.deploy(10_000_000n);
     token20.address = await token20.getAddress();
+
     const numAuthors = 10;
-    avnBridge = await helper.deployAVNBridge(numAuthors);
-    avnBridge.address = await avnBridge.getAddress();
-    accounts = helper.accounts();
-    owner = helper.owner();
+    bridge = await deployBridge(numAuthors);
+    bridge.address = await bridge.getAddress();
+
+    accounts = getAccounts();
+    owner = accounts[0];
     someOtherAccount = accounts[1];
     unauthorizedAccount = accounts[2];
     newTokenOwner = accounts[3];
-    someT2PubKey = helper.someT2PubKey();
-    authors = helper.authors();
-    await token20.transferOwnership(avnBridge.address);
+
+    authors = getAuthors();
+    await token20.transferOwnership(bridge.address);
   });
 
-  context('Transferring Ownership', async () => {
-    context('succeeds', async () => {
+  context('Transferring Ownership', () => {
+    context('succeeds', () => {
       it('when called by the owner', async () => {
-        await expect(avnBridge.transferOwnership(someOtherAccount.address))
-          .to.emit(avnBridge, 'OwnershipTransferStarted')
-          .withArgs(owner, someOtherAccount.address);
+        await expect(bridge.transferOwnership(someOtherAccount.address))
+          .to.emit(bridge, 'OwnershipTransferStarted')
+          .withArgs(owner.address, someOtherAccount.address);
 
-        expect(someOtherAccount.address).to.equal(await avnBridge.pendingOwner());
-        expect(owner).to.equal(await avnBridge.owner());
+        expect(await bridge.pendingOwner()).to.equal(someOtherAccount.address);
+        expect(await bridge.owner()).to.equal(owner.address);
 
-        await expect(avnBridge.connect(someOtherAccount).acceptOwnership())
-          .to.emit(avnBridge, 'OwnershipTransferred')
-          .withArgs(owner, someOtherAccount.address);
+        await expect(bridge.connect(someOtherAccount).acceptOwnership())
+          .to.emit(bridge, 'OwnershipTransferred')
+          .withArgs(owner.address, someOtherAccount.address);
 
-        expect(helper.ZERO_ADDRESS.address).to.equal(await avnBridge.pendingOwner());
-        expect(someOtherAccount.address).to.equal(await avnBridge.owner());
+        expect(await bridge.pendingOwner()).to.equal(ZERO_ADDRESS.address);
+        expect(await bridge.owner()).to.equal(someOtherAccount.address);
 
-        await avnBridge.connect(someOtherAccount).transferOwnership(owner);
-        await avnBridge.acceptOwnership();
-        expect(owner).to.equal(await avnBridge.owner());
+        await expect(bridge.connect(someOtherAccount).transferOwnership(owner.address))
+          .to.emit(bridge, 'OwnershipTransferStarted')
+          .withArgs(someOtherAccount.address, owner.address);
+
+        await expect(bridge.acceptOwnership()).to.emit(bridge, 'OwnershipTransferred').withArgs(someOtherAccount.address, owner.address);
+
+        expect(await bridge.owner()).to.equal(owner.address);
       });
     });
 
-    context('fails', async () => {
+    context('fails', () => {
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).transferOwnership(unauthorizedAccount.address)).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(bridge.connect(someOtherAccount).transferOwnership(unauthorizedAccount.address)).to.be.revertedWith('Ownable: caller is not the owner');
       });
 
       it('when an unauthorised account attempts to accept ownership', async () => {
-        avnBridge.transferOwnership(someOtherAccount.address);
-        await expect(avnBridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(avnBridge, 'PendingOwnerOnly');
+        await bridge.transferOwnership(someOtherAccount.address);
+        await expect(bridge.connect(unauthorizedAccount).acceptOwnership()).to.be.revertedWithCustomError(bridge, 'PendingOwnerOnly');
       });
     });
   });
 
-  context('Renouncing Ownership', async () => {
-    context('succeeds', async () => {
+  context('Renouncing Ownership', () => {
+    context('succeeds', () => {
       it('does nothing when the caller is the owner', async () => {
-        expect(owner).to.equal(await avnBridge.owner());
-        await avnBridge.renounceOwnership();
-        expect(owner).to.equal(await avnBridge.owner());
+        expect(await bridge.owner()).to.equal(owner.address);
+        await bridge.renounceOwnership();
+        expect(await bridge.owner()).to.equal(owner.address);
       });
+    });
 
-      context('fails', async () => {
-        it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith('Ownable: caller is not the owner');
-        });
+    context('fails', () => {
+      it('when the caller is not the owner', async () => {
+        await expect(bridge.connect(someOtherAccount).renounceOwnership()).to.be.revertedWith('Ownable: caller is not the owner');
       });
     });
   });
 
-  context('Initialization', async () => {
+  context('Initialization', () => {
     let initVals = {};
-    const numAuthors = helper.MIN_AUTHORS + 1;
+    const numAuthors = MIN_AUTHORS + 1;
 
     async function deployAndCatchInitError(expectedError) {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
@@ -92,7 +108,7 @@ describe('Owner Functions', async () => {
     beforeEach(async () => {
       initVals = { t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
 
-      for (i = 0; i < numAuthors; i++) {
+      for (let i = 0; i < numAuthors; i++) {
         initVals.t1Addresses.push(authors[i].t1Address);
         initVals.t1PubKeysLHS.push(authors[i].t1PubKeyLHS);
         initVals.t1PubKeysRHS.push(authors[i].t1PubKeyRHS);
@@ -102,9 +118,10 @@ describe('Owner Functions', async () => {
 
     it('succeeds', async () => {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
+      const AVNBridge = await ethers.getContractFactory('AVNBridge');
       const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
 
-      for (i = 0; i < numAuthors; i++) {
+      for (let i = 0; i < numAuthors; i++) {
         const authorId = i + 1;
         expect(await newBridge.t1AddressToId(initVals.t1Addresses[i])).to.equal(authorId);
         expect(await newBridge.t2PubKeyToId(initVals.t2PubKeys[i])).to.equal(authorId);
@@ -123,22 +140,22 @@ describe('Owner Functions', async () => {
       await deployAndCatchInitError('AddressMismatch');
     });
 
-    it('when addresses are missing', async () => {
+    it('fails when addresses are missing', async () => {
       initVals.t1Addresses.pop();
       await deployAndCatchInitError('MissingKeys');
     });
 
-    it('when t1 key left halves are missing', async () => {
+    it('fails when t1 key left halves are missing', async () => {
       initVals.t1PubKeysLHS.pop();
       await deployAndCatchInitError('MissingKeys');
     });
 
-    it('when t1 key right halves are missing', async () => {
+    it('fails when t1 key right halves are missing', async () => {
       initVals.t1PubKeysRHS.pop();
       await deployAndCatchInitError('MissingKeys');
     });
 
-    it('when t2 keys are missing', async () => {
+    it('fails when t2 keys are missing', async () => {
       initVals.t2PubKeys.pop();
       await deployAndCatchInitError('MissingKeys');
     });
@@ -156,79 +173,86 @@ describe('Owner Functions', async () => {
     });
 
     it('fails when there are too few authors', async () => {
-      initVals.t1Addresses.splice(helper.MIN_AUTHORS - 1);
-      initVals.t1PubKeysLHS.splice(helper.MIN_AUTHORS - 1);
-      initVals.t1PubKeysRHS.splice(helper.MIN_AUTHORS - 1);
-      initVals.t2PubKeys.splice(helper.MIN_AUTHORS - 1);
+      initVals.t1Addresses.splice(MIN_AUTHORS - 1);
+      initVals.t1PubKeysLHS.splice(MIN_AUTHORS - 1);
+      initVals.t1PubKeysRHS.splice(MIN_AUTHORS - 1);
+      initVals.t2PubKeys.splice(MIN_AUTHORS - 1);
       await deployAndCatchInitError('NotEnoughAuthors');
     });
   });
 
-  context('Switches', async () => {
-    context('Toggle Authors', async () => {
-      context('succeeds', async () => {
+  context('Switches', () => {
+    context('Toggle Authors', () => {
+      context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleAuthors(false)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(false);
+          await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
         });
       });
-      context('fails', async () => {
+      context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleAuthors(true)).to.emit(avnBridge, 'LogAuthorsEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
+
+          await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
         });
       });
     });
 
-    context('Toggle Lifting', async () => {
-      context('succeeds', async () => {
+    context('Toggle Lifting', () => {
+      context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleLifting(false)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(false);
+          await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
         });
       });
-      context('fails', async () => {
+      context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleLifting(true)).to.emit(avnBridge, 'LogLiftingEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
+
+          await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
         });
       });
     });
 
-    context('Toggle Lowering', async () => {
-      context('succeeds', async () => {
+    context('Toggle Lowering', () => {
+      context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(avnBridge.toggleLowering(false)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(false);
+          await expect(bridge.toggleLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
         });
       });
-      context('fails', async () => {
+      context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(avnBridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
-          await expect(avnBridge.toggleLowering(true)).to.emit(avnBridge, 'LogLoweringEnabled').withArgs(true);
+          await expect(bridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
+
+          await expect(bridge.toggleLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
         });
       });
     });
   });
 
-  context('Initializer', async () => {
-    it('Cannot reinitialize', async () => {
-      const initArgs = helper.generateInitArgs(helper.MIN_AUTHORS);
-      await expect(avnBridge.initialize(...initArgs)).to.be.reverted;
+  context('Initializer', () => {
+    it('cannot reinitialize', async () => {
+      const initArgs = generateInitArgs(MIN_AUTHORS);
+      await expect(bridge.initialize(...initArgs)).to.be.reverted;
     });
   });
 
-  context('Migrate', async () => {
-    context('succeeds', async () => {
+  context('Migrate', () => {
+    context('succeeds', () => {
       it('when called by the owner', async () => {
-        expect(await token20.owner()).to.equal(avnBridge.address);
-        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
+        expect(await token20.owner()).to.equal(bridge.address);
+
+        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
+
         expect(await token20.owner()).to.equal(newTokenOwner.address);
       });
     });
-    context('fails', async () => {
+
+    context('fails', () => {
       it('if the migration has already been run', async () => {
-        await expect(avnBridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
+        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
       });
+
       it('when the caller is not the owner', async () => {
-        await expect(avnBridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
+        await expect(bridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
@@ -243,8 +267,8 @@ describe('Owner Functions', async () => {
     });
 
     context('succeeds', function () {
-      it('via Openzeppelin upgrades', async () => {
-        const upgradedBridge = await upgrades.upgradeProxy(avnBridge.address, upgradeContract);
+      it('via OpenZeppelin upgrades', async () => {
+        const upgradedBridge = await upgrades.upgradeProxy(bridge.address, upgradeContract);
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
       });
     });
@@ -252,9 +276,102 @@ describe('Owner Functions', async () => {
     context('fails', function () {
       it('when the caller is not the owner', async () => {
         const newBridge = await upgradeContract.deploy();
-        await expect(avnBridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
+      });
+    });
+  });
+
+  context('Rotation', () => {
+    const NUM_AUTHORS = 10;
+    let rotBridge;
+
+    before(async () => {
+      rotBridge = await deployBridge(NUM_AUTHORS);
+      rotBridge.address = await rotBridge.getAddress();
+    });
+
+    context('succeeds', () => {
+      async function removeAuthor(id) {
+        const expiry = await getValidExpiry();
+        const t2TxId = randomT2TxId();
+        const confirmations = await getConfirmations(rotBridge, 'removeAuthor', [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId]);
+        await rotBridge.connect(authors[0].account).removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
+      }
+
+      it('when called by the owner to rotate all the T1 addresses', async () => {
+        expect(await rotBridge.numActiveAuthors()).to.equal(NUM_AUTHORS);
+
+        await removeAuthor(6);
+        await removeAuthor(8);
+
+        expect(await rotBridge.numActiveAuthors()).to.equal(NUM_AUTHORS - 2);
+        expect(await rotBridge.authorIsActive(5)).to.equal(true);
+        expect(await rotBridge.authorIsActive(6)).to.equal(false);
+        expect(await rotBridge.authorIsActive(7)).to.equal(true);
+        expect(await rotBridge.authorIsActive(8)).to.equal(false);
+
+        const startID = 1;
+        const endID = NUM_AUTHORS;
+
+        const oldT1Addresses = [];
+        for (let i = startID; i <= endID; i++) {
+          oldT1Addresses.push(await rotBridge.idToT1Address(i));
+        }
+
+        const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
+        await rotBridge.rotateT1(newT1Addresses, startID, endID);
+
+        for (const oldAddress of oldT1Addresses) {
+          const mappedId = await rotBridge.t1AddressToId(oldAddress);
+          expect(mappedId).to.equal(0);
+        }
+
+        for (let i = 0; i < newT1Addresses.length; i++) {
+          const id = startID + i;
+          const expectedNewAddress = newT1Addresses[i];
+          const actualT1Address = await rotBridge.idToT1Address(id);
+          const mappedId = await rotBridge.t1AddressToId(expectedNewAddress);
+
+          expect(actualT1Address).to.equal(expectedNewAddress);
+          expect(mappedId).to.equal(id);
+          expect(actualT1Address).to.not.equal(oldT1Addresses[i]);
+        }
+
+        expect(await rotBridge.numActiveAuthors()).to.equal(NUM_AUTHORS - 2);
+        expect(await rotBridge.authorIsActive(5)).to.equal(true);
+        expect(await rotBridge.authorIsActive(6)).to.equal(false);
+        expect(await rotBridge.authorIsActive(7)).to.equal(true);
+        expect(await rotBridge.authorIsActive(8)).to.equal(false);
+      });
+
+      it('when rotating a single T1 address', async () => {
+        const id = 7;
+
+        const oldAddress = await rotBridge.idToT1Address(id);
+        expect(oldAddress).to.not.equal(ethers.ZeroAddress);
+        const oldMappedId = await rotBridge.t1AddressToId(oldAddress);
+        expect(oldMappedId).to.equal(id);
+
+        const newAddress = ethers.Wallet.createRandom().address;
+        await rotBridge.rotateT1([newAddress], id, id);
+
+        expect(await rotBridge.t1AddressToId(oldAddress)).to.equal(0);
+        expect(await rotBridge.idToT1Address(id)).to.equal(newAddress);
+        expect(await rotBridge.t1AddressToId(newAddress)).to.equal(id);
+      });
+    });
+
+    context('fails', () => {
+      it('when the caller is not the owner', async () => {
+        const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
+        await expect(rotBridge.connect(unauthorizedAccount).rotateT1(newT1Addresses, 1, NUM_AUTHORS)).to.be.revertedWith('Ownable: caller is not the owner');
+      });
+
+      it('with the wrong number of addresses', async () => {
+        const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
+        await expect(rotBridge.rotateT1(newT1Addresses, 1, NUM_AUTHORS - 1)).to.be.reverted;
       });
     });
   });
