@@ -312,16 +312,15 @@ describe('Owner Functions', () => {
         expect(await rotBridge.authorIsActive(7)).to.equal(true);
         expect(await rotBridge.authorIsActive(8)).to.equal(false);
 
-        const startID = 1;
-        const endID = NUM_AUTHORS;
-
+        const ids = [];
         const oldT1Addresses = [];
-        for (let i = startID; i <= endID; i++) {
+        for (let i = 1; i <= NUM_AUTHORS; i++) {
+          ids.push(i);
           oldT1Addresses.push(await rotBridge.idToT1Address(i));
         }
 
         const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
-        await rotBridge.rotateT1(newT1Addresses, startID, endID);
+        await rotBridge.rotateT1(ids, newT1Addresses);
 
         for (const oldAddress of oldT1Addresses) {
           const mappedId = await rotBridge.t1AddressToId(oldAddress);
@@ -329,7 +328,7 @@ describe('Owner Functions', () => {
         }
 
         for (let i = 0; i < newT1Addresses.length; i++) {
-          const id = startID + i;
+          const id = ids[i];
           const expectedNewAddress = newT1Addresses[i];
           const actualT1Address = await rotBridge.idToT1Address(id);
           const mappedId = await rotBridge.t1AddressToId(expectedNewAddress);
@@ -355,7 +354,7 @@ describe('Owner Functions', () => {
         expect(oldMappedId).to.equal(id);
 
         const newAddress = ethers.Wallet.createRandom().address;
-        await rotBridge.rotateT1([newAddress], id, id);
+        await rotBridge.rotateT1([id], [newAddress]);
 
         expect(await rotBridge.t1AddressToId(oldAddress)).to.equal(0);
         expect(await rotBridge.idToT1Address(id)).to.equal(newAddress);
@@ -365,13 +364,26 @@ describe('Owner Functions', () => {
 
     context('fails', () => {
       it('when the caller is not the owner', async () => {
+        const ids = Array.from({ length: NUM_AUTHORS }, (_, i) => i + 1);
         const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
-        await expect(rotBridge.connect(unauthorizedAccount).rotateT1(newT1Addresses, 1, NUM_AUTHORS)).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(rotBridge.connect(unauthorizedAccount).rotateT1(ids, newT1Addresses)).to.be.revertedWith('Ownable: caller is not the owner');
       });
 
       it('with the wrong number of addresses', async () => {
-        const newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
-        await expect(rotBridge.rotateT1(newT1Addresses, 1, NUM_AUTHORS - 1)).to.be.reverted;
+        const ids = [1, 2, 3];
+        const newT1Addresses = [ethers.Wallet.createRandom().address];
+        await expect(rotBridge.rotateT1(ids, newT1Addresses)).to.be.revertedWithCustomError(rotBridge, 'MissingKeys');
+      });
+
+      it('when any new address is zero', async () => {
+        const id = 3;
+        await expect(rotBridge.rotateT1([id], [ZERO_ADDRESS.address])).to.be.revertedWithCustomError(rotBridge, 'AddressIsZero');
+      });
+
+      it('when any id is not an author', async () => {
+        const badId = NUM_AUTHORS + 5;
+        const addr = ethers.Wallet.createRandom().address;
+        await expect(rotBridge.rotateT1([badId], [addr])).to.be.revertedWithCustomError(rotBridge, 'NotAnAuthor');
       });
     });
   });

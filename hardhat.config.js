@@ -1,24 +1,33 @@
 require('@nomicfoundation/hardhat-toolbox');
-require('@nomicfoundation/hardhat-chai-matchers');
 require('@nomicfoundation/hardhat-ledger');
 require('@openzeppelin/hardhat-upgrades');
 require('hardhat-contract-sizer');
 require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('hardhat-erc1820');
-
-const { INFURA_API_KEY, ETHERSCAN_API_KEY, SEPOLIA_PRIVATE_KEY, MAINNET_DEPLOYER_LEDGER_ADDRESS } = require('./config');
+require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 
-const INTERFACE_PATH = 'contracts/interfaces/IAVNBridge.sol';
+const { ETHERSCAN_API_KEY, MAINNET_DEPLOYER_LEDGER_ADDRESS, MAINNET_RPC_URL, SEPOLIA_DEPLOYER_PRIVATE_KEY, SEPOLIA_RPC_URL } = process.env;
+
+const ADDRESSES_PATH = './addresses.json';
+const AUTHORS_PATH = './authors.json';
 const CONTRACT_PATH = 'contracts/AVNBridge.sol';
+const INTERFACE_PATH = 'contracts/interfaces/IAVNBridge.sol';
+const CONTRACT_NAME = 'AVNBridge';
+const GWEI = 1e9;
+const VERIFICATION_DELAY_SECONDS = 40;
 
-task('deploy', 'deploy a new avn-bridge contract')
+task('deploy', 'deploy a new avn-bridge proxy')
   .addParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
-    await hre.run('compile');
-    const authors = require('./authors.json')[args.env];
+    const { ethers, network, run, upgrades } = hre;
+    const [signer] = await ethers.getSigners();
+    await run('compile');
+
+    const authors = require(AUTHORS_PATH)[args.env];
     const initArgs = [[], [], [], []];
 
     authors.forEach(author => {
@@ -28,161 +37,184 @@ task('deploy', 'deploy a new avn-bridge contract')
       initArgs[3].push(author.t2PublicKey);
     });
 
-    const [deployer] = await hre.ethers.getSigners();
-    console.log(`\nDeploying to ${hre.network.name} network using account ${deployer.address}...`);
+    console.log(`\nDeploying to ${network.name} network using account ${signer.address}...`);
+    const initialBalance = await ethers.provider.getBalance(signer.address);
+    const contract = await ethers.getContractFactory(CONTRACT_NAME);
+    const proxy = await upgrades.deployProxy(contract, initArgs, { kind: 'uups' });
+    await proxy.waitForDeployment();
+    const proxyAddress = await proxy.getAddress();
+    const impAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+    const addresses = fs.existsSync(ADDRESSES_PATH) ? require(ADDRESSES_PATH) : {};
+    const key = network.name + '_' + args.env;
+    addresses[key].avn = proxyAddress;
+    fs.writeFileSync(ADDRESSES_PATH, JSON.stringify(addresses, null, 2));
 
-    const balanceBefore = await deployer.getBalance();
-    const AVNBridge = await hre.ethers.getContractFactory('AVNBridge');
-    const avnBridge = await hre.upgrades.deployProxy(AVNBridge, initArgs, {
-      kind: 'uups'
-    });
-    await avnBridge.deployed();
-    const implementationAddress = await hre.upgrades.erc1967.getImplementationAddress(avnBridge.address);
-    const outFile = './addresses.json';
-    const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-    const key = hre.network.name + '_' + args.env;
-    addresses[key] = { avn: avnBridge.address, erc20token: args.token };
-    fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
+    console.log('Waiting to verify...');
+    await delay(VERIFICATION_DELAY_SECONDS);
+    await verify(run, impAddress);
+    await verify(run, proxyAddress);
 
-    await new Promise(r => setTimeout(r, 30000));
-    try {
-      await hre.run('verify:verify', { address: implementationAddress });
-      await hre.run('verify:verify', { address: avnBridge.address });
-    } catch (e) {}
-    console.log(`\nTotal cost: ${hre.ethers.utils.formatEther(balanceBefore.sub(await deployer.getBalance()))} ETH`);
-    console.log(`\nContract: ${avnBridge.address}`);
+    const finalBalance = await ethers.provider.getBalance(signer.address);
+    const cost = ethers.formatEther(initialBalance - finalBalance);
+    console.log(`\nDeployed ${CONTRACT_NAME} proxy at ${proxyAddress} (impl: ${impAddress}) for ${cost} ETH`);
+    console.log('\nDone');
   });
 
-task('lift', 'lift a token to the chain')
-  .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
-  .addParam('bridge', 'avn-bridge contract address')
-  .addParam('amount', 'amount to be lifted')
-  .addOptionalParam(
-    'token',
-    'The contract address of the token to be lifted. If "chain" is passed, it will use the ethereum chain native token. If "core" is passed it will pass the bridge core token'
-  )
-  .setAction(async (args, hre) => {
-    const bridge = args.bridge;
-    const amount = args.amount;
-    const recipient = args.recipient;
-    try {
-      const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', bridge);
-
-      // Handle the case of the chain native token
-      if (args.token === 'chain') {
-        const liftTx = await avnBridge.liftETH(recipient, { value: amount });
-        await liftTx.wait();
-        console.log(`Successfully lifted ${amount} of Ether for avn-bridge ${bridge} - lift tx: ${liftTx.hash}`);
-        return;
-      }
-
-      const token = args.token === undefined || args.token === 'core' ? await avnBridge.coreToken() : args.token;
-
-      console.log(`\nLifting token ${token} into avn-bridge @ ${bridge}`);
-      const tokenContract = await hre.ethers.getContractAt(`ERC20`, token);
-      const approvalTx = await tokenContract.approve(bridge, amount);
-      await approvalTx.wait();
-      console.log(`Successfully approved ${amount} tokens for avn-bridge ${bridge} - approval tx: ${approvalTx.hash}`);
-
-      console.log(`\nPeforming lift to avn-bridge @ ${bridge}`);
-      const liftTx = await avnBridge.lift(token, recipient, amount);
-      await liftTx.wait();
-      console.log(`Successfully lifted ${amount} tokens for avn-bridge ${bridge} - lift tx: ${liftTx.hash}`);
-    } catch (error) {
-      console.error(`Error occurred during lift:`, error);
-    }
-  });
-
-task('publishToken', 'deploy a new erc20 test token and publish it').setAction(async (args, hre) => {
-  mainnetCheck(hre);
-  await hre.run('compile');
-
-  const [deployer] = await hre.ethers.getSigners();
-  console.log(`\nDeploying an ERC20 to ${hre.network.name} network using account ${deployer.address}...`);
-  const supply = 100000;
-  const Token20 = await hre.ethers.getContractFactory('Token20');
-  const token20 = await Token20.deploy(supply);
-  await token20.deployed();
-  await new Promise(r => setTimeout(r, 30000));
-  await hre.run('verify:verify', { address: token20.address, constructorArguments: [supply] });
-
-  const outFile = './addresses.json';
-  const addresses = fs.existsSync(outFile) ? require(outFile) : {};
-  addresses[hre.network.name]['erc20token'] = token20.address;
-  fs.writeFileSync(outFile, JSON.stringify(addresses, null, 2));
-});
-
-task('update', 'updates the openzeppelin mainfest')
+task('prepare', 'prepares the openzeppelin manifest')
   .addPositionalParam('bridge', 'proxy address')
   .setAction(async (args, hre) => {
-    const chainId = hre.network.name === 'sepolia' ? 11155111n : 1n;
+    const { ethers, network, run, upgrades } = hre;
+    testContracts(false);
+    const originalInterface = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
+    const originalContract = fs.readFileSync('./' + CONTRACT_PATH, 'utf8');
+
+    const chainId = network.name === 'sepolia' ? 11155111n : 1n;
     const implementation = await upgrades.erc1967.getImplementationAddress(args.bridge);
     const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=contract&action=getsourcecode&address=${implementation}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await axios.get(url);
     const sources = JSON.parse(response.data.result[0].SourceCode.slice(1, -1)).sources;
-    const interfaceCode = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
-    const contractCode = fs.readFileSync('./' + CONTRACT_PATH, 'utf8');
 
     try {
       fs.writeFileSync('./' + INTERFACE_PATH, sources[INTERFACE_PATH].content);
       fs.writeFileSync('./' + CONTRACT_PATH, sources[CONTRACT_PATH].content);
-      await hre.run('compile');
-      const AVNBridge = await ethers.getContractFactory('AVNBridge');
-      await upgrades.forceImport(args.bridge, AVNBridge);
+      await run('compile');
+      const contract = await ethers.getContractFactory(CONTRACT_NAME);
+      await upgrades.forceImport(args.bridge, contract);
     } catch (e) {
       console.log(e);
+    } finally {
+      testContracts(true);
+      fs.writeFileSync('./' + INTERFACE_PATH, originalInterface);
+      fs.writeFileSync('./' + CONTRACT_PATH, originalContract);
     }
 
-    fs.writeFileSync('./' + INTERFACE_PATH, interfaceCode);
-    fs.writeFileSync('./' + CONTRACT_PATH, contractCode);
-
-    console.log('Done');
+    console.log('\nDone');
   });
 
 task('validate')
   .addPositionalParam('bridge', 'proxy address')
   .setAction(async (args, hre) => {
-    const { ethers } = hre;
-    await hre.run('compile');
+    const { ethers, run, upgrades } = hre;
+    await run('compile');
 
-    const contractFactory = await ethers.getContractFactory('AVNBridge');
-    console.log(`\nValidating new AVNBridge implementation...`);
-    await upgrades.validateImplementation(contractFactory);
+    console.log(`\nValidating new implementation...`);
+    const contract = await ethers.getContractFactory(CONTRACT_NAME);
+    await upgrades.validateImplementation(contract);
 
     console.log(`\nValidating upgrade safety for proxy at ${args.bridge}...`);
-    await upgrades.validateUpgrade(args.bridge, contractFactory);
-
+    await upgrades.validateUpgrade(args.bridge, contract);
     console.log('\nResult: Safe for upgrade');
   });
 
-task('implementation', 'release new implementation contract').setAction(async (_, hre) => {
-  const { ethers, network } = hre;
-  await hre.run('compile');
+task('implementation', 'deploy new implementation contract').setAction(async (_, hre) => {
+  const { ethers, network, run } = hre;
   const [signer] = await ethers.getSigners();
+  await run('compile');
+
   const initialBalance = await ethers.provider.getBalance(signer.address);
   console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
-  const contractFactory = await ethers.getContractFactory('AVNBridge');
-  const implementation = await contractFactory.deploy();
+  const contract = await ethers.getContractFactory(CONTRACT_NAME);
+  const implementation = await contract.deploy();
   await implementation.waitForDeployment();
   const impAddress = await implementation.getAddress();
+
+  console.log('Waiting to verify...');
+  await delay(VERIFICATION_DELAY_SECONDS);
+  await verify(run, impAddress);
 
   const finalBalance = await ethers.provider.getBalance(signer.address);
   const cost = ethers.formatEther(initialBalance - finalBalance);
   console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
 });
 
-function getWeb3Url(networkName) {
-  return `https://${networkName}.infura.io/v3/${INFURA_API_KEY}`;
+task('lift', 'lift a token to the chain')
+  .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
+  .addParam('bridge', 'avn-bridge address')
+  .addParam('amount', 'amount to lift')
+  .addParam('token', 'The token address. Pass "chain" to lift ETH.')
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
+    const { bridge, amount, recipient, token } = args;
+    try {
+      const avnBridge = await ethers.getContractAt('contracts/AVNBridge.sol:AVNBridge', bridge);
+
+      if (token === 'chain') {
+        const tx = await avnBridge.liftETH(recipient, { value: amount });
+        await tx.wait();
+        console.log(`Successfully lifted ${amount} of Ether for avn-bridge ${bridge} - lift tx: ${tx.hash}`);
+        return;
+      }
+
+      console.log(`\nLifting token ${token} into avn-bridge @ ${bridge}`);
+      const tokenContract = await ethers.getContractAt(`ERC20`, token);
+      const approvalTx = await tokenContract.approve(bridge, amount);
+      await approvalTx.wait();
+      console.log(`Successfully approved ${amount} tokens for avn-bridge ${bridge} - approval tx: ${approvalTx.hash}`);
+
+      console.log(`\nPeforming lift to avn-bridge @ ${bridge}`);
+      const tx = await avnBridge.lift(token, recipient, amount);
+      await tx.wait();
+      console.log(`Successfully lifted ${amount} tokens for avn-bridge ${bridge} - lift tx: ${tx.hash}`);
+    } catch (error) {
+      console.error(`Error occurred during lift:`, error);
+    }
+  });
+
+task('publishToken', 'deploy a new erc20 test token and publish it').setAction(async (_, hre) => {
+  const { ethers, network, run } = hre;
+  await run('compile');
+  const [signer] = await ethers.getSigners();
+  console.log(`\nDeploying to ${network.name} using ${signer.address}...`);
+  const supply = 100000;
+  const Token20 = await ethers.getContractFactory('Token20');
+  const token20 = await Token20.deploy(supply);
+  await token20.deployed();
+  console.log('Waiting to verify...');
+  await delay(VERIFICATION_DELAY_SECONDS);
+  await verify(run, token20.address, [supply]);
+  const addresses = fs.existsSync(ADDRESSES_PATH) ? require(ADDRESSES_PATH) : {};
+  addresses[network.name]['erc20token'] = token20.address;
+  fs.writeFileSync(ADDRESSES_PATH, JSON.stringify(addresses, null, 2));
+  console.log('\nDone');
+});
+
+function delay(seconds) {
+  return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+}
+
+async function verify(run, address, constructorArguments = []) {
+  try {
+    await run('verify:verify', { address, constructorArguments });
+  } catch (error) {
+    console.log(`Etherscan verification failed for ${address}: ${error.message}`);
+  }
+}
+
+function testContracts(enabled) {
+  const dir = './contracts/test';
+  const extension = enabled ? 'sol' : 'xxx';
+  for (const f of fs.readdirSync(dir)) fs.renameSync(path.join(dir, f), path.join(dir, f.slice(0, -3) + extension));
 }
 
 module.exports = {
   mocha: {
-    timeout: 100000000000
+    timeout: 300000
   },
   solidity: {
     compilers: [
       {
         version: '0.8.30',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100000,
+            details: { yul: true }
+          },
+          viaIR: true
+        }
+      },
+      {
+        version: '0.8.25',
         settings: {
           optimizer: {
             enabled: true,
@@ -195,22 +227,22 @@ module.exports = {
   },
   networks: {
     sepolia: {
-      url: getWeb3Url(`sepolia`),
-      accounts: [SEPOLIA_PRIVATE_KEY],
-      maxFeePerGas: 10000000000,
-      maxPriorityFeePerGas: 2000000000
+      url: SEPOLIA_RPC_URL,
+      accounts: [SEPOLIA_DEPLOYER_PRIVATE_KEY],
+      maxFeePerGas: 1 * GWEI,
+      maxPriorityFeePerGas: 1 * GWEI
     },
     hardhat: {
       accounts: {
-        accountsBalance: '5000000000000000000000000' // 5,000,000 ETH TO COVER ACCOUNTS FOR COVERAGE
+        accountsBalance: '5000000000000000000000000'
       }
     },
     mainnet: {
-      url: getWeb3Url(`mainnet`),
+      url: MAINNET_RPC_URL,
       ledgerAccounts: [MAINNET_DEPLOYER_LEDGER_ADDRESS],
       type: 2,
-      maxFeePerGas: 30 * 1e9,
-      maxPriorityFeePerGas: 2 * 1e9,
+      maxFeePerGas: 20 * GWEI,
+      maxPriorityFeePerGas: 2 * GWEI,
       timeout: 1200000,
       pollingInterval: 4000
     }
@@ -219,6 +251,7 @@ module.exports = {
     apiKey: ETHERSCAN_API_KEY
   },
   gasReporter: {
-    enabled: true
+    enabled: true,
+    showMethodSig: true
   }
 };

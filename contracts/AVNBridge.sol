@@ -24,9 +24,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   using SafeERC20 for IERC20;
 
   IERC1820Registry private constant ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+  string private constant EIP712_PREFIX = '\x19\x01';
   bytes32 private constant ERC777_TOKEN_HASH = keccak256('ERC777Token');
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = keccak256('ERC777TokensRecipient');
-  string private constant EIP712_PREFIX = '\x19\x01';
   bytes32 private constant VERSION_HASH = keccak256('1');
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
@@ -203,17 +203,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Lets the owner rotate author T1 addresses.
    */
-  function rotateT1(address[] calldata newT1Addresses, uint256 startID, uint256 endID) external onlyOwner {
-    uint256 numToRotate = endID - startID + 1;
-    if (numToRotate != newT1Addresses.length) revert();
+  function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external onlyOwner {
+    uint256 rotations = ids.length;
+    if (rotations != newAddresses.length) revert MissingKeys();
 
-    for (uint256 i; i < numToRotate; i++) {
-      uint256 currentID = startID + i;
-      address oldAddress = idToT1Address[currentID];
+    uint256 id;
+    address newAddress;
+    address oldAddress;
+
+    for (uint256 i; i < rotations; i++) {
+      id = ids[i];
+      newAddress = newAddresses[i];
+      if (newAddress == address(0)) revert AddressIsZero();
+      oldAddress = idToT1Address[id];
+      if (oldAddress == address(0)) revert NotAnAuthor();
       t1AddressToId[oldAddress] = 0;
-      address newAddress = newT1Addresses[i];
-      idToT1Address[currentID] = newAddress;
-      t1AddressToId[newAddress] = currentID;
+      idToT1Address[id] = newAddress;
+      t1AddressToId[newAddress] = id;
     }
   }
 
