@@ -203,17 +203,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Lets the owner rotate author T1 addresses.
    */
-  function rotateT1(address[] calldata newT1Addresses, uint256 startID, uint256 endID) external onlyOwner {
-    uint256 numToRotate = endID - startID + 1;
-    if (numToRotate != newT1Addresses.length) revert();
+  function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external onlyOwner {
+    uint256 rotations = ids.length;
+    if (rotations != newAddresses.length) revert MissingKeys();
 
-    for (uint256 i; i < numToRotate; i++) {
-      uint256 currentID = startID + i;
-      address oldAddress = idToT1Address[currentID];
+    uint256 id;
+    address newAddress;
+    address oldAddress;
+
+    for (uint256 i; i < rotations; i++) {
+      id = ids[i];
+      newAddress = newAddresses[i];
+      if (newAddress == address(0)) revert AddressIsZero();
+      oldAddress = idToT1Address[id];
+      if (oldAddress == address(0)) revert NotAnAuthor();
       t1AddressToId[oldAddress] = 0;
-      address newAddress = newT1Addresses[i];
-      idToT1Address[currentID] = newAddress;
-      t1AddressToId[newAddress] = currentID;
+      idToT1Address[id] = newAddress;
+      t1AddressToId[newAddress] = id;
     }
   }
 

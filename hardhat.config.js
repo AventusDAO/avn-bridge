@@ -96,7 +96,7 @@ task('validate')
   .setAction(async (args, hre) => {
     const { ethers, run, upgrades } = hre;
     await run('compile');
-    
+
     console.log(`\nValidating new implementation...`);
     const contract = await ethers.getContractFactory(CONTRACT_NAME);
     await upgrades.validateImplementation(contract);
