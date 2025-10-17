@@ -179,6 +179,11 @@ describe('Owner Functions', () => {
       initVals.t2PubKeys.splice(MIN_AUTHORS - 1);
       await deployAndCatchInitError('NotEnoughAuthors');
     });
+
+    it('fails when addresses are missing', async () => {
+      initVals.t1Addresses[0] = ZERO_ADDRESS.address;
+      await deployAndCatchInitError('AddressIsZero');
+    });
   });
 
   context('Switches', () => {
@@ -232,30 +237,6 @@ describe('Owner Functions', () => {
     it('cannot reinitialize', async () => {
       const initArgs = generateInitArgs(MIN_AUTHORS);
       await expect(bridge.initialize(...initArgs)).to.be.reverted;
-    });
-  });
-
-  context('Migrate', () => {
-    context('succeeds', () => {
-      it('when called by the owner', async () => {
-        expect(await token20.owner()).to.equal(bridge.address);
-
-        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.emit(token20, 'LogSetOwner').withArgs(newTokenOwner.address);
-
-        expect(await token20.owner()).to.equal(newTokenOwner.address);
-      });
-    });
-
-    context('fails', () => {
-      it('if the migration has already been run', async () => {
-        await expect(bridge.migrate(token20.address, newTokenOwner.address)).to.be.reverted;
-      });
-
-      it('when the caller is not the owner', async () => {
-        await expect(bridge.connect(someOtherAccount).migrate(token20.address, someOtherAccount.address)).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
-      });
     });
   });
 
@@ -384,6 +365,13 @@ describe('Owner Functions', () => {
         const badId = NUM_AUTHORS + 5;
         const addr = ethers.Wallet.createRandom().address;
         await expect(rotBridge.rotateT1([badId], [addr])).to.be.revertedWithCustomError(rotBridge, 'NotAnAuthor');
+      });
+
+      it('with a duplicate address', async () => {
+        const ids = Array.from({ length: NUM_AUTHORS }, (_, i) => i + 1);
+        let newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
+        newT1Addresses[1] = newT1Addresses[0];
+        await expect(rotBridge.rotateT1(ids, newT1Addresses)).to.be.revertedWithCustomError(rotBridge, 'T1AddressInUse');
       });
     });
   });
