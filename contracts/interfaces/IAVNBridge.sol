@@ -13,6 +13,7 @@ interface IAVNBridge {
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLowerClaimed(uint32 indexed lowerId);
+  event LogLowerReverted(uint32 indexed lowerId, address indexed recipient, address indexed revertedBy);
 
   // Owner only
   function toggleAuthors(bool state) external;
@@ -29,6 +30,7 @@ interface IAVNBridge {
   function lift(address token, bytes32 t2PubKey, uint256 amount) external;
   function liftETH(bytes32 t2PubKey) external payable;
   function claimLower(bytes calldata proof) external;
+  function revertLower(bytes calldata proof) external;
   function checkLower(
     bytes calldata proof
   )
@@ -39,6 +41,8 @@ interface IAVNBridge {
       uint256 amount,
       address recipient,
       uint32 lowerId,
+      bytes32 t2Sender,
+      uint32 t2Timestamp,
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,

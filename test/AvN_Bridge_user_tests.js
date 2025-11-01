@@ -232,7 +232,7 @@ describe('Lifting and lowering', () => {
         const avnEthBalanceBefore = await ethers.provider.getBalance(bridge.address);
         const lowererEthBalanceBefore = await ethers.provider.getBalance(owner.address);
 
-        const [lowerProof, _] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmount, owner);
+        const [lowerProof, _] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmount, owner, someT2PubKey);
         const txResponse = await bridge.claimLower(lowerProof);
         const receipt = await txResponse.wait();
         const txCost = receipt.gasUsed * receipt.gasPrice;
@@ -251,7 +251,7 @@ describe('Lifting and lowering', () => {
         const avnBalanceBefore = await token20.balanceOf(bridge.address);
         const senderBalBefore = await token20.balanceOf(owner.address);
 
-        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, owner);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, owner, someT2PubKey);
 
         await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
         expect(await token20.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
@@ -264,7 +264,7 @@ describe('Lifting and lowering', () => {
         const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const senderBalBefore = await token777.balanceOf(owner.address);
 
-        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, owner);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, owner, someT2PubKey);
 
         await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
         expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
@@ -277,7 +277,7 @@ describe('Lifting and lowering', () => {
         const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const recipientBalBefore = await token777.balanceOf(token20.address);
 
-        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, token20);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, token20, someT2PubKey);
 
         await expect(bridge.connect(someOtherAccount).claimLower(lowerProof)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
         expect(await token777.balanceOf(bridge.address)).to.equal(avnBalanceBefore - lowerAmount);
@@ -290,7 +290,7 @@ describe('Lifting and lowering', () => {
         const avnBalanceBefore = await token777.balanceOf(bridge.address);
         const senderBalBefore = await token777.balanceOf(owner.address);
 
-        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, bridge);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, bridge, someT2PubKey);
 
         const tx = bridge.connect(someOtherAccount).claimLower(lowerProof);
         await expect(tx).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
@@ -305,7 +305,7 @@ describe('Lifting and lowering', () => {
       let lowerAmountLocal = 100n;
 
       beforeEach(async () => {
-        [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmountLocal, owner);
+        [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmountLocal, owner, someT2PubKey);
       });
 
       it('lowering is disabled', async () => {
@@ -327,12 +327,12 @@ describe('Lifting and lowering', () => {
       it('attempting to lower ETH to an address which cannot receive it', async () => {
         await bridge.liftETH(someT2PubKey, { value: lowerAmountLocal });
         const addressCannotReceiveETH = token20;
-        [lowerProof] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmountLocal, addressCannotReceiveETH);
+        [lowerProof] = await createLowerProof(bridge, PSEUDO_ETH, lowerAmountLocal, addressCannotReceiveETH, someT2PubKey);
         await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'PaymentFailed');
       });
 
       it('the recipient address is missing', async () => {
-        [lowerProof] = await createLowerProof(bridge, token20, lowerAmountLocal, ZERO_ADDRESS);
+        [lowerProof] = await createLowerProof(bridge, token20, lowerAmountLocal, ZERO_ADDRESS, someT2PubKey);
         await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'AddressIsZero');
       });
     });
@@ -341,8 +341,9 @@ describe('Lifting and lowering', () => {
   context('Check lower', () => {
     it('results are as expected for a valid, unused proof', async () => {
       const amount = 123n;
-      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token20, amount, owner);
-      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+      const timestamp = Math.floor(Date.now() / 1000);
+      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token20, amount, owner, someT2PubKey, timestamp);
+      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await bridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
@@ -350,6 +351,8 @@ describe('Lifting and lowering', () => {
       expect(checkedAmount).to.equal(amount);
       expect(recipient).to.equal(owner.address);
       expect(lowerId).to.equal(expectedLowerId);
+      expect(t2Sender).to.equal(someT2PubKey);
+      expect(t2Timestamp).to.equal(timestamp);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
@@ -359,10 +362,11 @@ describe('Lifting and lowering', () => {
     it('results are as expected for a valid, used proof', async () => {
       const amount = 456n;
       await token777.send(bridge.address, amount, someT2PubKey);
-      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token777, amount, owner);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token777, amount, owner, someT2PubKey, timestamp);
       await bridge.claimLower(lowerProof);
 
-      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await bridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
@@ -370,6 +374,8 @@ describe('Lifting and lowering', () => {
       expect(checkedAmount).to.equal(amount);
       expect(recipient).to.equal(owner.address);
       expect(lowerId).to.equal(expectedLowerId);
+      expect(t2Sender).to.equal(someT2PubKey);
+      expect(t2Timestamp).to.equal(timestamp);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
@@ -380,11 +386,12 @@ describe('Lifting and lowering', () => {
       const amount = 789n;
       await token20.approve(bridge.address, amount);
       await bridge.lift(token20.address, someT2PubKey, amount);
-      const [proofA, lowerIdA] = await createLowerProof(bridge, token20, amount, owner);
-      const [proofB] = await createLowerProof(bridge, token20, amount, owner);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const [proofA, lowerIdA] = await createLowerProof(bridge, token20, amount, owner, someT2PubKey, timestamp);
+      const [proofB] = await createLowerProof(bridge, token20, amount, owner, someT2PubKey, timestamp);
       const confirmationsStart = 154;
       const invalidProof = ethers.concat([proofA.slice(0, confirmationsStart), '0x' + proofB.slice(confirmationsStart)]);
-      const [token, checkedAmount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await bridge.checkLower(invalidProof);
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
 
@@ -392,6 +399,8 @@ describe('Lifting and lowering', () => {
       expect(checkedAmount).to.equal(amount);
       expect(recipient).to.equal(owner.address);
       expect(lowerId).to.equal(lowerIdA);
+      expect(t2Sender).to.equal(someT2PubKey);
+      expect(t2Timestamp).to.equal(timestamp);
       expect(confirmationsRequired).to.equal(numConfirmationsRequired);
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
@@ -401,13 +410,15 @@ describe('Lifting and lowering', () => {
     it('results are as expected for a completely invalid proof', async () => {
       const emptyAddress = ZERO_ADDRESS.address;
       const shortProof = randomBytes32();
-      const [token, amount, recipient, lowerId, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
+      const [token, amount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
         await bridge.checkLower(shortProof);
 
       expect(token).to.equal(emptyAddress);
       expect(amount).to.equal(0);
       expect(recipient).to.equal(emptyAddress);
       expect(lowerId).to.equal(0);
+      expect(t2Sender).to.equal(EMPTY_BYTES_32);
+      expect(t2Timestamp).to.equal(0);
       expect(confirmationsRequired).to.equal(0);
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
@@ -415,12 +426,122 @@ describe('Lifting and lowering', () => {
     });
   });
 
+  context('Reverting lowers', () => {
+    const liftAmount = 1_000n;
+    const lowerAmount = 123n;
+    const OWNER_DELAY = 72 * 60 * 60;
+
+    context('succeeds', () => {
+      it('lets the recipient revert the lower, leaving balances unchanged, emitting the correct lift event, and using up the lower proof', async () => {
+        await token20.approve(bridge.address, liftAmount);
+        await bridge.lift(token20.address, someT2PubKey, liftAmount);
+        const recipient = someOtherAccount;
+
+        const avnBalBefore = await token20.balanceOf(bridge.address);
+        const recipBalBefore = await token20.balanceOf(recipient.address);
+
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, recipient, someT2PubKey);
+
+        await expect(bridge.connect(recipient).revertLower(lowerProof))
+          .to.emit(bridge, 'LogLowerReverted')
+          .withArgs(lowerId, recipient.address, recipient.address)
+          .and.to.emit(bridge, 'LogLifted')
+          .withArgs(token20.address, someT2PubKey, lowerAmount);
+
+        // Revert should not transfer tokens to the recipient on T1
+        expect(await token20.balanceOf(bridge.address)).to.equal(avnBalBefore);
+        expect(await token20.balanceOf(recipient.address)).to.equal(recipBalBefore);
+
+        // Lower has been marked off
+        await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+      });
+
+      it('allows the owner to revert on behalf of the recipient after 72 hours have passed from the proof timestamp', async () => {
+        await token777.send(bridge.address, liftAmount, someT2PubKey);
+
+        const now = Math.floor(Date.now() / 1000);
+        const oldT2Timestamp = now - OWNER_DELAY - 5;
+
+        const avnBalBefore = await token777.balanceOf(bridge.address);
+        const recipient = someOtherAccount;
+
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token777, lowerAmount, recipient, someT2PubKey, oldT2Timestamp);
+
+        await expect(bridge.connect(owner).revertLower(lowerProof))
+          .to.emit(bridge, 'LogLowerReverted')
+          .withArgs(lowerId, recipient.address, owner.address)
+          .and.to.emit(bridge, 'LogLifted')
+          .withArgs(token777.address, someT2PubKey, lowerAmount);
+
+        expect(await token777.balanceOf(bridge.address)).to.equal(avnBalBefore);
+
+        await expect(bridge.connect(recipient).claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+      });
+    });
+
+    context('fails when', () => {
+      it('a non-recipient, non-owner attempts to revert', async () => {
+        await token20.approve(bridge.address, lowerAmount);
+        await bridge.lift(token20.address, someT2PubKey, lowerAmount);
+        const recipient = owner;
+        const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, recipient, someT2PubKey);
+        await expect(bridge.connect(someOtherAccount).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'PermissionDenied');
+      });
+
+      it('the owner attempts to revert before 72 hours have passed', async () => {
+        await token777.send(bridge.address, lowerAmount, someT2PubKey);
+        const recipient = someOtherAccount;
+        const [lowerProof] = await createLowerProof(bridge, token777, lowerAmount, recipient, someT2PubKey);
+
+        await expect(bridge.connect(owner).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'PermissionDenied');
+      });
+
+      it('lifting is disabled', async () => {
+        await token20.approve(bridge.address, lowerAmount);
+        await bridge.lift(token20.address, someT2PubKey, lowerAmount);
+
+        const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, owner, someT2PubKey);
+
+        await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
+        await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
+        await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
+
+        await bridge.revertLower(lowerProof);
+      });
+
+      it('the lower has already been claimed', async () => {
+        await token20.approve(bridge.address, lowerAmount);
+        await bridge.lift(token20.address, someT2PubKey, lowerAmount);
+
+        const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, owner, someT2PubKey);
+
+        await bridge.claimLower(lowerProof);
+        await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+      });
+
+      it('the lower has already been reverted', async () => {
+        await token20.approve(bridge.address, lowerAmount);
+        await bridge.lift(token20.address, someT2PubKey, lowerAmount);
+
+        const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, owner, someT2PubKey);
+
+        await bridge.revertLower(lowerProof);
+        await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+      });
+
+      it('the proof is invalid', async () => {
+        await expect(bridge.revertLower(randomBytes32())).to.be.revertedWithCustomError(bridge, 'InvalidProof');
+      });
+    });
+  });
+
   context('Reentrancy prevention', () => {
     const reentryPoint = {
       ClaimLower: 0,
-      ETHLift: 1,
-      ERC20Lift: 2,
-      ERC777Lift: 3
+      RevertLower: 1,
+      ETHLift: 2,
+      ERC20Lift: 3,
+      ERC777Lift: 4
     };
 
     const amount = 100n;
@@ -435,6 +556,11 @@ describe('Lifting and lowering', () => {
 
     it('the claimLower re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ClaimLower);
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
+    });
+
+    it('the revertLower re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.RevertLower);
       await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
 
