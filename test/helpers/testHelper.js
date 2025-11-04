@@ -26,7 +26,9 @@ const PROOF_TYPES = {
       { name: 'token', type: 'address' },
       { name: 'amount', type: 'uint256' },
       { name: 'recipient', type: 'address' },
-      { name: 'lowerId', type: 'uint32' }
+      { name: 'lowerId', type: 'uint32' },
+      { name: 't2Sender', type: 'bytes32' },
+      { name: 't2Timestamp', type: 'uint32' }
     ]
   },
   permit: {
@@ -78,11 +80,11 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function createLowerProof(bridge, token, amount, recipient) {
+async function createLowerProof(bridge, token, amount, recipient, t2Sender, t2Timestamp = Math.floor(Date.now() / 1000)) {
   const confirmationsRequired = await getNumRequiredConfirmations(bridge);
   const domain = await getDomain(bridge);
 
-  const args = [token.address, amount, recipient.address, ++lowerId];
+  const args = [token.address, amount, recipient.address, ++lowerId, t2Sender, t2Timestamp];
   const message = toEIP712Message.claimLower(args);
 
   const confirmations = [];
@@ -96,7 +98,9 @@ async function createLowerProof(bridge, token, amount, recipient) {
     ethers.getBytes(token.address),
     ethers.toBeHex(amount, 32),
     ethers.getBytes(recipient.address),
-    ethers.toBeHex(lowerId, 4)
+    ethers.toBeHex(lowerId, 4),
+    ethers.getBytes(t2Sender),
+    ethers.toBeHex(t2Timestamp, 4)
   ]);
 
   const lowerProof = ethers.concat([lowerDataBytes, confirmationsBytes]);
@@ -248,6 +252,7 @@ function printErrorCodes() {
     'NotEnoughAuthors()',
     'PaymentFailed()',
     'PendingOwnerOnly()',
+    'PermissionDenied()',
     'RootHashIsUsed()',
     'T1AddressInUse(address)',
     'T2KeyInUse(bytes32)',
@@ -285,7 +290,7 @@ function toAuthorAccount(account) {
 
 const toEIP712Message = {
   addAuthor: args => ({ t1PubKey: args[0], t2PubKey: args[1], expiry: args[2], t2TxId: args[3] }),
-  claimLower: args => ({ token: args[0], amount: args[1], recipient: args[2], lowerId: args[3] }),
+  claimLower: args => ({ token: args[0], amount: args[1], recipient: args[2], lowerId: args[3], t2Sender: args[4], t2Timestamp: args[5] }),
   publishRoot: args => ({ rootHash: args[0], expiry: args[1], t2TxId: args[2] }),
   removeAuthor: args => ({ t2PubKey: args[0], t1PubKey: args[1], expiry: args[2], t2TxId: args[3] })
 };
