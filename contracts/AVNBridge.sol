@@ -164,11 +164,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _initialiseAuthors(t1Addresses, t1PubKeysLHS, t1PubKeysRHS, t2PubKeys);
   }
 
-  function migrate(address avt, address newOwner) external onlyOwner {
-    (bool success, ) = avt.call(abi.encodeWithSignature('setOwner(address)', newOwner));
-    if (!success) revert();
-  }
-
   /**
    * @dev EIP712 Domain name.
    */
@@ -215,6 +210,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       id = ids[i];
       newAddress = newAddresses[i];
       if (newAddress == address(0)) revert AddressIsZero();
+      if (t1AddressToId[newAddress] != 0) revert T1AddressInUse(newAddress);
       oldAddress = idToT1Address[id];
       if (oldAddress == address(0)) revert NotAnAuthor();
       t1AddressToId[oldAddress] = 0;
@@ -490,6 +486,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
     do {
       t1Address = t1Addresses[i];
+      if (t1Address == address(0)) revert AddressIsZero();
       t1PubKey = abi.encode(t1PubKeysLHS[i], t1PubKeysRHS[i]);
       if (address(uint160(uint256(keccak256(t1PubKey)))) != t1Address) revert AddressMismatch();
       if (t1AddressToId[t1Address] != 0) revert T1AddressInUse(t1Address);
