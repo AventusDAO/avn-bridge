@@ -213,10 +213,7 @@ describe('Lifting and lowering', () => {
       });
 
       it('calling bridge tokensReceived hook directly when not a registered contract', async () => {
-        await expect(bridge.tokensReceived(owner.address, owner.address, bridge.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(
-          bridge,
-          'InvalidERC777'
-        );
+        await expect(bridge.tokensReceived(owner.address, owner.address, bridge.address, 100n, someT2PubKey, '0x')).to.be.revertedWithCustomError(bridge, 'InvalidERC777');
       });
     });
   });

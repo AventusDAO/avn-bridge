@@ -29,8 +29,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
-  bytes32 private constant LOWER_DATA_TYPEHASH =
-    keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
+  bytes32 private constant LOWER_DATA_TYPEHASH = keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
 

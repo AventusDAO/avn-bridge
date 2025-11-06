@@ -142,10 +142,7 @@ describe('Author Functions', () => {
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, t2TxId], -halfSet);
         const duplicateConfirmations = confirmations + strip_0x(confirmations);
-        await expect(bridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
-          bridge,
-          'BadConfirmations'
-        );
+        await expect(bridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
       });
     });
   });
@@ -195,9 +192,10 @@ describe('Author Functions', () => {
         const t2TxId = randomT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
 
-        await expect(
-          bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
+        await expect(bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'AuthorsDisabled'
+        );
 
         await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
       });
@@ -231,9 +229,10 @@ describe('Author Functions', () => {
         const expiry = (await getCurrentBlockTimestamp()) - 1;
         const t2TxId = randomT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
-        await expect(
-          bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(bridge, 'WindowExpired');
+        await expect(bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'WindowExpired'
+        );
       });
 
       it('the author is already active', async () => {
@@ -241,9 +240,10 @@ describe('Author Functions', () => {
         const expiry = await getValidExpiry();
         const t2TxId = randomT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
-        await expect(
-          bridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(bridge, 'AlreadyAdded');
+        await expect(bridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'AlreadyAdded'
+        );
       });
 
       it('trying to re-add a removed author with a different public key', async () => {
@@ -278,9 +278,10 @@ describe('Author Functions', () => {
         const t2TxId = randomT2TxId();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
-        await expect(
-          bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
-        ).to.be.revertedWithCustomError(bridge, 'T2KeyInUse');
+        await expect(bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'T2KeyInUse'
+        );
       });
     });
   });
