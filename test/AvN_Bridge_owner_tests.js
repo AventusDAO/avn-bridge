@@ -43,16 +43,12 @@ describe('Owner Functions', () => {
   context('Transferring Ownership', () => {
     context('succeeds', () => {
       it('when called by the owner', async () => {
-        await expect(bridge.transferOwnership(someOtherAccount.address))
-          .to.emit(bridge, 'OwnershipTransferStarted')
-          .withArgs(owner.address, someOtherAccount.address);
+        await expect(bridge.transferOwnership(someOtherAccount.address)).to.emit(bridge, 'OwnershipTransferStarted').withArgs(owner.address, someOtherAccount.address);
 
         expect(await bridge.pendingOwner()).to.equal(someOtherAccount.address);
         expect(await bridge.owner()).to.equal(owner.address);
 
-        await expect(bridge.connect(someOtherAccount).acceptOwnership())
-          .to.emit(bridge, 'OwnershipTransferred')
-          .withArgs(owner.address, someOtherAccount.address);
+        await expect(bridge.connect(someOtherAccount).acceptOwnership()).to.emit(bridge, 'OwnershipTransferred').withArgs(owner.address, someOtherAccount.address);
 
         expect(await bridge.pendingOwner()).to.equal(ZERO_ADDRESS.address);
         expect(await bridge.owner()).to.equal(someOtherAccount.address);
@@ -189,7 +185,7 @@ describe('Owner Functions', () => {
   context('setClaimedLowers', () => {
     const toWord = bitIdxs => bitIdxs.reduce((w, b) => w | (1n << BigInt(b)), 0n);
 
-    it('owner can set a single bucket and query lowerClaimed()', async () => {
+    it('owner can set IDs in a single bucket', async () => {
       const ids = [1, 2, 4, 6, 8, 9];
       const word = toWord(ids);
       await bridge.setClaimedLowers([0], [word]);
@@ -203,7 +199,7 @@ describe('Owner Functions', () => {
       }
     });
 
-    it('owner can set multiple buckets including the 255/256 boundary', async () => {
+    it('owner can set IDs in multiple buckets including IDs on the boundary', async () => {
       const bucket0 = toWord([255]); // ID 255
       const bucket1 = toWord([0, 3]); // IDs 256, 259
 
@@ -218,7 +214,7 @@ describe('Owner Functions', () => {
       }
     });
 
-    it('setClaimedLowers overwrites bucket contents', async () => {
+    it('buckets can be overwritten', async () => {
       const first = toWord([1, 2, 4]);
       await bridge.setClaimedLowers([0], [first]);
 
@@ -263,7 +259,7 @@ describe('Owner Functions', () => {
       expect(await bridge.lowerClaimed(4)).to.equal(false);
     });
 
-    it('accepts empty arrays as a no-op', async () => {
+    it('does nothing with empty arrays', async () => {
       await bridge.setClaimedLowers([], []);
       expect(await bridge.lowerClaimed(0)).to.equal(false);
       expect(await bridge.lowerClaimed(1)).to.equal(false);
@@ -282,7 +278,7 @@ describe('Owner Functions', () => {
       expect(await bridge.lowerClaimed(id + 1)).to.equal(false);
     });
 
-    it('bulk set ~7k lowers with bit 23 cleared per bucket', async () => {
+    it('bulk set ~7k lowers with single bit (bit 23) cleared per bucket', async () => {
       const NUM_BUCKETS = 28;
       const START_BUCKET = 100; // Start past earlier sets so we get fair gas estimates using fresh storage
       const CLEARED_BIT = 23n;
@@ -392,9 +388,7 @@ describe('Owner Functions', () => {
     context('fails', function () {
       it('when the caller is not the owner', async () => {
         const newBridge = await upgradeContract.deploy();
-        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith('Ownable: caller is not the owner');
       });
     });
   });
