@@ -43,12 +43,16 @@ describe('Owner Functions', () => {
   context('Transferring Ownership', () => {
     context('succeeds', () => {
       it('when called by the owner', async () => {
-        await expect(bridge.transferOwnership(someOtherAccount.address)).to.emit(bridge, 'OwnershipTransferStarted').withArgs(owner.address, someOtherAccount.address);
+        await expect(bridge.transferOwnership(someOtherAccount.address))
+          .to.emit(bridge, 'OwnershipTransferStarted')
+          .withArgs(owner.address, someOtherAccount.address);
 
         expect(await bridge.pendingOwner()).to.equal(someOtherAccount.address);
         expect(await bridge.owner()).to.equal(owner.address);
 
-        await expect(bridge.connect(someOtherAccount).acceptOwnership()).to.emit(bridge, 'OwnershipTransferred').withArgs(owner.address, someOtherAccount.address);
+        await expect(bridge.connect(someOtherAccount).acceptOwnership())
+          .to.emit(bridge, 'OwnershipTransferred')
+          .withArgs(owner.address, someOtherAccount.address);
 
         expect(await bridge.pendingOwner()).to.equal(ZERO_ADDRESS.address);
         expect(await bridge.owner()).to.equal(someOtherAccount.address);
@@ -388,7 +392,9 @@ describe('Owner Functions', () => {
     context('fails', function () {
       it('when the caller is not the owner', async () => {
         const newBridge = await upgradeContract.deploy();
-        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
       });
     });
   });

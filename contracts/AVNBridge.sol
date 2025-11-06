@@ -27,15 +27,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   string private constant EIP712_PREFIX = '\x19\x01';
 
-  bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
-  bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
-  bytes32 private constant LOWER_DATA_TYPEHASH = keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
-  bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
-  bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
-
   bytes32 private constant ERC777_TOKEN_HASH = keccak256('ERC777Token');
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = keccak256('ERC777TokensRecipient');
   bytes32 private constant VERSION_HASH = keccak256('1');
+
+  bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
+  bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant LOWER_DATA_TYPEHASH =
+    keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
+  bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
 
   address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -161,7 +162,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _lock = UNLOCKED;
   }
 
-  function initialize(address[] calldata t1Addresses, bytes32[] calldata t1PubKeysLHS, bytes32[] calldata t1PubKeysRHS, bytes32[] calldata t2PubKeys) public initializer {
+  function initialize(
+    address[] calldata t1Addresses,
+    bytes32[] calldata t1PubKeysLHS,
+    bytes32[] calldata t1PubKeysRHS,
+    bytes32[] calldata t2PubKeys
+  ) public initializer {
     __Ownable_init();
     __UUPSUpgradeable_init();
     ERC1820_REGISTRY.setInterfaceImplementer(address(this), ERC777_TOKENS_RECIPIENT_HASH, address(this));
@@ -520,7 +526,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
-  function _initialiseAuthors(address[] calldata t1Addresses, bytes32[] calldata t1PubKeysLHS, bytes32[] calldata t1PubKeysRHS, bytes32[] calldata t2PubKeys) private {
+  function _initialiseAuthors(
+    address[] calldata t1Addresses,
+    bytes32[] calldata t1PubKeysLHS,
+    bytes32[] calldata t1PubKeysRHS,
+    bytes32[] calldata t2PubKeys
+  ) private {
     uint256 numAuth = t1Addresses.length;
     if (numAuth < MINIMUM_AUTHOR_SET) revert NotEnoughAuthors();
     if (t1PubKeysLHS.length != numAuth || t1PubKeysRHS.length != numAuth || t2PubKeys.length != numAuth) revert MissingKeys();
@@ -542,7 +553,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } while (i < numAuth);
   }
 
-  function _processLower(address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp, bytes calldata lowerProof) private {
+  function _processLower(
+    address token,
+    uint256 amount,
+    address recipient,
+    uint32 lowerId,
+    bytes32 t2Sender,
+    uint32 t2Timestamp,
+    bytes calldata lowerProof
+  ) private {
     if (lowerClaimed(lowerId)) revert LowerIsUsed();
     uint256 bucket = uint256(lowerId) >> 8;
     claimedLowers[bucket] |= 1 << (uint256(lowerId) & 255);
@@ -569,7 +588,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       }
     }
 
-    id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0 ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)] : 0;
+    id = v < 29 && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+      ? t1AddressToId[ecrecover(ethSignedPrefixMsgHash, v, r, s)]
+      : 0;
   }
 
   function _releaseFunds(address token, uint256 amount, address recipient) private {
@@ -605,7 +626,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
 
-  function _toLowerDataProofHash(address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) private view returns (bytes32) {
+  function _toLowerDataProofHash(
+    address token,
+    uint256 amount,
+    address recipient,
+    uint32 lowerId,
+    bytes32 t2Sender,
+    uint32 t2Timestamp
+  ) private view returns (bytes32) {
     bytes32 structHash = keccak256(abi.encode(LOWER_DATA_TYPEHASH, token, amount, recipient, lowerId, t2Sender, t2Timestamp));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
