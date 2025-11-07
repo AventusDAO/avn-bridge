@@ -98,7 +98,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
-  mapping(uint256 => uint256) private claimedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit
+  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
@@ -179,12 +179,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Temporary owner function to port the claimed lowers map over to the new optimized format.
+   * @dev Temporary owner function to migrate existing claimed lowers.
    */
-  function setClaimedLowers(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
+  function setUsedLowers(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
     if (buckets.length != words.length) revert();
     for (uint256 i; i < buckets.length; ) {
-      claimedLowers[buckets[i]] = words[i];
+      usedLowers[buckets[i]] = words[i];
       unchecked {
         ++i;
       }
@@ -359,7 +359,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Checks a lower proof. Returns the details, proof validity, and claim status.
+   * @dev Checks a lower proof. Returns the details of the lower, proof validity, and used status.
    */
   function checkLower(
     bytes calldata lowerProof
@@ -376,7 +376,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,
-      bool lowerIsClaimed
+      bool lowerIsUsed
     )
   {
     if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
@@ -387,7 +387,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bool[] memory confirmed = new bool[](nextAuthorId);
     uint256 confirmationsOffset;
 
-    lowerIsClaimed = lowerClaimed(lowerId);
+    lowerIsUsed = lowerUsed(lowerId);
     confirmationsProvided = numConfirmationsProvided;
     confirmationsRequired = _requiredConfirmations();
     assembly {
@@ -409,9 +409,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function claimLower(bytes calldata lowerProof) external whenLowerEnabled lock {
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) = _extractLowerData(lowerProof);
     if (recipient == address(0)) revert AddressIsZero();
+
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
     _releaseFunds(token, amount, recipient);
-
     emit LogLowerClaimed(lowerId);
   }
 
@@ -459,10 +459,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Returns the claim status of the lower.
    */
-  function lowerClaimed(uint32 lowerId) public view returns (bool) {
+  function lowerUsed(uint32 lowerId) public view returns (bool) {
     uint256 bucket = uint256(lowerId) >> 8;
     uint256 mask = 1 << (uint256(lowerId) & 255);
-    return (claimedLowers[bucket] & mask) != 0;
+    return (usedLowers[bucket] & mask) != 0;
   }
 
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
@@ -562,9 +562,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint32 t2Timestamp,
     bytes calldata lowerProof
   ) private {
-    if (lowerClaimed(lowerId)) revert LowerIsUsed();
+    if (lowerUsed(lowerId)) revert LowerIsUsed();
     uint256 bucket = uint256(lowerId) >> 8;
-    claimedLowers[bucket] |= 1 << (uint256(lowerId) & 255);
+    usedLowers[bucket] |= 1 << (uint256(lowerId) & 255);
 
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
     _verifyConfirmations(true, proofHash, lowerProof[LOWER_DATA_LENGTH:]);
