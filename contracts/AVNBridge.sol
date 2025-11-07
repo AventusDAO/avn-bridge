@@ -24,25 +24,33 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   using SafeERC20 for IERC20;
 
   IERC1820Registry private constant ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+
   string private constant EIP712_PREFIX = '\x19\x01';
+
   bytes32 private constant ERC777_TOKEN_HASH = keccak256('ERC777Token');
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = keccak256('ERC777TokensRecipient');
   bytes32 private constant VERSION_HASH = keccak256('1');
+
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant LOWER_DATA_TYPEHASH =
     keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
+
   address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
   uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4 + 32 + 4; // token address + amount + T1 recipient address + lower ID + T2 sender public key + T2 timestamp
   uint256 private constant MINIMUM_AUTHOR_SET = 4;
   uint256 private constant SIGNATURE_LENGTH = 65;
   uint256 private constant T2_TOKEN_LIMIT = type(uint128).max;
   uint256 private constant MINIMUM_LOWER_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
+
   uint256 private constant UNLOCKED = 0;
   uint256 private constant LOCKED = 1;
+
   uint32 private constant OWNER_REVERT_LOWER_DELAY = 3 days;
+
   int8 private constant TX_SUCCEEDED = 1;
   int8 private constant TX_PENDING = 0;
   int8 private constant TX_FAILED = -1;
@@ -62,7 +70,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   mapping(bytes32 => bool) public isPublishedRootHash;
   /// @custom:oz-renamed-from isUsedT2TransactionId
   mapping(uint256 => bool) public isUsedT2TxId;
-  mapping(bytes32 => bool) public hasLowered;
+  /// @custom:oz-renamed-from hasLowered
+  mapping(bytes32 => bool) private _unused8_;
   /// @custom:oz-renamed-from growthTriggered
   mapping(uint32 => uint256) private _unused4_;
   /// @custom:oz-renamed-from growthAmount
@@ -88,6 +97,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bool public loweringEnabled;
   address public pendingOwner;
   uint256 private _lock;
+
+  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowedId 514 = bucket[2], bit index 2)
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
@@ -165,6 +176,19 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     loweringEnabled = true;
     nextAuthorId = 1;
     _initialiseAuthors(t1Addresses, t1PubKeysLHS, t1PubKeysRHS, t2PubKeys);
+  }
+
+  /**
+   * @dev Temporary owner function to migrate existing claimed lowers.
+   */
+  function setUsedLowers(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
+    if (buckets.length != words.length) revert();
+    for (uint256 i; i < buckets.length; ) {
+      usedLowers[buckets[i]] = words[i];
+      unchecked {
+        ++i;
+      }
+    }
   }
 
   /**
@@ -335,7 +359,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Checks a lower proof. Returns the details, proof validity, and claim status.
+   * @dev Checks a lower proof. Returns the details of the lower, proof validity, and used status.
    */
   function checkLower(
     bytes calldata lowerProof
@@ -352,7 +376,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,
-      bool lowerIsClaimed
+      bool lowerIsUsed
     )
   {
     if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
@@ -363,8 +387,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bool[] memory confirmed = new bool[](nextAuthorId);
     uint256 confirmationsOffset;
 
-    bytes32 lowerClaimHash = _toLowerClaimHash(token, amount, recipient, lowerId);
-    lowerIsClaimed = hasLowered[lowerClaimHash];
+    lowerIsUsed = lowerUsed(lowerId);
     confirmationsProvided = numConfirmationsProvided;
     confirmationsRequired = _requiredConfirmations();
     assembly {
@@ -386,9 +409,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function claimLower(bytes calldata lowerProof) external whenLowerEnabled lock {
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) = _extractLowerData(lowerProof);
     if (recipient == address(0)) revert AddressIsZero();
+
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
     _releaseFunds(token, amount, recipient);
-
     emit LogLowerClaimed(lowerId);
   }
 
@@ -431,6 +454,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (isUsedT2TxId[t2TxId]) return TX_SUCCEEDED;
     else if (block.timestamp > expiry) return TX_FAILED;
     else return TX_PENDING;
+  }
+
+  /**
+   * @dev Returns the claim status of the lower.
+   */
+  function lowerUsed(uint32 lowerId) public view returns (bool) {
+    uint256 bucket = uint256(lowerId) >> 8;
+    uint256 mask = 1 << (uint256(lowerId) & 255);
+    return (usedLowers[bucket] & mask) != 0;
   }
 
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
@@ -530,9 +562,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint32 t2Timestamp,
     bytes calldata lowerProof
   ) private {
-    bytes32 lowerClaimHash = _toLowerClaimHash(token, amount, recipient, lowerId);
-    if (hasLowered[lowerClaimHash]) revert LowerIsUsed();
-    hasLowered[lowerClaimHash] = true;
+    if (lowerUsed(lowerId)) revert LowerIsUsed();
+    uint256 bucket = uint256(lowerId) >> 8;
+    usedLowers[bucket] |= 1 << (uint256(lowerId) & 255);
 
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
     _verifyConfirmations(true, proofHash, lowerProof[LOWER_DATA_LENGTH:]);
@@ -592,10 +624,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 t1PubKeyHash = keccak256(t1PubKey);
     bytes32 structHash = keccak256(abi.encode(ADD_AUTHOR_TYPEHASH, t1PubKeyHash, t2PubKey, expiry, t2TxId));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
-  }
-
-  function _toLowerClaimHash(address token, uint256 amount, address recipient, uint32 lowerId) private pure returns (bytes32) {
-    return keccak256(abi.encodePacked(token, amount, recipient, lowerId));
   }
 
   function _toLowerDataProofHash(
