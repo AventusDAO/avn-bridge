@@ -98,7 +98,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
-  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit
+  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowedId 514 = bucket[2], bit index 2)
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
