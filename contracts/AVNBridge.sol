@@ -34,13 +34,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant LOWER_DATA_TYPEHASH =
-    keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint32 t2Timestamp)');
+    keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint64 t2Timestamp)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
 
   address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-  uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4 + 32 + 4; // token address + amount + T1 recipient address + lower ID + T2 sender public key + T2 timestamp
+  uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4 + 32 + 8; // token address + amount + T1 recipient address + lower ID + T2 sender public key + T2 timestamp
   uint256 private constant MINIMUM_AUTHOR_SET = 4;
   uint256 private constant SIGNATURE_LENGTH = 65;
   uint256 private constant T2_TOKEN_LIMIT = type(uint128).max;
@@ -372,7 +372,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       address recipient,
       uint32 lowerId,
       bytes32 t2Sender,
-      uint32 t2Timestamp,
+      uint64 t2Timestamp,
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,
@@ -407,7 +407,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * @dev Enables anyone to claim the amount of funds specified in the lower proof, for the intended recipient.
    */
   function claimLower(bytes calldata lowerProof) external whenLowerEnabled lock {
-    (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) = _extractLowerData(lowerProof);
+    (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     if (recipient == address(0)) revert AddressIsZero();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
@@ -420,7 +420,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * In the case of the recipient being unable to revert, the owner may do so on their behalf after 72 hours have passed.
    */
   function revertLower(bytes calldata lowerProof) external whenLiftEnabled lock {
-    (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) = _extractLowerData(lowerProof);
+    (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
     if (!canRevert) revert PermissionDenied();
 
@@ -514,7 +514,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   function _extractLowerData(
     bytes calldata lowerProof
-  ) private pure returns (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint32 t2Timestamp) {
+  ) private pure returns (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) {
     if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) revert InvalidProof();
     assembly {
       token := shr(96, calldataload(lowerProof.offset))
@@ -522,7 +522,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       recipient := shr(96, calldataload(add(lowerProof.offset, 52)))
       lowerId := shr(224, calldataload(add(lowerProof.offset, 72)))
       t2Sender := calldataload(add(lowerProof.offset, 76))
-      t2Timestamp := shr(224, calldataload(add(lowerProof.offset, 108)))
+      t2Timestamp := shr(192, calldataload(add(lowerProof.offset, 108)))
     }
   }
 
@@ -559,7 +559,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address recipient,
     uint32 lowerId,
     bytes32 t2Sender,
-    uint32 t2Timestamp,
+    uint64 t2Timestamp,
     bytes calldata lowerProof
   ) private {
     if (lowerUsed(lowerId)) revert LowerIsUsed();
@@ -632,7 +632,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address recipient,
     uint32 lowerId,
     bytes32 t2Sender,
-    uint32 t2Timestamp
+    uint64 t2Timestamp
   ) private view returns (bytes32) {
     bytes32 structHash = keccak256(abi.encode(LOWER_DATA_TYPEHASH, token, amount, recipient, lowerId, t2Sender, t2Timestamp));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));

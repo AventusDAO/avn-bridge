@@ -42,7 +42,7 @@ interface IAVNBridge {
       address recipient,
       uint32 lowerId,
       bytes32 t2Sender,
-      uint32 t2Timestamp,
+      uint64 t2Timestamp,
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,
