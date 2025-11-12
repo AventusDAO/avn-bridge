@@ -67,20 +67,22 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 
 ### Migrating Claimed Lowers
 
-1. Deploy the new implementation contract.
-2. **Owner TX 1** - pause lowering on the bridge contract.
-3. Run:\
-    `npm run used-lowers-sep -- 0xBridge [from block]` (Sepolia)\
-    `npm run used-lowers-main -- 0xBridge [from block]` (Mainnet)
+To upgrade to the `revertLower`-enabled bridge, all existing claimed lowers must be migrated from their **hash format** to the new **ID-based format**. The process is as follows:
 
-    This scans for `LogLowerClaimed` events to capture all the claimed Lower IDs and generates the `buckets[]` and `words[]` arrays to pass to `setUsedLowers(...)`. The lower IDs are saved to a file to be verfied later.
-4. **Owner TX 2** - upgrade the bridge to the new implementation contract.
+1. Deploy the new implementation contract.
+2. **Owner TX 1** - *pause lowering* on the bridge.
+3. Run:\
+    `npm run used-lowers-sep -- 0xBridge... [from block]` (Sepolia)\
+    `npm run used-lowers-main -- 0xBridge... [from block]` (Mainnet)
+
+    This scans for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the buckets[] and words[] arrays required for setUsedLowers(...). The lower IDs are also saved to a `scripts/<0xBridge...` file for later verification.
+4. **Owner TX 2** - *upgrade* the bridge to the new implementation contract.
 5. **Owner TX 3** - call `setClaimedLowers`, passing the `buckets` and `words` arrays generated in step 3.
 6. Run:\
-    `npm run verify-lowers-sep -- 0xBridge` (Sepolia)\
-    `npm run verify-lowers-main -- 0xBridge` (Mainnet)
+    `npm run verify-lowers-sep -- 0xBridge...` (Sepolia)\
+    `npm run verify-lowers-main -- 0xBridge...` (Mainnet)
 
-    This verfies that all the lower IDs saved to the file are now marked as `used` by the contract.
-7. **Owner TX 4** - (assuming step 6 is successful) unpause lowering on the proxy contract.
+    This checks that all lower IDs saved to the file are now correctly marked as `used` in the contract.
+7. **Owner TX 4** - (after successful verification) *unpause lowering* on the bridge.
 
 💡 **Tip**: You can safely re-run the `used-lowers-*` at any time — it overwrites the saved file with the latest list of lowers.
