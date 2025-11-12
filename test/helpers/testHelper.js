@@ -28,7 +28,7 @@ const PROOF_TYPES = {
       { name: 'recipient', type: 'address' },
       { name: 'lowerId', type: 'uint32' },
       { name: 't2Sender', type: 'bytes32' },
-      { name: 't2Timestamp', type: 'uint32' }
+      { name: 't2Timestamp', type: 'uint64' }
     ]
   },
   permit: {
@@ -100,7 +100,7 @@ async function createLowerProof(bridge, token, amount, recipient, t2Sender, t2Ti
     ethers.getBytes(recipient.address),
     ethers.toBeHex(lowerId, 4),
     ethers.getBytes(t2Sender),
-    ethers.toBeHex(t2Timestamp, 4)
+    ethers.toBeHex(t2Timestamp, 8)
   ]);
 
   const lowerProof = ethers.concat([lowerDataBytes, confirmationsBytes]);
