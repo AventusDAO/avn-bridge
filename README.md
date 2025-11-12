@@ -65,4 +65,23 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
+### Migrating Claimed Lowers
 
+1. Deploy the new implementation contract.
+2. **Owner TX 1** - pause lowering on the bridge contract.
+3. Run:\
+    `npm run used-lowers-sep -- 0xBridge [from block]` (Sepolia)\
+    `npm run used-lowers-main -- 0xBridge [from block]` (Mainnet)
+
+    This scans for `LogLowerClaimed` events to capture all the claimed Lower IDs and generates the `buckets[]` and `words[]` arrays to pass to `setUsedLowers(...)`. The lower IDs are saved to a file to be verfied later.
+4. **Owner TX 2** - upgrade the bridge to the new implementation contract.
+5. **Owner TX 3** - call `setClaimedLowers`, passing the `buckets` and `words` arrays generated in step 3.
+6. Run:\
+    `npm run verify-lowers-sep -- 0xBridge` (Sepolia)\
+    `npm run verify-lowers-main -- 0xBridge` (Mainnet)
+
+    This verfies that all the lower IDs saved to the file are now marked as `used` by the contract.
+7. **Owner TX 4** - (assuming step 6 is successful) unpause lowering on the proxy contract.
+
+
+💡 **Tip**: You can safely re-run the `used-lowers-*` at any time — it overwrites the saved file with the latest list of lowers.
