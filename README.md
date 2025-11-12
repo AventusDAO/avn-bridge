@@ -75,7 +75,7 @@ To upgrade to the **`revertLower`-enabled** bridge, all existing claimed lowers 
     `npm run used-lowers-sep -- 0xBridge... [from block]` (Sepolia)\
     `npm run used-lowers-main -- 0xBridge... [from block]` (Mainnet)
 
-    This scans the bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[ ]` and `words[ ]` arrays required for `setUsedLowers()`. The lower IDs are also saved to a `scripts/<0xBridge...` file for later verification.
+    This scans the bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[ ]` and `words[ ]` arrays required for `setUsedLowers()`. The lower IDs are also saved to a `scripts/0xBridge...` file for later verification.
 4. **Owner TX 2** - *upgrade* the bridge to the new implementation contract.
 5. **Owner TX 3** - call `setUsedLowers()`, passing the `buckets` and `words` arrays generated in step 3.
 6. Verify the migration by running:\
