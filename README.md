@@ -83,5 +83,4 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
     This verfies that all the lower IDs saved to the file are now marked as `used` by the contract.
 7. **Owner TX 4** - (assuming step 6 is successful) unpause lowering on the proxy contract.
 
-
 💡 **Tip**: You can safely re-run the `used-lowers-*` at any time — it overwrites the saved file with the latest list of lowers.
