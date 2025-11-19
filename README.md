@@ -78,19 +78,31 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 When upgrading to the **`revertLower`-enabled** bridge, all existing claimed lowers must be migrated from their **hash format** to the new **ID-based format**. The migration process is as follows:
 
 1. Deploy the new implementation contract to be ready to upgrade to (in step 4).
-2. **Owner TX 1** - *pause lowering* on the bridge.
-3. Generate the migration data by running:\
-    `npm run used-lowers-sep -- 0xBridge... [from block]` (Sepolia)\
-    `npm run used-lowers-main -- 0xBridge... [from block]` (Mainnet)
 
-    This scans the specified bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[..]` and `words[..]` arguments required for `setUsedLowers(..)`. The lower IDs are saved to `scripts/0xBridge...` to be verified (in step 6).
+2. **Owner TX 1** - *pause lowering* on the bridge.
+
+3. Generate the migration data by running:
+
+    `npm run used-lowers-sep -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Sepolia)\
+    `npm run used-lowers-main -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Mainnet)
+
+    This scans the specified bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[..]` and `words[..]` arguments required for `setUsedLowers(..)`.
+
+    The claimed lowers are saved to `scripts/claimed_0xbridgeaddress.txt` to be verified (in step 6).
+
+    The unclaimed lowers (from 0 to the `v2ThresholdLowerID`) are saved to `scripts/regenerate_0xbridgeaddress.txt` to be regenerated on T2.
+
 4. **Owner TX 2** - *upgrade* the bridge to the new implementation contract.
+
 5. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 3.
-6. Verify the migration by running:\
-    `npm run verify-lowers-sep -- 0xBridge...` (Sepolia)\
-    `npm run verify-lowers-main -- 0xBridge...` (Mainnet)
+
+6. Verify the migration by running:
+
+    `npm run verify-lowers-sep -- 0xBridgeAddress` (Sepolia)\
+    `npm run verify-lowers-main -- 0xBridgeAddress` (Mainnet)
 
     This checks all the lower IDs discovered in step 3 are now correctly marked as `used` in the contract.
+    
 7. **Owner TX 4** - (after successful verification) *unpause lowering* on the bridge.
 
 💡 **Tip**: You can safely re-run the `used-lowers-*` command at any time — it simply overwrites any existing saved file with the latest list of claimed lowers.

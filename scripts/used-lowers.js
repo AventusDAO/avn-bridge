@@ -7,8 +7,10 @@ const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
 const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
 const LOWER_CLAIMED_SIG = ethers.id('LogLowerClaimed(uint32)');
 const CHUNK = 50_000;
-const [NETWORK, CONTRACT, FROM_BLOCK_ARG] = process.argv.slice(2);
+
+const [NETWORK, CONTRACT, FROM_BLOCK_ARG, V2_THRESH_ARG] = process.argv.slice(2);
 const FROM_BLOCK = Number(FROM_BLOCK_ARG ?? 0);
+const V2_THRESH = Number(V2_THRESH_ARG);
 
 const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -41,7 +43,8 @@ async function* ranges(from, to) {
 (async () => {
   const TO_BLOCK = await provider.getBlockNumber();
   console.log(`\nNetwork: ${NETWORK}`);
-  console.log(`\nBridge: ${CONTRACT}`);
+  console.log(`Bridge: ${CONTRACT}`);
+  console.log(`v2Thresh: ${V2_THRESH}`);
   console.log(`\nScanning blocks ${FROM_BLOCK} -> ${TO_BLOCK} (chunk=${CHUNK})`);
 
   const filterBase = { address: CONTRACT, topics: [LOWER_CLAIMED_SIG] };
@@ -88,9 +91,19 @@ async function* ranges(from, to) {
     )
   );
 
+  const claimedSet = new Set(lowerIds);
+  const unclaimed = [];
+  for (let i = 0; i < V2_THRESH; i++) {
+    if (!claimedSet.has(i)) unclaimed.push(i);
+  }
+
+  console.log(`\nFound ${unclaimed.length} unclaimed lower IDs in [0, ${V2_THRESH}).`);
+  console.log('\n--- Unclaimed Lower IDs ---');
+  console.log(JSON.stringify(unclaimed, null, 2));
+
   const filename = path.join(__dirname, `${CONTRACT.toLowerCase()}.txt`);
   fs.writeFileSync(filename, lowerIds.join('\n') + (lowerIds.length ? '\n' : ''));
-  console.log(`\n${lowerIds.length} claimed lower IDs written to ./${filename}`);
+  console.log(`\n${lowerIds.length} claimed lower IDs written to ./${path.basename(filename)}`);
 
   console.log('\nDone.');
 })().catch(e => {

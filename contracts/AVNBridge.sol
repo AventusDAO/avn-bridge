@@ -112,6 +112,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidRecipient(); // 0x9c8d2cd2
   error InvalidT1Key(); // 0x4b0218a8
   error InvalidT2Key(); // 0xf4fc87a4
+  error LegacyLower(); // 0x9e79b036
   error LiftDisabled(); // 0xb63d2c8c
   error LiftFailed(); // 0xb19ed519
   error LiftLimitHit(); // 0xc36d2830
@@ -423,6 +424,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
     if (!canRevert) revert PermissionDenied();
+    if (t2Sender == bytes32(0)) revert LegacyLower();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
     emit LogLowerReverted(lowerId, recipient, msg.sender);
