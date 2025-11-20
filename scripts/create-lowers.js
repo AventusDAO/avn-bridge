@@ -6,9 +6,9 @@ const [ENVIRONMENT] = process.argv.slice(2);
 const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
 const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET ;
 const T1_RECIPIENT = '0xde7e1091cde63c05aa4d82c62e4c54edbc701b22';
-const START_AMOUNT = 1000;
 
-const DELAY_SECS = 10;
+const TOKEN_START_AMOUNT = 1000;
+const DELAY_SECS = 4;
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
@@ -82,7 +82,7 @@ async function main() {
   const FROM = signer.address;
   console.log(`Using account: ${FROM}`);
 
-  let amount = START_AMOUNT;
+  let amount = TOKEN_START_AMOUNT;
 
   const avtAddressRaw = await api.query.tokenManager.avtTokenContract();
   const avtAddress = avtAddressRaw.toString();
