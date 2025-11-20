@@ -7,9 +7,8 @@ const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
 const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
 const LOWER_CLAIMED_SIG = ethers.id('LogLowerClaimed(uint32)');
 const CHUNK = 50_000;
-
 const [NETWORK, CONTRACT, FROM_BLOCK_ARG, V2_THRESH_ARG] = process.argv.slice(2);
-const FROM_BLOCK = Number(FROM_BLOCK_ARG ?? 0);
+const FROM_BLOCK = Number(FROM_BLOCK_ARG);
 const V2_THRESH = Number(V2_THRESH_ARG);
 
 const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
