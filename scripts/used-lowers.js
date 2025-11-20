@@ -106,7 +106,7 @@ async function* ranges(from, to) {
 
   const unclaimedFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_unclaimed.txt`);
   fs.writeFileSync(unclaimedFile, unclaimedLowerIDs.join('\n') + (unclaimedLowerIDs.length ? '\n' : ''));
-  console.log(`\n${unclaimedLowerIDs.length} claimed lower IDs written to ./${path.basename(unclaimedFile)}`);
+  console.log(`\n${unclaimedLowerIDs.length} unclaimed lower IDs written to ./${path.basename(unclaimedFile)}`);
 
   console.log('\nDone.');
 })().catch(e => {
