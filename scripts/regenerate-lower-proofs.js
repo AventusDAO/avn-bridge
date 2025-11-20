@@ -4,22 +4,12 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const T2_PRIVATE_KEY = process.env.T2_PRIVATE_KEY;
-const WS_ENDPOINT = 'wss://avn-parachain-internal.dev.aventus.io';
-const filePath = path.join(__dirname, `${process.argv[2]}_unclaimed.txt`);
+const [ENVIRONMENT] = process.argv.slice(2);
+const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
+const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET ;
 
 const BATCH_SIZE = 10;
 const DELAY_SECS = 30;
-
-if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
-  console.error('T2_PRIVATE_KEY env var required');
-  process.exit(1);
-}
-
-if (!fs.existsSync(filePath)) {
-  console.error(`File not found: ${filePath}`);
-  process.exit(1);
-}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -98,6 +88,12 @@ async function main() {
   }
 
   console.log(`Using account: ${signer.address}`);
+
+  const bridgeAddressRaw = await api.query.avn.avnBridgeContractAddress();
+  const bridgeAddress = bridgeAddressRaw.toString();
+  console.log(`Bridge address: ${bridgeAddress}`);
+  
+  const filePath = path.join(__dirname, `${bridgeAddress}_unclaimed.txt`);
 
   const raw = fs.readFileSync(filePath, 'utf8');
   const lowerIds = raw
