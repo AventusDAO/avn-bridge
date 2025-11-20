@@ -15,9 +15,9 @@ const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const parseLowerIdFromTopic = topicHex => Number.parseInt(topicHex.slice(-8), 16);
 
-function accumulateBitmap(lowerIds) {
+function accumulateBitmap(lowerIDs) {
   const map = new Map();
-  for (const id of lowerIds) {
+  for (const id of lowerIDs) {
     const bucket = id >>> 8;
     const bitIdx = id & 0xff;
     const cur = map.get(bucket) ?? 0n;
@@ -67,17 +67,17 @@ async function* ranges(from, to) {
     await sleep(30);
   }
 
-  const lowerIds = Array.from(new Set(ids)).sort((a, b) => a - b);
-  console.log(`\nFound ${lowerIds.length} claimed lower IDs.`);
+  const claimedLowerIDs = Array.from(new Set(ids)).sort((a, b) => a - b);
+  console.log(`\nFound ${claimedLowerIDs.length} claimed lower IDs.`);
 
-  if (lowerIds.length > 0) {
+  if (claimedLowerIDs.length > 0) {
     console.log('\n--- Claimed Lower IDs ---');
-    console.log(JSON.stringify(lowerIds, null, 2));
+    console.log(JSON.stringify(claimedLowerIDs, null, 2));
   } else {
     console.log('No claimed lower IDs found.');
   }
 
-  const { buckets, words } = accumulateBitmap(lowerIds);
+  const { buckets, words } = accumulateBitmap(claimedLowerIDs);
 
   console.log('\n--- Buckets (uint256[]) ---');
   console.log(JSON.stringify(buckets, null, 2));
@@ -90,19 +90,23 @@ async function* ranges(from, to) {
     )
   );
 
-  const claimedSet = new Set(lowerIds);
-  const unclaimed = [];
+  const claimedSet = new Set(claimedLowerIDs);
+  const unclaimedLowerIDs = [];
   for (let i = 0; i < V2_THRESH; i++) {
-    if (!claimedSet.has(i)) unclaimed.push(i);
+    if (!claimedSet.has(i)) unclaimedLowerIDs.push(i);
   }
 
-  console.log(`\nFound ${unclaimed.length} unclaimed lower IDs in [0, ${V2_THRESH}).`);
+  console.log(`\nFound ${unclaimedLowerIDs.length} unclaimed lower IDs in [0, ${V2_THRESH}).`);
   console.log('\n--- Unclaimed Lower IDs ---');
-  console.log(JSON.stringify(unclaimed, null, 2));
+  console.log(JSON.stringify(unclaimedLowerIDs, null, 2));
 
-  const filename = path.join(__dirname, `${CONTRACT.toLowerCase()}.txt`);
-  fs.writeFileSync(filename, lowerIds.join('\n') + (lowerIds.length ? '\n' : ''));
-  console.log(`\n${lowerIds.length} claimed lower IDs written to ./${path.basename(filename)}`);
+  const claimedFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_claimed.txt`);
+  fs.writeFileSync(claimedFile, claimedLowerIDs.join('\n') + (claimedLowerIDs.length ? '\n' : ''));
+  console.log(`\n${claimedLowerIDs.length} claimed lower IDs written to ./${path.basename(claimedFile)}`);
+
+  const unclaimedFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_unclaimed.txt`);
+  fs.writeFileSync(unclaimedFile, unclaimedLowerIDs.join('\n') + (unclaimedLowerIDs.length ? '\n' : ''));
+  console.log(`\n${unclaimedLowerIDs.length} claimed lower IDs written to ./${path.basename(unclaimedFile)}`);
 
   console.log('\nDone.');
 })().catch(e => {

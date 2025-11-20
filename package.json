@@ -14,6 +14,7 @@
     "@openzeppelin/contracts": "^4.9.6",
     "@openzeppelin/contracts-upgradeable": "^4.9.6",
     "@openzeppelin/hardhat-upgrades": "^3.9.1",
+    "@polkadot/api": "^16.5.2",
     "axios": "^1.11.0",
     "dotenv": "^17.2.3",
     "hardhat": "^2.26.3",
@@ -35,6 +36,7 @@
     "used-lowers-sep": "node scripts/used-lowers.js sepolia",
     "used-lowers-main": "node scripts/used-lowers.js mainnet",
     "verify-lowers-sep": "node scripts/verify-used-lowers.js sepolia",
-    "verify-lowers-main": "node scripts/verify-used-lowers.js mainnet"
+    "verify-lowers-main": "node scripts/verify-used-lowers.js mainnet",
+    "regen-lowers": "node scripts/regenerate-lower-proofs.js"
   }
 }
