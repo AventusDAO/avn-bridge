@@ -6,10 +6,10 @@ require('dotenv').config();
 
 const [ENVIRONMENT] = process.argv.slice(2);
 const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
-const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET ;
+const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET;
 
 const BATCH_SIZE = 10;
-const DELAY_SECS = 30;
+const DELAY_SECS = 50;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -115,7 +115,7 @@ async function main() {
 
   while (processed < lowerIds.length) {
     const batchIds = lowerIds.slice(processed, processed + BATCH_SIZE);
-    console.log(`\nStarting batch: ${processed} → ${processed + batchIds.length - 1} [${batchIds.join(', ')}]`);
+    console.log(`\nProcessing batch: [${batchIds.join(', ')}]`);
 
     try {
       await sendBatchRegenerate(api, signer, batchIds);
