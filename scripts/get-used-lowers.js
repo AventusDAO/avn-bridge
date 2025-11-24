@@ -5,11 +5,11 @@ require('dotenv').config();
 
 const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
 const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
-const LOWER_CLAIMED_SIG = ethers.id('LogLowerClaimed(uint32)');
-const CHUNK = 50_000;
 const [NETWORK, CONTRACT, FROM_BLOCK_ARG, V2_THRESH_ARG] = process.argv.slice(2);
 const FROM_BLOCK = Number(FROM_BLOCK_ARG);
 const V2_THRESH = Number(V2_THRESH_ARG);
+const LOWER_CLAIMED_SIG = ethers.id('LogLowerClaimed(uint32)');
+const CHUNK = 50_000;
 
 const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -104,9 +104,13 @@ async function* ranges(from, to) {
   fs.writeFileSync(claimedFile, claimedLowerIDs.join('\n') + (claimedLowerIDs.length ? '\n' : ''));
   console.log(`\n${claimedLowerIDs.length} claimed lower IDs written to ./${path.basename(claimedFile)}`);
 
-  const unclaimedFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_unclaimed.txt`);
-  fs.writeFileSync(unclaimedFile, unclaimedLowerIDs.join('\n') + (unclaimedLowerIDs.length ? '\n' : ''));
-  console.log(`\n${unclaimedLowerIDs.length} unclaimed lower IDs written to ./${path.basename(unclaimedFile)}`);
+  const unclaimedJsonFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_unclaimed.json`);
+  const state = {
+    unclaimed: unclaimedLowerIDs,
+    regenerated: []
+  };
+  fs.writeFileSync(unclaimedJsonFile, JSON.stringify(state, null, 2));
+  console.log(`JSON state (unclaimed + empty regenerated) written to ./${path.basename(unclaimedJsonFile)}`);
 
   console.log('\nDone.');
 })().catch(e => {

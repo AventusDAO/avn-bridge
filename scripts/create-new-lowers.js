@@ -8,15 +8,19 @@ const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : 
 const T1_RECIPIENT = '0xde7e1091cde63c05aa4d82c62e4c54edbc701b22';
 
 const TOKEN_START_AMOUNT = 1000;
-const PER_BLOCK = 5;
+const DELAY_SECS = 4;
 
-async function sendDirectLower(api, signer, avtAddress, amount, from, nonce) {
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function sendDirectLower(api, signer, avtAddress, amount, from) {
   return new Promise(async (resolve, reject) => {
     try {
       const tx = api.tx.tokenManager.scheduleDirectLower(from, avtAddress, amount, T1_RECIPIENT);
       let lowerId = null;
 
-      const unsub = await tx.signAndSend(signer, { nonce }, ({ status, dispatchError, events }) => {
+      const unsub = await tx.signAndSend(signer, ({ status, dispatchError, events }) => {
         if (dispatchError) {
           if (dispatchError.isModule) {
             const decoded = api.registry.findMetaError(dispatchError.asModule);
@@ -44,9 +48,9 @@ async function sendDirectLower(api, signer, avtAddress, amount, from, nonce) {
         }
 
         if (status.isInBlock) {
-          console.log(`Included in block ${status.asInBlock.toHex()} amount=${amount} nonce=${nonce.toString()}`);
+          console.log(`Included in block ${status.asInBlock.toHex()} amount=${amount}`);
         } else if (status.isFinalized) {
-          console.log(`✅ Finalized amount=${amount} lowerId=${lowerId !== null ? lowerId : 'unknown'} nonce=${nonce.toString()}`);
+          console.log(`✅ Finalized amount=${amount} lowerId=${lowerId !== null ? lowerId : 'unknown'}`);
           unsub();
           resolve(lowerId);
         }
@@ -85,31 +89,16 @@ async function main() {
   console.log(`AVT address: ${avtAddress}`);
 
   while (true) {
-    let nextNonce = await api.rpc.system.accountNextIndex(FROM);
-    console.log(`\n=== New batch: ${PER_BLOCK} lowers starting amount=${amount + 1}, starting nonce=${nextNonce.toString()} ===`);
-
-    const batchTx = [];
-
-    for (let i = 0; i < PER_BLOCK; i++) {
-      const thisAmount = ++amount;
-      const thisNonce = nextNonce;
-      nextNonce = nextNonce.addn(1);
-
-      console.log(`Sending scheduleDirectLower amount=${thisAmount} nonce=${thisNonce.toString()}`);
-
-      const p = sendDirectLower(api, signer, avtAddress, thisAmount, FROM, thisNonce)
-        .then(lowerId => {
-          console.log(`Completed amount=${thisAmount}, lowerId=${lowerId ?? 'unknown'}, nonce=${thisNonce.toString()}`);
-          return lowerId;
-        })
-        .catch(err => {
-          console.error(`❌ Error amount=${thisAmount}, nonce=${thisNonce.toString()}: ${err}`);
-        });
-
-      batchTx.push(p);
+    console.log(`Sending scheduleDirectLower amount=${amount}`);
+    try {
+      const lowerId = await sendDirectLower(api, signer, avtAddress, amount, FROM);
+      console.log(`Completed amount=${amount}, lowerId=${lowerId}`);
+    } catch (err) {
+      console.error(`❌ Error amount=${amount}: ${err.toString()}`);
     }
 
-    await Promise.allSettled(batchTx);
+    amount += 1;
+    await sleep(DELAY_SECS * 1000);
   }
 }
 

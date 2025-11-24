@@ -83,8 +83,10 @@ When upgrading to the **`revertLower`-enabled** bridge, all existing claimed low
 
 3. Generate the migration data by running:
 
-    `npm run used-lowers-sep -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Sepolia)\
-    `npm run used-lowers-main -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Mainnet)
+    `npm run get-lowers-sep -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Sepolia)\
+    `npm run get-lowers-main -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Mainnet)
+
+    **e.g. for Dev bridge (published @ block 6,855,422) with V2 thresh 119:** `npm run get-lowers-sep -- 0x8017bdbd6def5f8518fe44c2d650c21d1c4427a1 6845422 119`
 
     This scans the specified bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[..]` and `words[..]` arguments required for `setUsedLowers(..)`.
 
@@ -106,3 +108,21 @@ When upgrading to the **`revertLower`-enabled** bridge, all existing claimed low
 7. **Owner TX 4** - (after successful verification) *unpause lowering* on the bridge.
 
 💡 **Tip**: You can safely re-run the `used-lowers-*` command at any time — it simply overwrites any existing saved file with the latest list of claimed lowers.
+
+### Lower migration testing helper
+
+Spam schedule lower requests:
+
+`npm run create-lowers-dev`
+
+`npm run create-lowers-testnet`
+
+### Lower proof regeneration helper
+Request lower proof regeneration for all unclaimed lowers:
+
+`npm run regen-lowers-dev`
+
+`npm run regen-lowers-testnet`
+
+`npm run regen-lowers-mainnet`
+

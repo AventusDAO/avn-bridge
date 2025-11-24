@@ -33,13 +33,14 @@
     "coverage": "npx hardhat coverage",
     "size": "npx hardhat size-contracts",
     "test": "npx hardhat test",
-    "used-lowers-sep": "node scripts/used-lowers.js sepolia",
-    "used-lowers-main": "node scripts/used-lowers.js mainnet",
-    "verify-lowers-sep": "node scripts/verify-used-lowers.js sepolia",
-    "verify-lowers-main": "node scripts/verify-used-lowers.js mainnet",
+    "create-lowers-dev": "node scripts/create-new-lowers.js dev",
+    "create-lowers-testnet": "node scripts/create-new-lowers.js testnet",
+    "get-lowers-sep": "node scripts/get-used-lowers.js sepolia",
+    "get-lowers-main": "node scripts/get-used-lowers.js mainnet",
     "regen-lowers-dev": "node scripts/regenerate-lower-proofs.js dev",
     "regen-lowers-testnet": "node scripts/regenerate-lower-proofs.js testnet",
-    "create-lowers-dev": "node scripts/create-lowers.js dev",
-    "create-lowers-testnet": "node scripts/create-lowers.js testnet"
+    "regen-lowers-mainnet": "node scripts/regenerate-lower-proofs.js mainnet",
+    "verify-lowers-sep": "node scripts/verify-used-lowers.js sepolia",
+    "verify-lowers-main": "node scripts/verify-used-lowers.js mainnet"
   }
 }

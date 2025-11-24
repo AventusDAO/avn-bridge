@@ -8,59 +8,49 @@ const [ENVIRONMENT] = process.argv.slice(2);
 const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
 const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET;
 
+const DELAY_SECS = 30;
 const BATCH_SIZE = 10;
-const DELAY_SECS = 50;
+const QUEUE_LIMIT = 100;
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(r => setTimeout(r, ms));
 }
 
-async function sendBatchRegenerate(api, signer, lowerIds) {
+async function sendRegenerateLower(api, signer, lowerId) {
   return new Promise(async (resolve, reject) => {
     try {
-      const calls = lowerIds.map(id => api.tx.tokenManager.regenerateLowerProof(id));
-      const batch = api.tx.utility.batch(calls);
+      const tx = api.tx.tokenManager.regenerateLowerProof(lowerId);
 
-      const unsub = await batch.signAndSend(signer, ({ status, dispatchError, events }) => {
+      console.log(`  → Submitting regenerateLowerProof for lowerId=${lowerId}`);
+      const unsub = await tx.signAndSend(signer, ({ status, dispatchError, events }) => {
         if (dispatchError) {
           if (dispatchError.isModule) {
             const decoded = api.registry.findMetaError(dispatchError.asModule);
             const { section, name, docs } = decoded;
-            console.error(`❌ Batch extrinsic failed: ${section}.${name} - ${docs.join(' ')}`);
+            console.error(`❌ Failed lowerId=${lowerId}: ${section}.${name} - ${docs.join(' ')}`);
           } else {
-            console.error(`❌ Batch extrinsic failed: ${dispatchError.toString()}`);
+            console.error(`❌ Failed lowerId=${lowerId}: ${dispatchError.toString()}`);
           }
           unsub();
           reject(dispatchError);
           return;
         }
 
+        if (events && events.length) {
+          events.forEach(({ event }) => {
+            const { section, method, data } = event;
+            if (section === 'tokenManager') {
+              console.log(`    Event: tokenManager.${method} ${data.toString()} (lowerId=${lowerId})`);
+            }
+          });
+        }
+
         if (status.isInBlock) {
-          console.log(`Batch included in block ${status.asInBlock.toHex()} for lowerIds=[${lowerIds.join(', ')}]`);
+          console.log(`  Included in block ${status.asInBlock.toHex()} lowerId=${lowerId}`);
         } else if (status.isFinalized) {
-          console.log(`✅ Batch finalized in block ${status.asFinalized.toHex()} for lowerIds=[${lowerIds.join(', ')}]`);
-
-          if (events && events.length) {
-            events.forEach(({ event }) => {
-              const { section, method, data } = event;
-              if (section === 'utility' && method === 'BatchInterrupted') {
-                const idx = data[0].toNumber();
-                const err = data[1];
-                let msg = err.toString();
-                if (err.isModule) {
-                  const decoded = api.registry.findMetaError(err.asModule);
-                  const { section, name, docs } = decoded;
-                  msg = `${section}.${name} - ${docs.join(' ')}`;
-                }
-                console.error(`❌ BatchInterrupted at index ${idx} (lowerId=${lowerIds[idx]}): ${msg}`);
-              } else if (section === 'utility' && method === 'BatchCompleted') {
-                console.log('utility.BatchCompleted');
-              }
-            });
-          }
-
+          console.log(`✅ Finalized lowerId=${lowerId}`);
           unsub();
-          resolve();
+          resolve(true);
         }
       });
     } catch (err) {
@@ -70,7 +60,16 @@ async function sendBatchRegenerate(api, signer, lowerIds) {
 }
 
 async function main() {
-  console.log(`Connecting to ${WS_ENDPOINT} ...`);
+  if (!ENVIRONMENT) {
+    console.error('Usage: node regenerateLowers.js <dev|testnet>');
+    process.exit(1);
+  }
+  if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
+    console.error('T2_PRIVATE_KEY env var required');
+    process.exit(1);
+  }
+
+  console.log(`Connecting to ${WS_ENDPOINT}...`);
   const provider = new WsProvider(WS_ENDPOINT);
   const api = await ApiPromise.create({ provider });
   console.log('API connected.');
@@ -87,46 +86,105 @@ async function main() {
     signer = keyring.addFromUri(trimmed);
   }
 
-  console.log(`Using account: ${signer.address}`);
+  const FROM = signer.address;
+  console.log(`Using account: ${FROM}`);
 
   const bridgeAddressRaw = await api.query.avn.avnBridgeContractAddress();
   const bridgeAddress = bridgeAddressRaw.toString();
   console.log(`Bridge address: ${bridgeAddress}`);
-  
-  const filePath = path.join(__dirname, `${bridgeAddress}_unclaimed.txt`);
+
+  const filePath = path.join(__dirname, `${bridgeAddress}_unclaimed.json`);
+  if (!fs.existsSync(filePath)) {
+    console.error(`State file not found: ${filePath}`);
+    await api.disconnect();
+    process.exit(1);
+  }
 
   const raw = fs.readFileSync(filePath, 'utf8');
-  const lowerIds = raw
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .map(line => {
-      const n = Number(line);
-      if (Number.isNaN(n)) {
-        throw new Error(`Invalid lowerId in file: "${line}"`);
+  let state;
+  try {
+    state = JSON.parse(raw);
+  } catch (e) {
+    console.error(`Failed to parse JSON from ${filePath}:`, e);
+    await api.disconnect();
+    process.exit(1);
+  }
+
+  if (!Array.isArray(state.unclaimed)) {
+    console.error(`State file missing "unclaimed" array`);
+    await api.disconnect();
+    process.exit(1);
+  }
+  if (!Array.isArray(state.regenerated)) {
+    console.warn(`State file missing "regenerated" array, initialising empty []`);
+    state.regenerated = [];
+  }
+
+  const allUnclaimed = state.unclaimed.map(n => Number(n)).filter(n => !Number.isNaN(n));
+  const regeneratedSet = new Set(state.regenerated.map(n => Number(n)).filter(n => !Number.isNaN(n)));
+
+  const pending = allUnclaimed.filter(id => !regeneratedSet.has(id));
+
+  console.log(`Total unclaimed IDs: ${allUnclaimed.length}`);
+  console.log(`Already regenerated: ${regeneratedSet.size}`);
+  console.log(`Pending to regenerate: ${pending.length}`);
+
+  if (pending.length === 0) {
+    console.log('Nothing to do. All unclaimed IDs are already regenerated.');
+    await api.disconnect();
+    return;
+  }
+
+  function saveState() {
+    state.regenerated = Array.from(regeneratedSet).sort((a, b) => a - b);
+    fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
+    console.log(`  → State saved. regenerated=${state.regenerated.length}, ` + `still pending=${allUnclaimed.length - state.regenerated.length}`);
+  }
+
+  let index = 0;
+
+  while (index < pending.length) {
+    const remaining = pending.length - index;
+    const batchSize = Math.min(BATCH_SIZE, remaining);
+
+    while (true) {
+      const queue = await api.query.ethBridge.requestQueue();
+      const queueLen = queue.length;
+
+      console.log(`\nCurrent ethBridge.requestQueue length=${queueLen}, ` + `next batchSize=${batchSize}, QUEUE_LIMIT=${QUEUE_LIMIT}`);
+
+      if (queueLen + batchSize < QUEUE_LIMIT) {
+        console.log('Queue has capacity for next batch, proceeding...');
+        break;
       }
-      return n;
-    });
 
-  console.log(`Loaded ${lowerIds.length} lower IDs from ${path.basename(filePath)}`);
-  console.log(`Processing in batches of ${BATCH_SIZE}, with ${DELAY_SECS} seconds delay between batches`);
-
-  let processed = 0;
-
-  while (processed < lowerIds.length) {
-    const batchIds = lowerIds.slice(processed, processed + BATCH_SIZE);
-    console.log(`\nProcessing batch: [${batchIds.join(', ')}]`);
-
-    try {
-      await sendBatchRegenerate(api, signer, batchIds);
-    } catch (err) {
-      console.error(`❌ Error sending batch starting at index ${processed}:`, err.toString());
+      console.log(`Queue too full (would be ${queueLen + batchSize} ≥ ${QUEUE_LIMIT}), ` + `waiting ${DELAY_SECS}s before re-check...`);
+      await sleep(DELAY_SECS * 1000);
     }
 
-    processed += batchIds.length;
+    const batchIds = pending.slice(index, index + batchSize);
+    console.log(`\n=== Sending batch [${index + 1}..${index + batchSize}] of ${pending.length}`);
+    console.log(`Batch lowerIds: ${batchIds.join(', ')}`);
 
-    if (processed < lowerIds.length) {
-      console.log(`Batch complete (${processed}/${lowerIds.length}). Waiting ${DELAY_SECS} seconds before next batch...`);
+    for (const lowerId of batchIds) {
+      console.log(`\nProcessing lowerId=${lowerId}`);
+      try {
+        const ok = await sendRegenerateLower(api, signer, lowerId);
+        if (ok) {
+          regeneratedSet.add(lowerId);
+          console.log(`Completed lowerId=${lowerId}`);
+        }
+      } catch (err) {
+        console.error(`❌ Error lowerId=${lowerId}: ${err.toString()}`);
+      }
+    }
+
+    saveState();
+
+    index += batchSize;
+
+    if (index < pending.length) {
+      console.log(`\nBatch complete. ${pending.length - index} still pending. ` + `Waiting ${DELAY_SECS} seconds before next batch...`);
       await sleep(DELAY_SECS * 1000);
     }
   }
