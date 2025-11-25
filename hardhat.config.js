@@ -21,7 +21,7 @@ const GWEI = 1e9;
 const VERIFICATION_DELAY_SECONDS = 40;
 
 task('deploy', 'deploy a new avn-bridge proxy')
-  .addParam('env', 'AvN environment name')
+  .addPositionalParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
     const { ethers, network, run, upgrades } = hre;
     const [signer] = await ethers.getSigners();
@@ -163,17 +163,21 @@ task('lift', 'lift a token to the chain')
 task('publishToken', 'deploy a new erc20 test token and publish it').setAction(async (_, hre) => {
   const { ethers, network, run } = hre;
   await run('compile');
+
   const [signer] = await ethers.getSigners();
   console.log(`\nDeploying to ${network.name} using ${signer.address}...`);
-  const supply = 100000;
+  const supply = 1_000_000;
   const Token20 = await ethers.getContractFactory('Token20');
   const token20 = await Token20.deploy(supply);
-  await token20.deployed();
+  await token20.waitForDeployment();
+  const tokenAddress = await token20.getAddress();
+
   console.log('Waiting to verify...');
   await delay(VERIFICATION_DELAY_SECONDS);
-  await verify(run, token20.address, [supply]);
+  await verify(run, tokenAddress, [supply]);
   const addresses = fs.existsSync(ADDRESSES_PATH) ? require(ADDRESSES_PATH) : {};
-  addresses[network.name]['erc20token'] = token20.address;
+  addresses[network.name]['erc20token'] = tokenAddress;
+
   fs.writeFileSync(ADDRESSES_PATH, JSON.stringify(addresses, null, 2));
   console.log('\nDone');
 });
