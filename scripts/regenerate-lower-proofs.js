@@ -60,15 +60,6 @@ async function sendRegenerateLower(api, signer, lowerId) {
 }
 
 async function main() {
-  if (!ENVIRONMENT) {
-    console.error('Usage: node regenerateLowers.js <dev|testnet>');
-    process.exit(1);
-  }
-  if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
-    console.error('T2_PRIVATE_KEY env var required');
-    process.exit(1);
-  }
-
   console.log(`Connecting to ${WS_ENDPOINT}...`);
   const provider = new WsProvider(WS_ENDPOINT);
   const api = await ApiPromise.create({ provider });
@@ -93,36 +84,24 @@ async function main() {
   const bridgeAddress = bridgeAddressRaw.toString();
   console.log(`Bridge address: ${bridgeAddress}`);
 
-  const filePath = path.join(__dirname, `${bridgeAddress}_unclaimed.json`);
+  const filePath = path.join(__dirname, `${bridgeAddress}.json`);
   if (!fs.existsSync(filePath)) {
     console.error(`State file not found: ${filePath}`);
     await api.disconnect();
     process.exit(1);
   }
 
-  const raw = fs.readFileSync(filePath, 'utf8');
-  let state;
+  let lowers;
   try {
-    state = JSON.parse(raw);
+    lowers = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
     console.error(`Failed to parse JSON from ${filePath}:`, e);
     await api.disconnect();
     process.exit(1);
   }
 
-  if (!Array.isArray(state.unclaimed)) {
-    console.error(`State file missing "unclaimed" array`);
-    await api.disconnect();
-    process.exit(1);
-  }
-  if (!Array.isArray(state.regenerated)) {
-    console.warn(`State file missing "regenerated" array, initialising empty []`);
-    state.regenerated = [];
-  }
-
-  const allUnclaimed = state.unclaimed.map(n => Number(n)).filter(n => !Number.isNaN(n));
-  const regeneratedSet = new Set(state.regenerated.map(n => Number(n)).filter(n => !Number.isNaN(n)));
-
+  const allUnclaimed = lowers.unclaimed.map(n => Number(n)).filter(n => !Number.isNaN(n));
+  const regeneratedSet = new Set(lowers.regenerated.map(n => Number(n)).filter(n => !Number.isNaN(n)));
   const pending = allUnclaimed.filter(id => !regeneratedSet.has(id));
 
   console.log(`Total unclaimed IDs: ${allUnclaimed.length}`);
@@ -136,9 +115,9 @@ async function main() {
   }
 
   function saveState() {
-    state.regenerated = Array.from(regeneratedSet).sort((a, b) => a - b);
-    fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
-    console.log(`  → State saved. regenerated=${state.regenerated.length}, ` + `still pending=${allUnclaimed.length - state.regenerated.length}`);
+    lowers.regenerated = Array.from(regeneratedSet).sort((a, b) => a - b);
+    fs.writeFileSync(filePath, JSON.stringify(lowers, null, 2));
+    console.log(`  → State saved. regenerated=${lowers.regenerated.length}, ` + `still pending=${allUnclaimed.length - lowers.regenerated.length}`);
   }
 
   let index = 0;
@@ -149,7 +128,7 @@ async function main() {
 
     while (true) {
       const queue = await api.query.ethBridge.requestQueue();
-      const queueLen = queue.length;
+      const queueLen = queue.toJSON().length;
 
       console.log(`\nCurrent ethBridge.requestQueue length=${queueLen}, ` + `next batchSize=${batchSize}, QUEUE_LIMIT=${QUEUE_LIMIT}`);
 

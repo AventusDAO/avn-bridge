@@ -5,35 +5,32 @@ require('dotenv').config();
 
 const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
 const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
-const [NETWORK, CONTRACT] = process.argv.slice(2);
+const [NETWORK, BRIDGE_ADDRESS] = process.argv.slice(2);
 const ABI = ['function lowerUsed(uint32 lowerId) view returns (bool)'];
 
-const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
-const contract = new ethers.Contract(CONTRACT, ABI, provider);
+async function main() {
+  const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
+  const contract = new ethers.Contract(BRIDGE_ADDRESS, ABI, provider);
+  const filePath = path.join(__dirname, `${BRIDGE_ADDRESS}.json`);
 
-const filename = path.join(__dirname, `${CONTRACT.toLowerCase()}.txt`);
-if (!fs.existsSync(filename)) {
-  console.error(`Missing ${filename}. Run "used-lowers.js" first.`);
-  process.exit(1);
-}
+  if (!fs.existsSync(filePath)) {
+    console.error(`State file not found: ${filePath}`);
+    process.exit(1);
+  }
 
-const lowerIds = fs
-  .readFileSync(filename, 'utf8')
-  .split('\n')
-  .map(s => s.trim())
-  .filter(Boolean)
-  .map(s => Number(s))
-  .sort((a, b) => a - b);
+  let lowers;
+  try {
+    lowers = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.error(`Failed to parse JSON from ${filePath}:`, e);
+    process.exit(1);
+  }
 
-if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
-  console.error('File contains invalid lower IDs.');
-  process.exit(1);
-}
+  const claimedLowerIDs = lowers.claimed.map(n => Number(n)).filter(n => !Number.isNaN(n));
 
-(async () => {
   console.log(`\nNetwork: ${NETWORK}`);
-  console.log(`\nBridge: ${CONTRACT}`);
-  console.log(`\nLoaded ${lowerIds.length} lowerId(s) from ${filename}`);
+  console.log(`\nBridge: ${BRIDGE_ADDRESS}`);
+  console.log(`\nLoaded ${claimedLowerIDs.length} lowerId(s) from ${filePath}`);
 
   const bad = [];
   const CONCURRENCY = 25;
@@ -50,10 +47,10 @@ if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
     }
   }
 
-  const chunkSize = Math.ceil(lowerIds.length / CONCURRENCY) || 1;
+  const chunkSize = Math.ceil(claimedLowerIDs.length / CONCURRENCY) || 1;
   const chunks = [];
-  for (let i = 0; i < lowerIds.length; i += chunkSize) {
-    chunks.push(lowerIds.slice(i, i + chunkSize));
+  for (let i = 0; i < claimedLowerIDs.length; i += chunkSize) {
+    chunks.push(claimedLowerIDs.slice(i, i + chunkSize));
   }
 
   await Promise.all(chunks.map(worker));
@@ -71,7 +68,9 @@ if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
     );
     process.exitCode = 1;
   }
-})().catch(e => {
-  console.error(e);
+}
+
+main().catch(err => {
+  console.error('Exiting:', err);
   process.exit(1);
 });

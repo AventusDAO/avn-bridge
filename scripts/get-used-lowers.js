@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
 const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
-const [NETWORK, CONTRACT, FROM_BLOCK_ARG, V2_THRESH_ARG] = process.argv.slice(2);
+const [NETWORK, BRIDGE_ADDRESS, FROM_BLOCK_ARG, V2_THRESH_ARG] = process.argv.slice(2);
 const FROM_BLOCK = Number(FROM_BLOCK_ARG);
 const V2_THRESH = Number(V2_THRESH_ARG);
 const LOWER_CLAIMED_SIG = ethers.id('LogLowerClaimed(uint32)');
@@ -42,11 +42,11 @@ async function* ranges(from, to) {
 (async () => {
   const TO_BLOCK = await provider.getBlockNumber();
   console.log(`\nNetwork: ${NETWORK}`);
-  console.log(`Bridge: ${CONTRACT}`);
+  console.log(`Bridge: ${BRIDGE_ADDRESS}`);
   console.log(`v2Thresh: ${V2_THRESH}`);
   console.log(`\nScanning blocks ${FROM_BLOCK} -> ${TO_BLOCK} (chunk=${CHUNK})`);
 
-  const filterBase = { address: CONTRACT, topics: [LOWER_CLAIMED_SIG] };
+  const filterBase = { address: BRIDGE_ADDRESS, topics: [LOWER_CLAIMED_SIG] };
   const ids = [];
 
   for await (const [from, to] of ranges(FROM_BLOCK, TO_BLOCK)) {
@@ -70,13 +70,6 @@ async function* ranges(from, to) {
   const claimedLowerIDs = Array.from(new Set(ids)).sort((a, b) => a - b);
   console.log(`\nFound ${claimedLowerIDs.length} claimed lower IDs.`);
 
-  if (claimedLowerIDs.length > 0) {
-    console.log('\n--- Claimed Lower IDs ---');
-    console.log(JSON.stringify(claimedLowerIDs, null, 2));
-  } else {
-    console.log('No claimed lower IDs found.');
-  }
-
   const { buckets, words } = accumulateBitmap(claimedLowerIDs);
 
   console.log('\n--- Buckets (uint256[]) ---');
@@ -96,22 +89,17 @@ async function* ranges(from, to) {
     if (!claimedSet.has(i)) unclaimedLowerIDs.push(i);
   }
 
-  console.log(`\nFound ${unclaimedLowerIDs.length} unclaimed lower IDs in [0, ${V2_THRESH}).`);
-  console.log('\n--- Unclaimed Lower IDs ---');
-  console.log(JSON.stringify(unclaimedLowerIDs, null, 2));
+  console.log(`\nDetermined ${unclaimedLowerIDs.length} unclaimed lower IDs in [0, ${V2_THRESH}).`);
 
-  const claimedFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_claimed.txt`);
-  fs.writeFileSync(claimedFile, claimedLowerIDs.join('\n') + (claimedLowerIDs.length ? '\n' : ''));
-  console.log(`\n${claimedLowerIDs.length} claimed lower IDs written to ./${path.basename(claimedFile)}`);
-
-  const unclaimedJsonFile = path.join(__dirname, `${CONTRACT.toLowerCase()}_unclaimed.json`);
-  const state = {
+  const filePath = path.join(__dirname, `${BRIDGE_ADDRESS.toLowerCase()}.json`);
+  const lowers = {
+    claimed: [...claimedSet],
     unclaimed: unclaimedLowerIDs,
     regenerated: []
   };
-  fs.writeFileSync(unclaimedJsonFile, JSON.stringify(state, null, 2));
-  console.log(`JSON state (unclaimed + empty regenerated) written to ./${path.basename(unclaimedJsonFile)}`);
+  fs.writeFileSync(filePath, JSON.stringify(lowers, null, 2));
 
+  console.log(`Lowers (unclaimed + empty regenerated) written to ./${path.basename(filePath)}`);
   console.log('\nDone.');
 })().catch(e => {
   console.error(e);
