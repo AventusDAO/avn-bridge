@@ -113,9 +113,9 @@ When upgrading to the **`revertLower`-enabled** bridge, all existing claimed low
 
 Spam schedule lower requests:
 
-`npm run create-lowers-dev`
+`npm run create-lowers-dev -- [max lowers (defaults to inf.)]  [batch size (defaults to 1)]`
 
-`npm run create-lowers-testnet`
+`npm run create-lowers-testnet -- [max lowers (defaults to inf.)]  [batch size (defaults to 1)]`
 
 ### Lower proof regeneration helper
 Request lower proof regeneration for all unclaimed lowers:
