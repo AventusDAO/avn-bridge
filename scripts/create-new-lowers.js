@@ -136,7 +136,7 @@ async function main() {
     const remaining = MAX_LOWERS - created;
     const toSendInBatch = Math.min(BATCH_SIZE, remaining);
 
-    console.log(`\n--- Starting batch: up to ${toSendInBatch} lowers (created so far: ${created}) ---`);
+    console.log(`\n--- Starting batch of ${toSendInBatch} lowers (total created so far: ${created}) ---`);
 
     try {
       const { successCount, lowerIds } = await sendBatchDirectLower(api, signer, avtAddress, amount, toSendInBatch, FROM);
