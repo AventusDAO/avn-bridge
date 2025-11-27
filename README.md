@@ -126,6 +126,6 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 To spam schedule lower requests:
 
-`npm run create-lowers -- [env] [T1 recipient address] [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
+`npm run create-lowers -- [chain] [T1 recipient address] [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
 
 
