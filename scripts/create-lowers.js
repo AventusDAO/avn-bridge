@@ -2,9 +2,17 @@ const { ApiPromise, WsProvider, Keyring } = require('@polkadot/api');
 const { hexToU8a, isHex } = require('@polkadot/util');
 require('dotenv').config();
 
-const [ENVIRONMENT, T1_RECIPIENT, MAX_LOWERS_ARG, BATCH_SIZE_ARG] = process.argv.slice(2);
-const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
-const T2_PRIVATE_KEY = process.env[`T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`];
+const [CHAIN, T1_RECIPIENT, MAX_LOWERS_ARG, BATCH_SIZE_ARG] = process.argv.slice(2);
+
+if (!CHAIN || !T1_RECIPIENT) {
+  console.error('Usage: node create-lowers.js <CHAIN> <T1_RECIPIENT> [MAX_LOWERS] [BATCH_SIZE]');
+  process.exit(1);
+}
+
+const WS_ENDPOINT = `wss://avn-parachain-internal.${CHAIN}.aventus.io`;
+const T2_KEY_ENV = `T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`;
+const T2_PRIVATE_KEY = process.env[T2_KEY_ENV];
+
 const TOKEN_START_AMOUNT = 1000;
 const DELAY_SECS = 4;
 
@@ -17,6 +25,11 @@ if (Number.isNaN(MAX_LOWERS) || MAX_LOWERS <= 0) {
 const BATCH_SIZE = BATCH_SIZE_ARG ? Number(BATCH_SIZE_ARG) : 1;
 if (Number.isNaN(BATCH_SIZE) || BATCH_SIZE <= 0) {
   console.error('❌ Invalid BATCH_SIZE argument.');
+  process.exit(1);
+}
+
+if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
+  console.error(`❌ Env var ${T2_KEY_ENV} is required but missing/empty.`);
   process.exit(1);
 }
 
@@ -88,7 +101,7 @@ async function sendBatchDirectLower(api, signer, avtAddress, startAmount, count,
           console.log(`Batch included in block ${status.asInBlock.toHex()}`);
         } else if (status.isFinalized) {
           const lowerIds = Array.from(lowerIdsSet);
-          console.log(`✅ Batch finalized: ${successCount} lowers created in this batch (lowerIds=[${lowerIds.join(', ')}])`);
+          console.log(`✅ Batch finalized: ${successCount} lowers created in this batch ` + `(lowerIds=[${lowerIds.join(', ')}])`);
           unsub();
           resolve({ successCount, lowerIds });
         }
@@ -141,7 +154,7 @@ async function main() {
       created += successCount;
       amount += toSendInBatch;
 
-      console.log(`Batch result: successCount=${successCount}, totalCreated=${created}, batchLowerIds=[${lowerIds.join(', ')}]`);
+      console.log(`Batch result: successCount=${successCount}, totalCreated=${created}, ` + `batchLowerIds=[${lowerIds.join(', ')}]`);
     } catch (err) {
       console.error(`❌ Batch failed: ${err.toString()}`);
       break;
@@ -149,7 +162,7 @@ async function main() {
 
     if (created >= MAX_LOWERS) break;
 
-    console.log(`--- Batch complete. Total created so far: ${created}. Sleeping ${DELAY_SECS}s before next batch ---`);
+    console.log(`--- Batch complete. Total created so far: ${created}. ` + `Sleeping ${DELAY_SECS}s before next batch ---`);
     await sleep(DELAY_SECS * 1000);
   }
 

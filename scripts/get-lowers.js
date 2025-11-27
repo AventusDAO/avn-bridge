@@ -97,7 +97,7 @@ async function* ranges(from, to) {
     process.exit(1);
   }
 
-  console.log(`T1 Network: ${NETWORK}`);
+  console.log(`\nT1 Network: ${NETWORK}`);
   console.log(`Bridge: ${bridgeAddress}`);
   console.log(`T2 Chain: "${CHAIN}"`);
   console.log(`T2 endpoint: ${WS_ENDPOINT}`);
@@ -176,9 +176,14 @@ async function* ranges(from, to) {
   console.log('\n--- Buckets (uint256[]) ---');
   console.log(JSON.stringify(buckets));
   console.log('\n--- Words (uint256[]) ---');
-  console.log(JSON.stringify(decWords));
+  console.log(JSON.stringify(decWords, null, 2));
 
-  const filePath = path.join(__dirname, 'data', `${CHAIN}.json`);
+  const dataDir = path.join(__dirname, 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+  }
+
+  const filePath = path.join(dataDir, `${CHAIN}.json`);
   fs.writeFileSync(
     filePath,
     JSON.stringify(
@@ -193,7 +198,7 @@ async function* ranges(from, to) {
     )
   );
 
-  console.log(`\nOutput written to ./data/${path.basename(filePath)}`);
+  console.log(`\nOutput written to ${filePath}`);
   console.log('Done.');
 
   await api.disconnect();
