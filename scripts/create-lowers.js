@@ -2,11 +2,9 @@ const { ApiPromise, WsProvider, Keyring } = require('@polkadot/api');
 const { hexToU8a, isHex } = require('@polkadot/util');
 require('dotenv').config();
 
-const [ENVIRONMENT, MAX_LOWERS_ARG, BATCH_SIZE_ARG] = process.argv.slice(2);
+const [ENVIRONMENT, T1_RECIPIENT, MAX_LOWERS_ARG, BATCH_SIZE_ARG] = process.argv.slice(2);
 const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
-const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET;
-const T1_RECIPIENT = '0xde7e1091cde63c05aa4d82c62e4c54edbc701b22';
-
+const T2_PRIVATE_KEY = process.env[`T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`];
 const TOKEN_START_AMOUNT = 1000;
 const DELAY_SECS = 4;
 
@@ -119,8 +117,7 @@ async function main() {
     signer = keyring.addFromUri(trimmed);
   }
 
-  const FROM = signer.address;
-  console.log(`Using account: ${FROM}`);
+  console.log(`Using account: ${signer.address}`);
   console.log(`Max lowers to create: ${MAX_LOWERS === Infinity ? '∞ (no limit)' : MAX_LOWERS}`);
   console.log(`Batch size (per utility.batch): ${BATCH_SIZE}`);
 
@@ -139,7 +136,7 @@ async function main() {
     console.log(`\n--- Starting batch of ${toSendInBatch} lowers (total created so far: ${created}) ---`);
 
     try {
-      const { successCount, lowerIds } = await sendBatchDirectLower(api, signer, avtAddress, amount, toSendInBatch, FROM);
+      const { successCount, lowerIds } = await sendBatchDirectLower(api, signer, avtAddress, amount, toSendInBatch, signer.address);
 
       created += successCount;
       amount += toSendInBatch;

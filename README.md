@@ -73,56 +73,59 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
-## Migrating Claimed Lowers
+## Migrating Claimed Lowers (T2 v8.3.0 upgrade)
 
-When upgrading to the **`revertLower`-enabled** bridge, all existing claimed lowers must be migrated from their **hash format** to the new **ID-based format**. The migration process is as follows:
+Introducing `revertLower` on T1 requires all existing claimed lowers to be migrated from their **hash format** to a new **ID-based format**. The migration process is as follows:
 
-1. Deploy the new implementation contract to be ready to upgrade to (in step 4).
+1. Pre-deploy the new bridge implementation so it is ready for upgrade later.
 
-2. **Owner TX 1** - *pause lowering* on the bridge.
+2. Run get-lowers (pass 1):
 
-3. Generate the migration data by running:
+    `npm run get-lowers-sep -- [chain]`
 
-    `npm run get-lowers-sep -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Sepolia)\
-    `npm run get-lowers-main -- 0xBridgeAddress  [fromBlock]  [v2ThresholdLowerID]` (Mainnet)
+    This produces a `data/[chain].json` file containing:
 
-    **e.g. for Dev bridge (published @ block 6,855,422) with V2 thresh 119:** `npm run get-lowers-sep -- 0x8017bdbd6def5f8518fe44c2d650c21d1c4427a1 6845422 119`
+    - all claimed lower IDs detected in the contract
+    - buckets[] + words[] for `setUsedLowers`
+    - unclaimed lowers that will require proof regeneration
+    - T1 tx hashes of claimed lowers still present on T2
 
-    This scans the specified bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[..]` and `words[..]` arguments required for `setUsedLowers(..)`.
+3. Pass the T1 tx hashes output in step 2 with the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
 
-    The claimed lowers are saved to `scripts/claimed_0xbridgeaddress.txt` to be verified (in step 6).
+4. **Owner TX 1** - *pause lowering* on the bridge.
 
-    The unclaimed lowers (from 0 to the `v2ThresholdLowerID`) are saved to `scripts/regenerate_0xbridgeaddress.txt` to be regenerated on T2.
+5. Ensure T2 is idle by confirming:
 
-4. **Owner TX 2** - *upgrade* the bridge to the new implementation contract.
+    - no pending items in ethBridge.requestQueue
+    - no active lowers in T2
 
-5. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 3.
+6. Perform the T2 forkless upgrade. This will pause T2 -> T1 communication until step 11.
 
-6. Verify the migration by running:
+7. Run get-lowers again (pass 2):
 
-    `npm run verify-lowers-sep -- 0xBridgeAddress` (Sepolia)\
-    `npm run verify-lowers-main -- 0xBridgeAddress` (Mainnet)
+    `npm run get-lowers-sep -- [chain]`
 
-    This checks all the lower IDs discovered in step 3 are now correctly marked as `used` in the contract.
+    This produces the final migration data for steps 9, 10, and 12.
+
+8. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 1.
+
+9. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 7 to mark all existing claimed lowers as `used`.
+
+10. Verify step 9:
+
+    `npm run verify-lowers -- [chain]`
+
+11. Request lower proof regeneration on T2 for all remaining unclaimed lowers:
+
+    `npm run regen-lowers -- [chain]`
     
-7. **Owner TX 4** - (after successful verification) *unpause lowering* on the bridge.
+8. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
 
-💡 **Tip**: You can safely re-run the `used-lowers-*` command at any time — it simply overwrites any existing saved file with the latest list of claimed lowers.
 
 ### Lower migration testing helper
 
-Spam schedule lower requests:
+To spam schedule lower requests:
 
-`npm run create-lowers-dev -- [max lowers (defaults to inf.)]  [batch size (defaults to 1)]`
+`npm run create-lowers -- [env] [T1 recipient address] [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
 
-`npm run create-lowers-testnet -- [max lowers (defaults to inf.)]  [batch size (defaults to 1)]`
-
-### Lower proof regeneration helper
-Request lower proof regeneration for all unclaimed lowers:
-
-`npm run regen-lowers-dev`
-
-`npm run regen-lowers-testnet`
-
-`npm run regen-lowers-mainnet`
 

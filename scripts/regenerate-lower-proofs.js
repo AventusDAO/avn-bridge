@@ -4,13 +4,19 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const [ENVIRONMENT] = process.argv.slice(2);
-const WS_ENDPOINT = `wss://avn-parachain-internal.${ENVIRONMENT}.aventus.io`;
-const T2_PRIVATE_KEY = ENVIRONMENT === 'dev' ? process.env.T2_PRIVATE_KEY_DEV : process.env.T2_PRIVATE_KEY_TESTNET;
-
 const DELAY_SECS = 30;
 const BATCH_SIZE = 10;
 const QUEUE_LIMIT = 100;
+
+const [CHAIN] = process.argv.slice(2);
+
+if (!CHAIN) {
+  console.error('Missing chain arg (e.g.: "dev", "testnet", "mainnet")');
+  process.exit(1);
+}
+
+const WS_ENDPOINT = CHAIN === 'mainnet' ? 'wss://avn-parachain-internal.mainnet.aventus.io' : `wss://avn-parachain-internal.${CHAIN}.aventus.io`;
+const T2_PRIVATE_KEY = process.env[`T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`];
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
@@ -60,6 +66,11 @@ async function sendRegenerateLower(api, signer, lowerId) {
 }
 
 async function main() {
+  if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
+    console.error('T2_PRIVATE_KEY env var required');
+    process.exit(1);
+  }
+
   console.log(`Connecting to ${WS_ENDPOINT}...`);
   const provider = new WsProvider(WS_ENDPOINT);
   const api = await ApiPromise.create({ provider });
@@ -77,14 +88,12 @@ async function main() {
     signer = keyring.addFromUri(trimmed);
   }
 
-  const FROM = signer.address;
-  console.log(`Using account: ${FROM}`);
+  console.log(`Using account: ${signer.address}`);
 
-  const bridgeAddressRaw = await api.query.avn.avnBridgeContractAddress();
-  const bridgeAddress = bridgeAddressRaw.toString();
-  console.log(`Bridge address: ${bridgeAddress}`);
+  const bridgeAddress = (await api.query.avn.avnBridgeContractAddress()).toString();
+  console.log(`Bridge: ${bridgeAddress}`);
 
-  const filePath = path.join(__dirname, `${bridgeAddress}.json`);
+  const filePath = path.join(__dirname, 'data', `${CHAIN}.json`);
   if (!fs.existsSync(filePath)) {
     console.error(`State file not found: ${filePath}`);
     await api.disconnect();
@@ -100,16 +109,18 @@ async function main() {
     process.exit(1);
   }
 
-  const allUnclaimed = lowers.unclaimed.map(n => Number(n)).filter(n => !Number.isNaN(n));
-  const regeneratedSet = new Set(lowers.regenerated.map(n => Number(n)).filter(n => !Number.isNaN(n)));
-  const pending = allUnclaimed.filter(id => !regeneratedSet.has(id));
+  const allToRegenerate = (lowers.toRegenerateOnT2 || []).map(n => Number(n)).filter(n => !Number.isNaN(n));
 
-  console.log(`Total unclaimed IDs: ${allUnclaimed.length}`);
+  const regeneratedSet = new Set((lowers.regenerated || []).map(n => Number(n)).filter(n => !Number.isNaN(n)));
+
+  const pending = allToRegenerate.filter(id => !regeneratedSet.has(id));
+
+  console.log(`Total toRegenerateOnT2 IDs: ${allToRegenerate.length}`);
   console.log(`Already regenerated: ${regeneratedSet.size}`);
   console.log(`Pending to regenerate: ${pending.length}`);
 
   if (pending.length === 0) {
-    console.log('Nothing to do. All unclaimed IDs are already regenerated.');
+    console.log('Nothing to do. All toRegenerateOnT2 IDs are already regenerated.');
     await api.disconnect();
     return;
   }
@@ -117,7 +128,7 @@ async function main() {
   function saveState() {
     lowers.regenerated = Array.from(regeneratedSet).sort((a, b) => a - b);
     fs.writeFileSync(filePath, JSON.stringify(lowers, null, 2));
-    console.log(`  → State saved. regenerated=${lowers.regenerated.length}, ` + `still pending=${allUnclaimed.length - lowers.regenerated.length}`);
+    console.log(`  → State saved. regenerated=${lowers.regenerated.length}, ` + `still pending=${allToRegenerate.length - lowers.regenerated.length}`);
   }
 
   let index = 0;
