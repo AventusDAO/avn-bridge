@@ -103,7 +103,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 7. Run get-lowers again (pass 2):
 
-    `npm run get-lowers-sep -- [chain]`
+    `npm run get-lowers -- [chain]`
 
     This produces the final migration data for steps 9, 10, and 12.
 
