@@ -241,7 +241,6 @@ function printErrorCodes() {
     'InvalidRecipient()',
     'InvalidT1Key()',
     'InvalidT2Key()',
-    'LegacyLower()',
     'LiftFailed()',
     'LiftDisabled()',
     'LiftLimitHit()',

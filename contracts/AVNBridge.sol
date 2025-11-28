@@ -112,7 +112,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidRecipient(); // 0x9c8d2cd2
   error InvalidT1Key(); // 0x4b0218a8
   error InvalidT2Key(); // 0xf4fc87a4
-  error LegacyLower(); // 0x9e79b036
   error LiftDisabled(); // 0xb63d2c8c
   error LiftFailed(); // 0xb19ed519
   error LiftLimitHit(); // 0xc36d2830
@@ -380,7 +379,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       bool lowerIsUsed
     )
   {
-    if (!_isCorrectLength(lowerProof)) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
+    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
 
     (token, amount, recipient, lowerId, t2Sender, t2Timestamp) = _extractLowerData(lowerProof);
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
@@ -424,7 +423,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
     if (!canRevert) revert PermissionDenied();
-    if (t2Sender == bytes32(0)) revert LegacyLower();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
     emit LogLowerReverted(lowerId, recipient, msg.sender);
@@ -517,8 +515,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _extractLowerData(
     bytes calldata lowerProof
   ) private pure returns (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) {
-    if (!_isCorrectLength(lowerProof)) revert InvalidProof();
-
+    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) revert InvalidProof();
     assembly {
       token := shr(96, calldataload(lowerProof.offset))
       amount := calldataload(add(lowerProof.offset, 20))
@@ -554,11 +551,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         ++i;
       }
     } while (i < numAuth);
-  }
-
-  function _isCorrectLength(bytes calldata proof) private pure returns (bool) {
-    if (proof.length < MINIMUM_LOWER_PROOF_LENGTH) return false;
-    return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
   function _processLower(

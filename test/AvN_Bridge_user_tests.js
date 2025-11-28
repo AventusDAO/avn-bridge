@@ -529,15 +529,6 @@ describe('Lifting and lowering', () => {
         await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
       });
 
-      it('the lower is a legacy lower', async () => {
-        await token20.approve(bridge.address, lowerAmount);
-        await bridge.lift(token20.address, someT2PubKey, lowerAmount);
-        const recipient = owner;
-        const missingT2Recipient = EMPTY_BYTES_32;
-        const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, recipient, missingT2Recipient);
-        await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LegacyLower');
-      });
-
       it('the proof is invalid', async () => {
         await expect(bridge.revertLower(randomBytes32())).to.be.revertedWithCustomError(bridge, 'InvalidProof');
       });
