@@ -27,7 +27,7 @@ The addition and removal of AvN "authors" - nodes which perform T2 block creatio
 The periodic checkpointing on T1 of all transaction calls having occurred on T2, recorded in the form of Merkle roots.
 
 3. **Bridging funds**\
-The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) between T1 Ethereum and T2 AVN via:
+The secure movement of ERC20 or ERC777 tokens between T1 Ethereum and T2 AVN via:
    - **Lifting** - Locking tokens sent to the T1 contract and authorising the generation of an identical amount in the designated recipient's account on T2.
    - **Lowering** - Unlocking tokens from the contract and transferring them to the specified T1 recipient, based on having received proof of their destruction on T2.
 

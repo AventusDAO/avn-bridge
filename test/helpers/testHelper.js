@@ -9,7 +9,6 @@ const EXPIRY_WINDOW = 60;
 const LOWER_ID = '0x5702';
 const MIN_AUTHORS = 4;
 const ONE_AVT_IN_ATTO = 1_000_000_000_000_000_000n;
-const PSEUDO_ETH = { address: ethers.getAddress('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') };
 const ZERO_ADDRESS = { address: ethers.getAddress('0x0000000000000000000000000000000000000000') };
 
 const PROOF_TYPES = {
@@ -241,6 +240,7 @@ function printErrorCodes() {
     'InvalidRecipient()',
     'InvalidT1Key()',
     'InvalidT2Key()',
+    'LegacyLower()',
     'LiftFailed()',
     'LiftDisabled()',
     'LiftLimitHit()',
@@ -326,7 +326,6 @@ module.exports = {
   keccak256,
   MIN_AUTHORS,
   ONE_AVT_IN_ATTO,
-  PSEUDO_ETH,
   randomBytes32,
   randomHex,
   randomT2TxId,

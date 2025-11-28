@@ -28,7 +28,6 @@ interface IAVNBridge {
 
   // Public
   function lift(address token, bytes32 t2PubKey, uint256 amount) external;
-  function liftETH(bytes32 t2PubKey) external payable;
   function claimLower(bytes calldata proof) external;
   function revertLower(bytes calldata proof) external;
   function checkLower(
