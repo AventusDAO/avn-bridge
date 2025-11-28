@@ -9,8 +9,8 @@ const CHUNK = 50_000;
 
 const [CHAIN] = process.argv.slice(2);
 
-if (!CHAIN) {
-  console.error('Missing chain arg (e.g.: "dev", "testnet", "mainnet")');
+if (!['dev', 'testnet', 'mainnet'].includes(CHAIN)) {
+  console.error(`Invalid chain: "${CHAIN}"`);
   process.exit(1);
 }
 
@@ -86,7 +86,6 @@ async function* ranges(from, to) {
 (async () => {
   const wsProvider = new WsProvider(WS_ENDPOINT);
   const api = await ApiPromise.create({ provider: wsProvider });
-
   const bridgeAddress = (await api.query.avn.avnBridgeContractAddress()).toString();
   const v2Threshold = (await api.query.tokenManager.lowerNonce()).toNumber();
 
@@ -99,7 +98,7 @@ async function* ranges(from, to) {
 
   console.log(`\nT1 Network: ${NETWORK}`);
   console.log(`Bridge: ${bridgeAddress}`);
-  console.log(`T2 Chain: "${CHAIN}"`);
+  console.log(`T2 Chain: ${CHAIN}`);
   console.log(`T2 endpoint: ${WS_ENDPOINT}`);
   console.log(`V2 Threshold Lower ID: ${v2Threshold}`);
 
@@ -114,7 +113,7 @@ async function* ranges(from, to) {
   readyIds.sort((a, b) => a - b);
   const readyIdsSet = new Set(readyIds);
   const toBlock = await provider.getBlockNumber();
-  console.log(`Scanning T1 blocks ${deployBlock} -> ${toBlock}...`);
+  console.log(`\nScanning T1 blocks ${deployBlock} -> ${toBlock}...`);
 
   const filterBase = { address: bridgeAddress, topics: [LOWER_CLAIMED_SIG] };
   const ids = [];
@@ -165,18 +164,19 @@ async function* ranges(from, to) {
   toRemoveFromT2.sort((a, b) => a.lowerId - b.lowerId);
   toRegenerateOnT2.sort((a, b) => a - b);
 
-  console.log(`\nFound ${readyIds.length} lowers in lowersReadyToClaim on T2.`);
-  console.log(`Found ${claimedLowerIDs.length} claimed lower IDs on T1.`);
-  console.log(`Found ${toRemoveFromT2.length} lower proofs to remove from T2.`);
-  console.log(`${toRegenerateOnT2.length} proofs require regenerating on T2.`);
+  console.log();
+  console.log(`Lowers already claimed on T1: ${claimedLowerIDs.length}`);
+  console.log(`Lowers in lowersReadyToClaim on T2: ${readyIds.length}`);
+  console.log(`Lower proofs to remove from T2: ${toRemoveFromT2.length}`);
+  console.log(`Lower proofs to regenerate on T2: ${toRegenerateOnT2.length}`);
 
   let { buckets, words } = accumulateBitmap(claimedLowerIDs);
-  const decWords = words.map(w => w.toString(10));
+  words = `[${words.map(w => w.toString(10))}]`;
 
-  console.log('\n--- Buckets (uint256[]) ---');
+  console.log('\nBuckets:');
   console.log(JSON.stringify(buckets));
-  console.log('\n--- Words (uint256[]) ---');
-  console.log(JSON.stringify(decWords, null, 2));
+  console.log('\nWords:');
+  console.log(words);
 
   const dataDir = path.join(__dirname, 'data');
   if (!fs.existsSync(dataDir)) {
@@ -184,22 +184,21 @@ async function* ranges(from, to) {
   }
 
   const filePath = path.join(dataDir, `${CHAIN}.json`);
-  fs.writeFileSync(
-    filePath,
-    JSON.stringify(
-      {
-        claimed: [...claimedSet],
-        toRemoveFromT2,
-        toRegenerateOnT2,
-        setUsedLowersArgs: { buckets, words: decWords }
-      },
-      null,
-      2
-    )
-  );
+
+  const out = `{
+   "setUsedLowersArgs": {
+    "buckets": [${buckets.join(', ')}],
+    "words": "${words}"
+   },
+   "claimed": ${JSON.stringify([...claimedSet])},
+   "toRemoveFromT2": ${JSON.stringify(toRemoveFromT2, null, 2)},
+   "toRegenerateOnT2": ${JSON.stringify(toRegenerateOnT2)}
+  }`;
+
+  fs.writeFileSync(filePath, out);
 
   console.log(`\nOutput written to ${filePath}`);
-  console.log('Done.');
+  console.log('\nDone.');
 
   await api.disconnect();
 })().catch(e => {

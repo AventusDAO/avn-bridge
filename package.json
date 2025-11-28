@@ -33,6 +33,7 @@
     "coverage": "npx hardhat coverage",
     "size": "npx hardhat size-contracts",
     "test": "npx hardhat test",
+    "claim-lowers": "node scripts/claim-lowers.js",
     "create-lowers": "node scripts/create-lowers.js",
     "get-lowers": "node scripts/get-lowers.js",
     "regen-lowers": "node scripts/regenerate-lower-proofs.js",

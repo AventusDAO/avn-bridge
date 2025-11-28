@@ -122,10 +122,14 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 8. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
 
 
-### Lower migration testing helper
+### Lower migration testing helpers
 
 To spam schedule lower requests:
 
 `npm run create-lowers -- <chain> <T1 recipient address> [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
+
+To claim lowers:
+
+`npm run claim-lowers -- <chain> <start ID> <end ID>`
 
 

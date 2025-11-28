@@ -9,12 +9,16 @@ if (!CHAIN || !T1_RECIPIENT) {
   process.exit(1);
 }
 
+if (CHAIN === 'mainnet') {
+  console.error('Not for mainnet use.');
+  process.exit(1);
+}
+
 const WS_ENDPOINT = `wss://avn-parachain-internal.${CHAIN}.aventus.io`;
-const T2_KEY_ENV = `T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`;
-const T2_PRIVATE_KEY = process.env[T2_KEY_ENV];
+const T2_PRIVATE_KEY = process.env[`T2_PRIVATE_KEY_${CHAIN.toUpperCase()}`];
 
 const TOKEN_START_AMOUNT = 1000;
-const DELAY_SECS = 4;
+const DELAY_SECS = 15;
 
 const MAX_LOWERS = MAX_LOWERS_ARG ? Number(MAX_LOWERS_ARG) : Infinity;
 if (Number.isNaN(MAX_LOWERS) || MAX_LOWERS <= 0) {
@@ -25,11 +29,6 @@ if (Number.isNaN(MAX_LOWERS) || MAX_LOWERS <= 0) {
 const BATCH_SIZE = BATCH_SIZE_ARG ? Number(BATCH_SIZE_ARG) : 1;
 if (Number.isNaN(BATCH_SIZE) || BATCH_SIZE <= 0) {
   console.error('❌ Invalid BATCH_SIZE argument.');
-  process.exit(1);
-}
-
-if (!T2_PRIVATE_KEY || !T2_PRIVATE_KEY.trim()) {
-  console.error(`❌ Env var ${T2_KEY_ENV} is required but missing/empty.`);
   process.exit(1);
 }
 

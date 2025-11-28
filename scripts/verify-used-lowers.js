@@ -6,8 +6,8 @@ require('dotenv').config();
 
 const [CHAIN] = process.argv.slice(2);
 
-if (!CHAIN) {
-  console.error('Missing chain arg (e.g.: "dev", "testnet", "mainnet")');
+if (!['dev', 'testnet', 'mainnet'].includes(CHAIN)) {
+  console.error(`Invalid chain: "${CHAIN}"`);
   process.exit(1);
 }
 
