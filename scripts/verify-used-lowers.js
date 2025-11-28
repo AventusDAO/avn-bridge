@@ -1,39 +1,69 @@
+const { ApiPromise, WsProvider } = require('@polkadot/api');
 const ethers = require('ethers');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const { MAINNET_RPC_URL, SEPOLIA_RPC_URL } = process.env;
-const RPCS = { mainnet: MAINNET_RPC_URL, sepolia: SEPOLIA_RPC_URL };
-const [NETWORK, CONTRACT] = process.argv.slice(2);
-const ABI = ['function lowerUsed(uint32 lowerId) view returns (bool)'];
+const [CHAIN] = process.argv.slice(2);
 
-const provider = new ethers.JsonRpcProvider(RPCS[NETWORK]);
-const contract = new ethers.Contract(CONTRACT, ABI, provider);
-
-const filename = path.join(__dirname, `${CONTRACT.toLowerCase()}.txt`);
-if (!fs.existsSync(filename)) {
-  console.error(`Missing ${filename}. Run "used-lowers.js" first.`);
+if (!['dev', 'testnet', 'mainnet'].includes(CHAIN)) {
+  console.error(`Invalid chain: "${CHAIN}"`);
   process.exit(1);
 }
 
-const lowerIds = fs
-  .readFileSync(filename, 'utf8')
-  .split('\n')
-  .map(s => s.trim())
-  .filter(Boolean)
-  .map(s => Number(s))
-  .sort((a, b) => a - b);
+async function main() {
+  let ETH_RPC;
+  let WS_ENDPOINT;
+  let NETWORK;
 
-if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
-  console.error('File contains invalid lower IDs.');
-  process.exit(1);
-}
+  if (CHAIN === 'mainnet') {
+    ETH_RPC = process.env.MAINNET_RPC_URL;
+    WS_ENDPOINT = 'wss://avn-parachain-internal.mainnet.aventus.io';
+    NETWORK = 'mainnet';
+  } else {
+    ETH_RPC = process.env.SEPOLIA_RPC_URL;
+    WS_ENDPOINT = `wss://avn-parachain-internal.${CHAIN}.aventus.io`;
+    NETWORK = 'sepolia';
+  }
 
-(async () => {
-  console.log(`\nNetwork: ${NETWORK}`);
-  console.log(`\nBridge: ${CONTRACT}`);
-  console.log(`\nLoaded ${lowerIds.length} lowerId(s) from ${filename}`);
+  if (!ETH_RPC) {
+    console.error(`Missing ETH RPC URL env var for CHAIN=${CHAIN}`);
+    process.exit(1);
+  }
+
+  const ABI = ['function lowerUsed(uint32 lowerId) view returns (bool)'];
+  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+
+  const wsProvider = new WsProvider(WS_ENDPOINT);
+  const api = await ApiPromise.create({ provider: wsProvider });
+  const bridgeAddress = (await api.query.avn.avnBridgeContractAddress()).toString();
+  const contract = new ethers.Contract(bridgeAddress, ABI, provider);
+  const filePath = path.join(__dirname, 'data', `${CHAIN}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`State file not found: ${filePath}`);
+    await api.disconnect();
+    process.exit(1);
+  }
+
+  console.log(`T1 Network: ${NETWORK}`);
+  console.log(`Bridge: ${bridgeAddress}`);
+  console.log(`T2 Chain: "${CHAIN}"`);
+  console.log(`T2 endpoint: ${WS_ENDPOINT}`);
+  console.log(`Using state file: ${path.basename(filePath)}`);
+
+  let lowers;
+  try {
+    lowers = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.error(`Failed to parse JSON from ${filePath}:`, e);
+    await api.disconnect();
+    process.exit(1);
+  }
+
+  const claimedLowerIDs = (lowers.claimed || []).map(n => Number(n)).filter(n => !Number.isNaN(n));
+
+  console.log(`\nLoaded ${claimedLowerIDs.length} claimed lowerId(s) from ${filePath}`);
 
   const bad = [];
   const CONCURRENCY = 25;
@@ -44,16 +74,16 @@ if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
         const used = await contract.lowerUsed(id);
         if (!used) bad.push(id);
       } catch (e) {
-        console.error(`Error checking lowerId ${id}`);
+        console.error(`Error checking lowerId ${id}: ${e.message}`);
         bad.push(id);
       }
     }
   }
 
-  const chunkSize = Math.ceil(lowerIds.length / CONCURRENCY) || 1;
+  const chunkSize = Math.ceil(claimedLowerIDs.length / CONCURRENCY) || 1;
   const chunks = [];
-  for (let i = 0; i < lowerIds.length; i += chunkSize) {
-    chunks.push(lowerIds.slice(i, i + chunkSize));
+  for (let i = 0; i < claimedLowerIDs.length; i += chunkSize) {
+    chunks.push(claimedLowerIDs.slice(i, i + chunkSize));
   }
 
   await Promise.all(chunks.map(worker));
@@ -71,7 +101,11 @@ if (lowerIds.some(n => !Number.isInteger(n) || n < 0)) {
     );
     process.exitCode = 1;
   }
-})().catch(e => {
-  console.error(e);
+
+  await api.disconnect();
+}
+
+main().catch(err => {
+  console.error('Exiting:', err);
   process.exit(1);
 });

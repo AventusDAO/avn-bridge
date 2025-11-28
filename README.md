@@ -16,7 +16,7 @@ The system is underwritten by [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd9
 
 #### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
 
-#### Develop - [0x8017bDbD6Def5f8518Fe44c2D650c21d1C4427A1](https://etherscan.io/address/0x8017bDbD6Def5f8518Fe44c2D650c21d1C4427A1) 
+#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
 
 ### Key Functions
 
@@ -56,7 +56,7 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 ### Deployment
 
 #### Deploy the initial proxy contract
-`npx hardhat --network <network> deploy --env <"dev" || "testnet" || "paseo" || "mainnet">`
+`npx hardhat --network <network> deploy <"dev" || "testnet" || "paseo" || "mainnet">`
 
 #### Prepare (update) the OZ manifest
 `npx hardhat --network <network> prepare <bridge address>`
@@ -73,24 +73,63 @@ The secure movement of fungible tokens (any ERC20 or ERC777 token, or ETH) betwe
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
-## Migrating Claimed Lowers
+## Migrating Claimed Lowers (T2 v8.3.0 upgrade)
 
-When upgrading to the **`revertLower`-enabled** bridge, all existing claimed lowers must be migrated from their **hash format** to the new **ID-based format**. The migration process is as follows:
+Introducing `revertLower` on T1 requires all existing claimed lowers to be migrated from their **hash format** to a new **ID-based format**. The migration process is as follows:
 
-1. Deploy the new implementation contract to be ready to upgrade to (in step 4).
-2. **Owner TX 1** - *pause lowering* on the bridge.
-3. Generate the migration data by running:\
-    `npm run used-lowers-sep -- 0xBridge... [from block]` (Sepolia)\
-    `npm run used-lowers-main -- 0xBridge... [from block]` (Mainnet)
+1. Pre-deploy the new bridge implementation so it is ready for upgrade later.
 
-    This scans the specified bridge for `LogLowerClaimed` events, capturing all claimed Lower IDs and generating the `buckets[..]` and `words[..]` arguments required for `setUsedLowers(..)`. The lower IDs are saved to `scripts/0xBridge...` to be verified (in step 6).
-4. **Owner TX 2** - *upgrade* the bridge to the new implementation contract.
-5. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 3.
-6. Verify the migration by running:\
-    `npm run verify-lowers-sep -- 0xBridge...` (Sepolia)\
-    `npm run verify-lowers-main -- 0xBridge...` (Mainnet)
+2. Run get-lowers (pass 1):
 
-    This checks all the lower IDs discovered in step 3 are now correctly marked as `used` in the contract.
-7. **Owner TX 4** - (after successful verification) *unpause lowering* on the bridge.
+    `npm run get-lowers-sep -- [chain]`
 
-💡 **Tip**: You can safely re-run the `used-lowers-*` command at any time — it simply overwrites any existing saved file with the latest list of claimed lowers.
+    This produces a `data/[chain].json` file containing:
+
+    - all claimed lower IDs detected in the contract
+    - buckets[] + words[] for `setUsedLowers`
+    - unclaimed lowers that will require proof regeneration
+    - T1 tx hashes of claimed lowers still present on T2
+
+3. Pass the T1 tx hashes output in step 2 with the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
+
+4. **Owner TX 1** - *pause lowering* on the bridge.
+
+5. Ensure T2 is idle by confirming:
+
+    - no pending items in ethBridge.requestQueue
+    - no active lowers in T2
+
+6. Perform the T2 forkless upgrade. This will pause T2 -> T1 communication until step 11.
+
+7. Run get-lowers again (pass 2):
+
+    `npm run get-lowers -- <chain>`
+
+    This produces the final migration data for steps 9, 10, and 12.
+
+8. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 1.
+
+9. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 7 to mark all existing claimed lowers as `used`.
+
+10. Verify step 9:
+
+    `npm run verify-lowers -- <chain>`
+
+11. Request lower proof regeneration on T2 for all remaining unclaimed lowers:
+
+    `npm run regen-lowers -- <chain>`
+    
+8. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
+
+
+### Lower migration testing helpers
+
+To spam schedule lower requests:
+
+`npm run create-lowers -- <chain> <T1 recipient address> [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
+
+To claim lowers:
+
+`npm run claim-lowers -- <chain> <start ID> <end ID>`
+
+
