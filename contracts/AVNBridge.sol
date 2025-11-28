@@ -5,8 +5,8 @@ pragma solidity 0.8.30;
  * @dev Aventus Network bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains.
  * Enables POS "author" nodes to periodically publish T2 transactional state to T1.
  * Enables addition and removal of authors from participation in consensus.
- * Enables "lifting" of ETH, ERC20, or ERC777 tokens from T1 to the specified account on T2.
- * Enables "lowering" of ETH, ERC20, and ERC777 tokens from T2 to the T1 account specified in the T2 proof.
+ * Enables "lifting" of ERC20 or ERC777 tokens from T1 to the specified account on T2.
+ * Enables "lowering" of ERC20 and ERC777 tokens from T2 to the T1 account specified in the T2 proof.
  * Proxy upgradeable implementation utilising EIP-1822.
  */
 
@@ -37,8 +37,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint64 t2Timestamp)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
-
-  address private constant PSEUDO_ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
   uint256 private constant LOWER_DATA_LENGTH = 20 + 32 + 20 + 4 + 32 + 8; // token address + amount + T1 recipient address + lower ID + T2 sender public key + T2 timestamp
   uint256 private constant MINIMUM_AUTHOR_SET = 4;
@@ -112,6 +110,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error InvalidRecipient(); // 0x9c8d2cd2
   error InvalidT1Key(); // 0x4b0218a8
   error InvalidT2Key(); // 0xf4fc87a4
+  error LegacyLower(); // 0x9e79b036
   error LiftDisabled(); // 0xb63d2c8c
   error LiftFailed(); // 0xb19ed519
   error LiftLimitHit(); // 0xc36d2830
@@ -179,15 +178,22 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Temporary owner function to migrate existing claimed lowers.
+   * @dev Temporary owner function to migrate existing claimed lowers and drain any trace wei.
    */
   function setUsedLowers(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
     if (buckets.length != words.length) revert();
+
     for (uint256 i; i < buckets.length; ) {
       usedLowers[buckets[i]] = words[i];
       unchecked {
         ++i;
       }
+    }
+
+    uint256 balance = address(this).balance;
+    if (balance != 0) {
+      (bool ok, ) = payable(owner()).call{ value: balance }('');
+      if (!ok) revert();
     }
   }
 
@@ -335,15 +341,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Lets the caller lift ETH to the specified T2 recipient.
-   */
-  function liftETH(bytes32 t2PubKey) external payable whenLiftEnabled lock {
-    if (t2PubKey == bytes32(0)) revert InvalidT2Key();
-    if (msg.value == 0) revert AmountIsZero();
-    emit LogLifted(PSEUDO_ETH_ADDRESS, t2PubKey, msg.value);
-  }
-
-  /**
    * @dev ERC777 hook, triggered when anyone sends ERC777 tokens to this contract with a data payload containing
    * the 32 byte public key of the T2 recipient. Fails if the recipient is not supplied.
    */
@@ -379,7 +376,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       bool lowerIsUsed
     )
   {
-    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
+    if (!_isCorrectLength(lowerProof)) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
 
     (token, amount, recipient, lowerId, t2Sender, t2Timestamp) = _extractLowerData(lowerProof);
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
@@ -423,6 +420,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
     if (!canRevert) revert PermissionDenied();
+    if (t2Sender == bytes32(0)) revert LegacyLower();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
     emit LogLowerReverted(lowerId, recipient, msg.sender);
@@ -515,7 +513,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _extractLowerData(
     bytes calldata lowerProof
   ) private pure returns (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) {
-    if (lowerProof.length < MINIMUM_LOWER_PROOF_LENGTH) revert InvalidProof();
+    if (!_isCorrectLength(lowerProof)) revert InvalidProof();
+
     assembly {
       token := shr(96, calldataload(lowerProof.offset))
       amount := calldataload(add(lowerProof.offset, 20))
@@ -551,6 +550,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         ++i;
       }
     } while (i < numAuth);
+  }
+
+  function _isCorrectLength(bytes calldata proof) private pure returns (bool) {
+    if (proof.length < MINIMUM_LOWER_PROOF_LENGTH) return false;
+    return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
   function _processLower(
@@ -594,10 +598,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _releaseFunds(address token, uint256 amount, address recipient) private {
-    if (token == PSEUDO_ETH_ADDRESS) {
-      (bool success, ) = payable(recipient).call{ value: amount }('');
-      if (!success) revert PaymentFailed();
-    } else if (token == ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH)) {
+    if (token == ERC1820_REGISTRY.getInterfaceImplementer(token, ERC777_TOKEN_HASH)) {
       try IERC777(token).send(recipient, amount, '') {} catch {
         IERC20(token).safeTransfer(recipient, amount);
       }
