@@ -14,9 +14,9 @@ The system is underwritten by [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd9
 
 #### Mainnet - [0xF05Df39f745A240fb133cC4a11E42467FAB10f1F](https://etherscan.io/address/0xF05Df39f745A240fb133cC4a11E42467FAB10f1F)
 
-#### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
+#### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://sepolia.etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
 
-#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
+#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://sepolia.etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
 
 ### Key Functions
 
