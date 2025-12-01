@@ -186,7 +186,7 @@ async function* ranges(from, to) {
   const filePath = path.join(dataDir, `${CHAIN}.json`);
 
   const out = `{
-   "setUsedLowersArgs": {
+   "migrateArgs": {
     "buckets": [${buckets.join(', ')}],
     "words": "${words}"
    },

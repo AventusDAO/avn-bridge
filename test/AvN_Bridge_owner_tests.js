@@ -186,13 +186,13 @@ describe('Owner Functions', () => {
     });
   });
 
-  context('setUsedLowers', () => {
+  context('migrate', () => {
     const toWord = bitIdxs => bitIdxs.reduce((w, b) => w | (1n << BigInt(b)), 0n);
 
     it('owner can set IDs in a single bucket', async () => {
       const ids = [1, 2, 4, 6, 8, 9];
       const word = toWord(ids);
-      await bridge.setUsedLowers([0], [word]);
+      await bridge.migrate([0], [word]);
 
       for (const id of ids) {
         expect(await bridge.lowerUsed(id)).to.equal(true);
@@ -207,7 +207,7 @@ describe('Owner Functions', () => {
       const bucket0 = toWord([255]); // ID 255
       const bucket1 = toWord([0, 3]); // IDs 256, 259
 
-      await bridge.setUsedLowers([0, 1], [bucket0, bucket1]);
+      await bridge.migrate([0, 1], [bucket0, bucket1]);
 
       expect(await bridge.lowerUsed(255)).to.equal(true);
       expect(await bridge.lowerUsed(256)).to.equal(true);
@@ -220,14 +220,14 @@ describe('Owner Functions', () => {
 
     it('buckets can be overwritten', async () => {
       const first = toWord([1, 2, 4]);
-      await bridge.setUsedLowers([0], [first]);
+      await bridge.migrate([0], [first]);
 
       expect(await bridge.lowerUsed(1)).to.equal(true);
       expect(await bridge.lowerUsed(2)).to.equal(true);
       expect(await bridge.lowerUsed(4)).to.equal(true);
 
       const second = toWord([2]);
-      await bridge.setUsedLowers([0], [second]);
+      await bridge.migrate([0], [second]);
 
       expect(await bridge.lowerUsed(2)).to.equal(true);
       expect(await bridge.lowerUsed(1)).to.equal(false);
@@ -239,7 +239,7 @@ describe('Owner Functions', () => {
       const bucket2 = toWord([10]); // ID 522
       const bucket1 = toWord([0, 255]); // IDs 256, 511
 
-      await bridge.setUsedLowers([2, 0, 1], [bucket2, bucket0, bucket1]);
+      await bridge.migrate([2, 0, 1], [bucket2, bucket0, bucket1]);
 
       expect(await bridge.lowerUsed(1)).to.equal(true);
       expect(await bridge.lowerUsed(3)).to.equal(true);
@@ -256,7 +256,7 @@ describe('Owner Functions', () => {
       const first = toWord([1, 2, 4]);
       const second = toWord([2]);
 
-      await bridge.setUsedLowers([0, 0], [first, second]);
+      await bridge.migrate([0, 0], [first, second]);
 
       expect(await bridge.lowerUsed(2)).to.equal(true);
       expect(await bridge.lowerUsed(1)).to.equal(false);
@@ -264,7 +264,7 @@ describe('Owner Functions', () => {
     });
 
     it('does nothing with empty arrays', async () => {
-      await bridge.setUsedLowers([], []);
+      await bridge.migrate([], []);
       expect(await bridge.lowerUsed(0)).to.equal(false);
       expect(await bridge.lowerUsed(1)).to.equal(false);
     });
@@ -275,7 +275,7 @@ describe('Owner Functions', () => {
       const bit = BigInt(id % 256);
       const word = 1n << bit;
 
-      await bridge.setUsedLowers([bucket], [word]);
+      await bridge.migrate([bucket], [word]);
 
       expect(await bridge.lowerUsed(id)).to.equal(true);
       expect(await bridge.lowerUsed(id - 1)).to.equal(false);
@@ -293,7 +293,7 @@ describe('Owner Functions', () => {
       const buckets = Array.from({ length: NUM_BUCKETS }, (_, i) => START_BUCKET + i);
       const words = Array.from({ length: NUM_BUCKETS }, () => wordAllBut23);
 
-      const tx = await bridge.setUsedLowers(buckets, words);
+      const tx = await bridge.migrate(buckets, words);
       const receipt = await tx.wait();
       console.log('Gas cost to set ~7k lowers as used =', receipt.gasUsed.toString());
 
@@ -312,11 +312,11 @@ describe('Owner Functions', () => {
     context('fails', () => {
       it('when the caller is not the owner', async () => {
         const word = toWord([5, 7, 9]);
-        await expect(bridge.connect(someOtherAccount).setUsedLowers([0], [word])).to.be.revertedWith('Ownable: caller is not the owner');
+        await expect(bridge.connect(someOtherAccount).migrate([0], [word])).to.be.revertedWith('Ownable: caller is not the owner');
       });
 
       it('when array lengths mismatch', async () => {
-        await expect(bridge.setUsedLowers([0, 1], [1n])).to.be.revertedWithoutReason();
+        await expect(bridge.migrate([0, 1], [1n])).to.be.revertedWithoutReason();
       });
     });
   });

@@ -387,9 +387,7 @@ describe('Lifting and lowering', () => {
 
         await expect(bridge.connect(recipient).revertLower(lowerProof))
           .to.emit(bridge, 'LogLowerReverted')
-          .withArgs(lowerId, recipient.address, recipient.address)
-          .and.to.emit(bridge, 'LogLifted')
-          .withArgs(token20.address, someT2PubKey, lowerAmount);
+          .withArgs(token20.address, someT2PubKey, recipient.address, lowerAmount, lowerId);
 
         // Revert should not transfer tokens to the recipient on T1
         expect(await token20.balanceOf(bridge.address)).to.equal(avnBalBefore);
@@ -412,9 +410,7 @@ describe('Lifting and lowering', () => {
 
         await expect(bridge.connect(owner).revertLower(lowerProof))
           .to.emit(bridge, 'LogLowerReverted')
-          .withArgs(lowerId, recipient.address, owner.address)
-          .and.to.emit(bridge, 'LogLifted')
-          .withArgs(token777.address, someT2PubKey, lowerAmount);
+          .withArgs(token777.address, someT2PubKey, recipient.address, lowerAmount, lowerId);
 
         expect(await token777.balanceOf(bridge.address)).to.equal(avnBalBefore);
 
