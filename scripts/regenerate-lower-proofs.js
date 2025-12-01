@@ -169,9 +169,9 @@ async function main() {
 
     const filePath = path.join(__dirname, 'data', `${CHAIN}.json`);
 
-    const setUsed = lowers.setUsedLowersArgs || {};
-    const buckets = Array.isArray(setUsed.buckets) ? setUsed.buckets : [];
-    const wordsStr = typeof setUsed.words === 'string' ? setUsed.words : '[]';
+    const migrate = lowers.migrateArgs || {};
+    const buckets = Array.isArray(migrate.buckets) ? migrate.buckets : [];
+    const wordsStr = typeof migrate.words === 'string' ? migrate.words : '[]';
 
     const claimed = Array.isArray(lowers.claimed) ? lowers.claimed : [];
     const toRemoveFromT2 = Array.isArray(lowers.toRemoveFromT2) ? lowers.toRemoveFromT2 : [];
@@ -181,7 +181,7 @@ async function main() {
     const lines = [];
 
     lines.push('{');
-    lines.push('  "setUsedLowersArgs": {');
+    lines.push('  "migrateArgs": {');
     lines.push(`    "buckets": [${buckets.join(', ')}],`);
     lines.push(`    "words": ${JSON.stringify(wordsStr)}`);
     lines.push('  },');

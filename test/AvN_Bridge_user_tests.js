@@ -387,7 +387,7 @@ describe('Lifting and lowering', () => {
 
         await expect(bridge.connect(recipient).revertLower(lowerProof))
           .to.emit(bridge, 'LogLowerReverted')
-          .withArgs(lowerId, recipient.address, recipient.address)
+          .withArgs(token20.address, someT2PubKey, recipient.address, lowerAmount, lowerId)
           .and.to.emit(bridge, 'LogLifted')
           .withArgs(token20.address, someT2PubKey, lowerAmount);
 
@@ -412,7 +412,7 @@ describe('Lifting and lowering', () => {
 
         await expect(bridge.connect(owner).revertLower(lowerProof))
           .to.emit(bridge, 'LogLowerReverted')
-          .withArgs(lowerId, recipient.address, owner.address)
+          .withArgs(token777.address, someT2PubKey, recipient.address, lowerAmount, lowerId)
           .and.to.emit(bridge, 'LogLifted')
           .withArgs(token777.address, someT2PubKey, lowerAmount);
 

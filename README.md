@@ -14,9 +14,9 @@ The system is underwritten by [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd9
 
 #### Mainnet - [0xF05Df39f745A240fb133cC4a11E42467FAB10f1F](https://etherscan.io/address/0xF05Df39f745A240fb133cC4a11E42467FAB10f1F)
 
-#### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
+#### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://sepolia.etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
 
-#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
+#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://sepolia.etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
 
 ### Key Functions
 
@@ -86,7 +86,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
     This produces a `data/[chain].json` file containing:
 
     - all claimed lower IDs detected in the contract
-    - buckets[] + words[] for `setUsedLowers`
+    - buckets[] + words[] for `migrate`
     - unclaimed lowers that will require proof regeneration
     - T1 tx hashes of claimed lowers still present on T2
 
@@ -109,7 +109,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 8. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 1.
 
-9. **Owner TX 3** - call `setUsedLowers(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 7 to mark all existing claimed lowers as `used`.
+9. **Owner TX 3** - call `migrate(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 7 to mark all existing claimed lowers as `used`.
 
 10. Verify step 9:
 
@@ -131,5 +131,3 @@ To spam schedule lower requests:
 To claim lowers:
 
 `npm run claim-lowers -- <chain> <start ID> <end ID>`
-
-
