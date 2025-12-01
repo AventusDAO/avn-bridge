@@ -13,7 +13,7 @@ interface IAVNBridge {
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLowerClaimed(uint32 indexed lowerId);
-  event LogLowerReverted(address indexed token, bytes32 indexed t2Sender, address indexed originalRecipient, uint256 amount, uint32 lowerId);
+  event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
 
   // Owner only
   function toggleAuthors(bool state) external;
