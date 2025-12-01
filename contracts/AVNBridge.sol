@@ -423,8 +423,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (t2Sender == bytes32(0)) revert LegacyLower();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
-    // TODO: Remove LogLifted event once T2 can process LogLowerReverted event
-    emit LogLifted(token, t2Sender, amount);
     emit LogLowerReverted(token, t2Sender, recipient, amount, lowerId);
   }
 
