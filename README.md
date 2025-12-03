@@ -128,6 +128,6 @@ To spam schedule lower requests:
 
 `npm run create-lowers -- <chain> <T1 recipient address> [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
 
-To claim lowers:
+To claim multiple lowers:
 
 `npm run claim-lowers -- <chain> <start ID> <end ID>`

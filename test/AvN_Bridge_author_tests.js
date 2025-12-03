@@ -57,7 +57,7 @@ describe('Author Functions', () => {
 
     context('fails when', () => {
       it('author functions are disabled', async () => {
-        await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+        await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
 
         const newt2TxId = randomT2TxId();
         const newRootHash = randomBytes32();
@@ -69,7 +69,7 @@ describe('Author Functions', () => {
           'AuthorsDisabled'
         );
 
-        await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+        await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
       });
 
       it('the expiry time has passed', async () => {
@@ -209,7 +209,7 @@ describe('Author Functions', () => {
 
     context('fails when', () => {
       it('author functions are disabled', async () => {
-        await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+        await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
 
         const prospectAuthor = authors[nextAuthorId];
         const expiry = await getValidExpiry();
@@ -220,7 +220,7 @@ describe('Author Functions', () => {
           bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
 
-        await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+        await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
       });
 
       it('the T1 public key is empty', async () => {
@@ -405,7 +405,7 @@ describe('Author Functions', () => {
       });
 
       it('author functions are disabled', async () => {
-        await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+        await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
 
         const t2TxId = randomT2TxId();
         const expiry = await getValidExpiry();
@@ -415,7 +415,7 @@ describe('Author Functions', () => {
           bridge.connect(activeAuthor).removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
 
-        await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+        await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
       });
 
       it('an invalid t1PublicKey is passed', async () => {
@@ -488,10 +488,10 @@ describe('Author Functions', () => {
     });
 
     it('The correct state is returned for a failed tx', async () => {
-      await bridge.toggleAuthors(false);
+      await bridge.enableAuthors(false);
       await expect(publishRoot()).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
       await increaseBlockTimestamp(EXPIRY_WINDOW);
-      await bridge.toggleAuthors(true);
+      await bridge.enableAuthors(true);
       expect(await bridge.corroborate(t2TxId, expiry)).to.equal(-1);
     });
 

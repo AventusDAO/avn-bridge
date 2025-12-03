@@ -2,9 +2,9 @@
 pragma solidity 0.8.30;
 
 interface IAVNBridge {
-  event LogAuthorsEnabled(bool indexed state);
-  event LogLiftingEnabled(bool indexed state);
-  event LogLoweringEnabled(bool indexed state);
+  event LogAuthorsEnabled(bool enabled);
+  event LogLiftingEnabled(bool enabled);
+  event LogLoweringEnabled(bool enabled);
   event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
@@ -16,9 +16,9 @@ interface IAVNBridge {
   event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
 
   // Owner only
-  function toggleAuthors(bool state) external;
-  function toggleLifting(bool state) external;
-  function toggleLowering(bool state) external;
+  function enableAuthors(bool enable) external;
+  function enableLifting(bool enable) external;
+  function enableLowering(bool enable) external;
   function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external;
 
   // Authors only

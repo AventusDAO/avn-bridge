@@ -250,7 +250,6 @@ function printErrorCodes() {
     'MissingKeys()',
     'NotAnAuthor()',
     'NotEnoughAuthors()',
-    'PaymentFailed()',
     'PendingOwnerOnly()',
     'PermissionDenied()',
     'RootHashIsUsed()',

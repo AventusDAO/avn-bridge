@@ -120,7 +120,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error MissingKeys(); // 0x097ec09e
   error NotAnAuthor(); // 0x157b0512
   error NotEnoughAuthors(); // 0x3a6a875c
-  error PaymentFailed(); // 0xf499da20
   error PendingOwnerOnly(); // 0x306bd3d7
   error PermissionDenied(); // 0x1e092104
   error RootHashIsUsed(); // 0x2c8a3b6e
@@ -207,25 +206,25 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Lets the owner enable/disable author access.
    */
-  function toggleAuthors(bool state) external onlyOwner {
-    authorsEnabled = state;
-    emit LogAuthorsEnabled(state);
+  function enableAuthors(bool enable) external onlyOwner {
+    authorsEnabled = enable;
+    emit LogAuthorsEnabled(enable);
   }
 
   /**
    * @dev Lets the owner enable/disable lifting.
    */
-  function toggleLifting(bool state) external onlyOwner {
-    liftingEnabled = state;
-    emit LogLiftingEnabled(state);
+  function enableLifting(bool enable) external onlyOwner {
+    liftingEnabled = enable;
+    emit LogLiftingEnabled(enable);
   }
 
   /**
    * @dev Lets the owner enable/disable lowering.
    */
-  function toggleLowering(bool state) external onlyOwner {
-    loweringEnabled = state;
-    emit LogLoweringEnabled(state);
+  function enableLowering(bool enable) external onlyOwner {
+    loweringEnabled = enable;
+    emit LogLoweringEnabled(enable);
   }
 
   /**

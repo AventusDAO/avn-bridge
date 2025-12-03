@@ -325,14 +325,14 @@ describe('Owner Functions', () => {
     context('Toggle Authors', () => {
       context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(bridge.toggleAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+          await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
         });
       });
       context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(bridge.connect(someOtherAccount).toggleAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.connect(someOtherAccount).enableAuthors(true)).to.be.revertedWith('Ownable: caller is not the owner');
 
-          await expect(bridge.toggleAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+          await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
         });
       });
     });
@@ -340,14 +340,14 @@ describe('Owner Functions', () => {
     context('Toggle Lifting', () => {
       context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
+          await expect(bridge.enableLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
         });
       });
       context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(bridge.connect(someOtherAccount).toggleLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.connect(someOtherAccount).enableLifting(true)).to.be.revertedWith('Ownable: caller is not the owner');
 
-          await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
+          await expect(bridge.enableLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
         });
       });
     });
@@ -355,14 +355,14 @@ describe('Owner Functions', () => {
     context('Toggle Lowering', () => {
       context('succeeds', () => {
         it('when called by the owner', async () => {
-          await expect(bridge.toggleLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
+          await expect(bridge.enableLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
         });
       });
       context('fails', () => {
         it('when the caller is not the owner', async () => {
-          await expect(bridge.connect(someOtherAccount).toggleLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(bridge.connect(someOtherAccount).enableLowering(true)).to.be.revertedWith('Ownable: caller is not the owner');
 
-          await expect(bridge.toggleLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
+          await expect(bridge.enableLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
         });
       });
     });
