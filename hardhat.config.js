@@ -207,24 +207,15 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: '0.8.30',
+        version: '0.8.31',
         settings: {
+          evmVersion: "osaka",
           optimizer: {
             enabled: true,
             runs: 100000,
             details: { yul: true }
           },
           viaIR: true
-        }
-      },
-      {
-        version: '0.8.25',
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 2000,
-            details: { yul: true }
-          }
         }
       }
     ]
