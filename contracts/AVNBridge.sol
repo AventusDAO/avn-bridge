@@ -177,26 +177,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Temporary owner function to migrate existing claimed lowers and drain any trace wei.
-   */
-  function migrate(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
-    if (buckets.length != words.length) revert();
-
-    for (uint256 i; i < buckets.length; ) {
-      usedLowers[buckets[i]] = words[i];
-      unchecked {
-        ++i;
-      }
-    }
-
-    uint256 balance = address(this).balance;
-    if (balance != 0) {
-      (bool ok, ) = payable(owner()).call{ value: balance }('');
-      if (!ok) revert();
-    }
-  }
-
-  /**
    * @dev EIP712 Domain name.
    */
   function name() public pure returns (string memory) {

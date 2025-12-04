@@ -73,9 +73,24 @@ The secure movement of ERC20 or ERC777 tokens between T1 Ethereum and T2 AVN via
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
-## Migrating Claimed Lowers (T2 v8.3.0 upgrade)
+## Migrating Claimed Lowers (T2 v8.3.3 upgrade)
 
 Introducing `revertLower` on T1 requires all existing claimed lowers to be migrated from their **hash format** to a new **ID-based format**. The migration process is as follows:
+
+0. Ensure the contract contains the `migrate` function (this function is removed after the migration is complete - see steps 13 & 14):
+
+```
+  function migrate(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
+    if (buckets.length != words.length) revert();
+
+    for (uint256 i; i < buckets.length; ) {
+      usedLowers[buckets[i]] = words[i];
+      unchecked {
+        ++i;
+      }
+    }
+  }
+```
 
 1. Pre-deploy the new bridge implementation so it is ready for upgrade later.
 
@@ -119,7 +134,11 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
     `npm run regen-lowers -- <chain>`
     
-8. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
+12. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
+
+13. Deploy a new implementation with the `migrate` function removed.
+
+14. **Owner TX 5** - *upgrade* the bridge to the new implementation contract deployed in step 13.
 
 
 ### Lower migration testing helpers
