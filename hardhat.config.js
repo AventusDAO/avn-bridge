@@ -209,7 +209,7 @@ module.exports = {
       {
         version: '0.8.31',
         settings: {
-          evmVersion: "osaka",
+          evmVersion: "prague",
           optimizer: {
             enabled: true,
             runs: 100000,
