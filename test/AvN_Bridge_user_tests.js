@@ -141,17 +141,17 @@ describe('Lifting and lowering', () => {
       });
 
       it('attempting to lift ERC777 tokens when lift is disabled', async () => {
-        await bridge.toggleLifting(false);
+        await bridge.enableLifting(false);
         await expect(token777.send(bridge.address, 1n, someT2PubKey)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
-        await bridge.toggleLifting(true);
+        await bridge.enableLifting(true);
         await token777.send(bridge.address, 1n, someT2PubKey);
       });
 
       it('attempting to lift ERC20 tokens when lift is disabled', async () => {
-        await bridge.toggleLifting(false);
+        await bridge.enableLifting(false);
         await token20.approve(bridge.address, 1n);
         await expect(bridge.lift(token20.address, someT2PubKey, 1n)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
-        await bridge.toggleLifting(true);
+        await bridge.enableLifting(true);
         await bridge.lift(token20.address, someT2PubKey, 1n);
       });
 
@@ -259,9 +259,9 @@ describe('Lifting and lowering', () => {
       });
 
       it('lowering is disabled', async () => {
-        await expect(bridge.toggleLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
+        await expect(bridge.enableLowering(false)).to.emit(bridge, 'LogLoweringEnabled').withArgs(false);
         await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerDisabled');
-        await expect(bridge.toggleLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
+        await expect(bridge.enableLowering(true)).to.emit(bridge, 'LogLoweringEnabled').withArgs(true);
         await bridge.claimLower(lowerProof);
       });
 
@@ -441,9 +441,9 @@ describe('Lifting and lowering', () => {
 
         const [lowerProof] = await createLowerProof(bridge, token20, lowerAmount, owner, someT2PubKey);
 
-        await expect(bridge.toggleLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
+        await expect(bridge.enableLifting(false)).to.emit(bridge, 'LogLiftingEnabled').withArgs(false);
         await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
-        await expect(bridge.toggleLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
+        await expect(bridge.enableLifting(true)).to.emit(bridge, 'LogLiftingEnabled').withArgs(true);
 
         await bridge.revertLower(lowerProof);
       });
