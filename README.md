@@ -105,7 +105,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
     - unclaimed lowers that will require proof regeneration
     - T1 tx hashes of claimed lowers still present on T2
 
-4. Pass the T1 tx hashes output from step 2 to the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
+4. Pass the T1 tx hashes output from step 3 to the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
 
 5. **Owner TX 1** - *pause lowering* on the bridge.
 
@@ -114,7 +114,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
     - no pending items in ethBridge.requestQueue
     - no active lowers in T2
 
-7. Perform the T2 forkless upgrade. This will pause T2 -> T1 communication until step 13.
+7. Perform the T2 forkless upgrade.
 
 8. Run get-lowers again (pass #2):
 
@@ -124,7 +124,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 9. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 2.
 
-10. **Owner TX 3** - call `migrate(..)` on the upgrade bridge, passing the `buckets[..]` and `words[..]` arguments generated in step 7. This will mark all existing claimed lowers as `used`.
+10. **Owner TX 3** - call `migrate(..)` on the bridge, passing the `buckets[..]` and `words[..]` arguments generated in step 8. This will mark all existing claimed lowers as `used`.
 
 11. Verify step 9 on-chain:
 

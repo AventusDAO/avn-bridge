@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const VALID_CHAINS = ['dev', 'testnet', 'mainnet'];
-
+const T1_PRIVATE_KEYS = { mainnet: 'MAINNET_T1_PRIVATE_KEY', dev: 'DEV_T1_PRIVATE_KEY', testnet: 'TESTNET_T1_PRIVATE_KEY' };
 const T2_PRIVATE_KEYS = { mainnet: 'MAINNET_T2_PRIVATE_KEY', dev: 'DEV_T2_PRIVATE_KEY', testnet: 'TESTNET_T2_PRIVATE_KEY' };
 
 async function init(chain) {
@@ -14,16 +14,20 @@ async function init(chain) {
 
   const network = chain === 'mainnet' ? 'mainnet' : 'sepolia';
   const rpcEnv = chain === 'mainnet' ? 'MAINNET_RPC_URL' : 'SEPOLIA_RPC_URL';
-  const t1PkEnv = chain === 'mainnet' ? 'MAINNET_T1_PRIVATE_KEY' : 'SEPOLIA_T1_PRIVATE_KEY';
+
+  const t1PkEnv = T1_PRIVATE_KEYS[chain];
+  const t2PkEnv = T2_PRIVATE_KEYS[chain];
   const t1RPC = requireEnv(rpcEnv);
   const t1PK = requireEnv(t1PkEnv);
+  const t2PK = requireEnv(t2PkEnv);
+
   const provider = new ethers.JsonRpcProvider(t1RPC);
   const wallet = new ethers.Wallet(t1PK).connect(provider);
-  const t2PkEnv = T2_PRIVATE_KEYS[chain];
-  const t2PK = requireEnv(t2PkEnv);
+
   const t2Websocket = `wss://avn-parachain-internal.${chain}.aventus.io`;
   const api = await ApiPromise.create({ provider: new WsProvider(t2Websocket) });
   const t2Signer = getT2Signer(t2PK);
+
   const bridgeAddress = (await api.query.avn.avnBridgeContractAddress()).toString();
   const bridgeABI = ['function claimLower(bytes proof)', 'function lowerUsed(uint32 lowerId) view returns (bool)'];
   const bridge = new ethers.Contract(bridgeAddress, bridgeABI, wallet);
