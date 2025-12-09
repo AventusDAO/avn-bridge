@@ -185,7 +185,7 @@ describe('Owner Functions', () => {
       await deployAndCatchInitError('AddressIsZero');
     });
   });
-  
+
   context('Switches', () => {
     context('Toggle Authors', () => {
       context('succeeds', () => {
