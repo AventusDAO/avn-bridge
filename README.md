@@ -126,7 +126,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 10. **Owner TX 3** - call `migrate(..)` on the bridge, passing the `buckets[..]` and `words[..]` arguments generated in step 8. This will mark all existing claimed lowers as `used`.
 
-11. Verify step 9 on-chain:
+11. Verify step 10 on-chain:
 
     `npm run verify-lowers -- <chain>`
 
