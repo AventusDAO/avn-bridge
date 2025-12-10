@@ -16,7 +16,7 @@ async function main() {
 
     for (const id of claimed) {
       try {
-        const used = await bridge.lowerUsed(id);
+        const used = await bridge.isLowerUsed(id);
         if (!used) bad.push(id);
       } catch (e) {
         console.error(`Error checking lower ID ${id}: ${e.message || e.toString()}`);

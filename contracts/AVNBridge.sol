@@ -363,7 +363,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bool[] memory confirmed = new bool[](nextAuthorId);
     uint256 confirmationsOffset;
 
-    lowerIsUsed = lowerUsed(lowerId);
+    lowerIsUsed = isLowerUsed(lowerId);
     confirmationsProvided = numConfirmationsProvided;
     confirmationsRequired = _requiredConfirmations();
     assembly {
@@ -435,9 +435,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /**
    * @dev Returns the claim status of the lower.
    */
-  function lowerUsed(uint32 lowerId) public view returns (bool) {
-    uint256 bucket = uint256(lowerId) >> 8;
-    uint256 mask = 1 << (uint256(lowerId) & 255);
+  function isLowerUsed(uint32 lowerId) public view returns (bool) {
+    (uint256 bucket, uint256 mask) = _lowerIdToBitmap(lowerId);
     return (usedLowers[bucket] & mask) != 0;
   }
 
@@ -535,6 +534,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
+  function _lowerIdToBitmap(uint32 lowerId) private pure returns (uint256 bucket, uint256 mask) {
+    bucket = uint256(lowerId) >> 8;
+    mask = 1 << (uint256(lowerId) & 255);
+  }
+
   function _processLower(
     address token,
     uint256 amount,
@@ -544,9 +548,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint64 t2Timestamp,
     bytes calldata lowerProof
   ) private {
-    if (lowerUsed(lowerId)) revert LowerIsUsed();
-    uint256 bucket = uint256(lowerId) >> 8;
-    usedLowers[bucket] |= 1 << (uint256(lowerId) & 255);
+    (uint256 bucket, uint256 mask) = _lowerIdToBitmap(lowerId);
+    if ((usedLowers[bucket] & mask) != 0) revert LowerIsUsed();
+    usedLowers[bucket] |= mask;
 
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
     _verifyConfirmations(true, proofHash, lowerProof[LOWER_DATA_LENGTH:]);

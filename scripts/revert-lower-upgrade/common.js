@@ -36,7 +36,7 @@ async function init(chain) {
   const t2Signer = getT2Signer(t2PrivateKey);
 
   const bridgeAddress = (await t2Api.query.ethBridge.instance()).toHuman().bridgeContract;
-  const bridgeABI = ['function claimLower(bytes proof)', 'function lowerUsed(uint32 lowerId) view returns (bool)'];
+  const bridgeABI = ['function claimLower(bytes proof)', 'function isLowerUsed(uint32 lowerId) view returns (bool)'];
 
   const bridge = new ethers.Contract(bridgeAddress, bridgeABI, t1Wallet ?? t1Provider);
   bridge.address = bridgeAddress;
