@@ -83,7 +83,7 @@ async function main() {
         }
       }
 
-      await sleep(30);
+      await sleep(3000);
     }
 
     const claimedSet = new Set(claimed);
@@ -93,7 +93,6 @@ async function main() {
     const toRegen = [];
 
     for (const id of ready) {
-      if (id >= t2LowerNonce) continue;
       if (claimedSet.has(id)) {
         toRemove.push({ lowerId: id, txHash: txHashById.get(id) ?? null });
       } else {
