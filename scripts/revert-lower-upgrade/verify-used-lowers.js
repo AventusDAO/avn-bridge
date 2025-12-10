@@ -1,9 +1,9 @@
-const { init, loadState } = require('./common/utils');
+const { init, loadState } = require('./common');
 
 const [CHAIN] = process.argv.slice(2);
 
 async function main() {
-  const { api, bridge } = await init(CHAIN);
+  const { t2Api, bridge } = await init(CHAIN);
 
   try {
     const { filePath, state } = loadState(CHAIN);
@@ -37,7 +37,7 @@ async function main() {
       console.log('\n✅ All lowers marked used');
     }
   } finally {
-    await api.disconnect();
+    await t2Api.disconnect();
   }
 }
 

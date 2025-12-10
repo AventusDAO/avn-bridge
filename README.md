@@ -73,9 +73,12 @@ The secure movement of ERC20 or ERC777 tokens between T1 Ethereum and T2 AVN via
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
-## Migrating Claimed Lowers (T2 v8.3.3 upgrade)
+
+## Migrating Claimed Lowers (T2 v8.4.0 upgrade)
 
 Introducing `revertLower` on T1 requires all existing claimed lowers to be migrated from their **hash format** to a new **ID-based format**. The migration process is as follows:
+
+0. The config for each chain environment (eg.: `dev`, `mainnet`, `testnet`, etc) sits at the top of the `scripts/revert-lower-upgrade/common.js` file. Ensure the relevant environment variables are populated as required.
 
 1. Ensure the contract contains the `migrate` function (this function is removed after the migration is complete - see steps 14 & 15):
 
@@ -100,19 +103,19 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
     This produces a `scripts/revert-lower-upgrade/data/[chain].json` file containing:
 
-    - all claimed lower IDs detected in the contract
-    - buckets[] + words[] arguments for `migrate` function
-    - unclaimed lowers that will require proof regeneration
-    - T1 tx hashes of claimed lowers still present on T2
+    - `migrateArgs` - the `buckets[]` and `words[]` arguments for the `migrate` function
+    - `claimed` - all claimed lower IDs detected in the contract
+    - `toRemoveFromT2` - Lower IDs and T1 tx hashes of claimed lowers that haven't been cleared from T2
+    - `toRegenerateOnT2` - unclaimed lowers that will require proof regeneration
 
-4. Pass the T1 tx hashes output from step 3 to the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
+4. If there are any entries in `toRemoveFromT2` produced in step 3 then pass the T1 tx hashes into Polkadot.js UI -> Developer tab -> `Extrinsics` -> `sudo` -> `sudo(call)` -> `ethBridge` -> `setAdminSetting` -> `QueueAdditionalEthereumEvent`. This will remove them from `TokenManager.lowersReadyToClaim`.
 
 5. **Owner TX 1** - *pause lowering* on the bridge.
 
 6. Ensure T2 is idle by confirming:
 
-    - no pending items in ethBridge.requestQueue
-    - no active lowers in T2
+    - no pending lowers in `ethBridge.requestQueue`
+    - no active lowers in `ethBridge.activeRequest`
 
 7. Perform the T2 forkless upgrade.
 

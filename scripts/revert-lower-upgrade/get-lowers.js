@@ -1,4 +1,4 @@
-const { init, sleep, saveState } = require('./common/utils');
+const { init, sleep, saveState } = require('./common');
 
 const [CHAIN] = process.argv.slice(2);
 const CHUNK = 50_000;
@@ -17,8 +17,8 @@ function accumulateBitmap(lowerIds) {
   return { buckets, words };
 }
 
-async function* blockRanges(provider, from, to) {
-  let latest = to ?? (await provider.getBlockNumber());
+async function* blockRanges(t1Provider, from, to) {
+  let latest = to ?? (await t1Provider.getBlockNumber());
   let start = from;
 
   while (start <= latest) {
@@ -28,14 +28,14 @@ async function* blockRanges(provider, from, to) {
   }
 }
 
-async function findDeploymentBlock(provider, address) {
+async function findDeploymentBlock(t1Provider, address) {
   let lo = 0;
-  let hi = await provider.getBlockNumber();
+  let hi = await t1Provider.getBlockNumber();
   let found = null;
 
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    const code = await provider.getCode(address, mid);
+    const code = await t1Provider.getCode(address, mid);
     if (code && code !== '0x') {
       found = mid;
       hi = mid - 1;
@@ -51,24 +51,24 @@ function parseLowerIdFromTopic(topicHex) {
 }
 
 async function main() {
-  const { api, provider, bridge } = await init(CHAIN);
+  const { t2Api, t1Provider, bridge } = await init(CHAIN);
 
   try {
-    const deployBlock = await findDeploymentBlock(provider, bridge.address);
+    const deployBlock = await findDeploymentBlock(t1Provider, bridge.address);
     if (!deployBlock) throw new Error('Bridge deployment block not found');
 
-    const t2LowerNonce = (await api.query.tokenManager.lowerNonce()).toNumber();
+    const t2LowerNonce = (await t2Api.query.tokenManager.lowerNonce()).toNumber();
     console.log(`T1 bridge deployment block      : ${deployBlock}`);
     console.log(`T2 Lower ID threshold           : ${t2LowerNonce}`);
-    const entries = await api.query.tokenManager.lowersReadyToClaim.entries();
+    const entries = await t2Api.query.tokenManager.lowersReadyToClaim.entries();
     const ready = new Set(entries.map(([k]) => k.args[0].toNumber()));
     console.log(`Proofs in T2 lowersReadyToClaim : ${ready.size}`);
 
     const claimed = [];
     const txHashById = new Map();
 
-    for await (const [from, to] of blockRanges(provider, deployBlock)) {
-      const logs = await provider.getLogs({
+    for await (const [from, to] of blockRanges(t1Provider, deployBlock)) {
+      const logs = await t1Provider.getLogs({
         address: bridge.address,
         topics: [bridge.lowerClaimedSig],
         fromBlock: from,
@@ -108,7 +108,7 @@ async function main() {
 
     const state = {
       migrateArgs: {
-        buckets,
+        buckets: `[${buckets.join(',')}]`,
         words: `[${words.map(w => w.toString(10)).join(',')}]`
       },
       claimed: [...claimedSet].sort((a, b) => a - b),
@@ -118,7 +118,7 @@ async function main() {
 
     saveState(CHAIN, state);
   } finally {
-    await api.disconnect();
+    await t2Api.disconnect();
   }
 }
 

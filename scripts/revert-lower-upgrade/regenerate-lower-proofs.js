@@ -1,4 +1,4 @@
-const { init, sleep, loadState, saveState } = require('./common/utils');
+const { init, sleep, loadState, saveState } = require('./common');
 
 const [CHAIN] = process.argv.slice(2);
 
@@ -6,13 +6,13 @@ const BATCH_SIZE = 10;
 const DELAY_SECS = 30;
 const QUEUE_LIMIT = 100;
 
-async function sendBatch(api, t2Signer, ids) {
+async function sendBatch(t2Api, t2Signer, ids) {
   if (!ids.length) return [];
 
-  const calls = ids.map(id => api.tx.tokenManager.regenerateLowerProof(id));
+  const calls = ids.map(id => t2Api.tx.tokenManager.regenerateLowerProof(id));
 
   return new Promise(async (resolve, reject) => {
-    const tx = api.tx.utility.batch(calls);
+    const tx = t2Api.tx.utility.batch(calls);
 
     const unsub = await tx.signAndSend(t2Signer, ({ status, dispatchError }) => {
       if (dispatchError) {
@@ -30,7 +30,7 @@ async function sendBatch(api, t2Signer, ids) {
 }
 
 async function main() {
-  const { api, t2Signer } = await init(CHAIN);
+  const { t2Api, t2Signer } = await init(CHAIN);
 
   try {
     const { filePath, state } = loadState(CHAIN);
@@ -44,7 +44,7 @@ async function main() {
     console.log(`Remaining           : ${remaining.length}`);
 
     while (remaining.length) {
-      const queueJson = (await api.query.ethBridge.requestQueue()).toJSON() || [];
+      const queueJson = (await t2Api.query.ethBridge.requestQueue()).toJSON() || [];
       const queueLen = Array.isArray(queueJson) ? queueJson.length : 0;
 
       if (queueLen + BATCH_SIZE >= QUEUE_LIMIT) {
@@ -56,7 +56,7 @@ async function main() {
       const batch = remaining.slice(0, BATCH_SIZE);
       console.log(`Regenerating        : ${batch.join(', ')}`);
 
-      await sendBatch(api, t2Signer, batch);
+      await sendBatch(t2Api, t2Signer, batch);
       batch.forEach(id => done.add(id));
 
       remaining = remaining.filter(x => !done.has(x));
@@ -74,7 +74,7 @@ async function main() {
 
     console.log('✅ All requested lower proofs regenerated.');
   } finally {
-    await api.disconnect();
+    await t2Api.disconnect();
   }
 }
 

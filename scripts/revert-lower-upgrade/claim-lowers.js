@@ -1,4 +1,4 @@
-const { init } = require('./common/utils');
+const { init } = require('./common');
 
 const [CHAIN, FROM, TO] = process.argv.slice(2);
 
@@ -9,7 +9,7 @@ const FROM_ID = Number(FROM);
 const TO_ID = Number(TO);
 
 async function main() {
-  const { api, bridge } = await init(CHAIN);
+  const { t2Api, bridge } = await init(CHAIN);
 
   let foundCount = 0;
   let successCount = 0;
@@ -20,7 +20,7 @@ async function main() {
 
   try {
     for (let id = FROM_ID; id <= TO_ID; id++) {
-      const entry = await api.query.tokenManager.lowersReadyToClaim(id);
+      const entry = await t2Api.query.tokenManager.lowersReadyToClaim(id);
       if (entry.isNone) {
         awaitingProofCount++;
         continue;
@@ -60,7 +60,7 @@ async function main() {
       process.exitCode = 1;
     }
   } finally {
-    await api.disconnect();
+    await t2Api.disconnect();
   }
 }
 
