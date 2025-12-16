@@ -73,11 +73,14 @@ The secure movement of ERC20 or ERC777 tokens between T1 Ethereum and T2 AVN via
 #### Lift funds
 `npx hardhat --network <network> lift --recipient <recipient T2 public key> --bridge <bridge address> --amount <amount> token <token address>`
 
-## Migrating Claimed Lowers (T2 v8.3.3 upgrade)
+
+## Migrating Claimed Lowers (T2 v8.4.0 upgrade)
 
 Introducing `revertLower` on T1 requires all existing claimed lowers to be migrated from their **hash format** to a new **ID-based format**. The migration process is as follows:
 
-0. Ensure the contract contains the `migrate` function (this function is removed after the migration is complete - see steps 13 & 14):
+0. The config for each chain environment (eg.: `dev`, `mainnet`, `testnet`, etc) sits at the top of the `scripts/revert-lower-upgrade/common.js` file. Ensure the relevant environment variables are populated as required.
+
+1. Ensure the contract contains the `migrate` function (this function is removed after the migration is complete - see steps 14 & 15):
 
 ```
   function migrate(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
@@ -92,61 +95,61 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
   }
 ```
 
-1. Pre-deploy the new bridge implementation so it is ready for upgrade later.
+2. Pre-deploy the new bridge implementation so it is ready to upgrade to in step 9.
 
-2. Run get-lowers (pass 1):
+3. Run get-lowers (pass #1):
 
-    `npm run get-lowers-sep -- [chain]`
+    `npm run get-lowers <chain>`
 
-    This produces a `data/[chain].json` file containing:
+    This produces a `scripts/revert-lower-upgrade/data/[chain].json` file containing:
 
-    - all claimed lower IDs detected in the contract
-    - buckets[] + words[] for `migrate`
-    - unclaimed lowers that will require proof regeneration
-    - T1 tx hashes of claimed lowers still present on T2
+    - `migrateArgs` - the `buckets[]` and `words[]` arguments for the `migrate` function
+    - `claimed` - all claimed lower IDs detected in the contract
+    - `toRemoveFromT2` - Lower IDs and T1 tx hashes of claimed lowers that haven't been cleared from T2
+    - `toRegenerateOnT2` - unclaimed lowers that will require proof regeneration
 
-3. Pass the T1 tx hashes output in step 2 with the sudo utilities → additional events tool on T2 to remove stale claimed-lower proofs from tokenManager.
+4. If there are any entries in `toRemoveFromT2` produced in step 3 then pass the T1 tx hashes into Polkadot.js UI -> Developer tab -> `Extrinsics` -> `sudo` -> `sudo(call)` -> `ethBridge` -> `setAdminSetting` -> `QueueAdditionalEthereumEvent`. This will remove them from `TokenManager.lowersReadyToClaim`.
 
-4. **Owner TX 1** - *pause lowering* on the bridge.
+5. **Owner TX 1** - *pause lowering* on the bridge.
 
-5. Ensure T2 is idle by confirming:
+6. Ensure T2 is idle by confirming:
 
-    - no pending items in ethBridge.requestQueue
-    - no active lowers in T2
+    - no pending lowers in `ethBridge.requestQueue`
+    - no active lowers in `ethBridge.activeRequest`
 
-6. Perform the T2 forkless upgrade. This will pause T2 -> T1 communication until step 11.
+7. Perform the T2 forkless upgrade.
 
-7. Run get-lowers again (pass 2):
+8. Run get-lowers again (pass #2):
 
-    `npm run get-lowers -- <chain>`
+    `npm run get-lowers <chain>`
 
-    This produces the final migration data for steps 9, 10, and 12.
+    This produces all the final migration data required for steps 10, 11, and 12.
 
-8. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 1.
+9. **Owner TX 2** - *upgrade* the bridge to the new implementation contract deployed in step 2.
 
-9. **Owner TX 3** - call `migrate(..)`, passing the `buckets[..]` and `words[..]` arguments generated in step 7 to mark all existing claimed lowers as `used`.
+10. **Owner TX 3** - call `migrate(..)` on the bridge, passing the `buckets[..]` and `words[..]` arguments generated in step 8. This will mark all existing claimed lowers as `used`.
 
-10. Verify step 9:
+11. Verify step 10 on-chain:
 
-    `npm run verify-lowers -- <chain>`
+    `npm run verify-lowers <chain>`
 
-11. Request lower proof regeneration on T2 for all remaining unclaimed lowers:
+12. Request lower proof regeneration on T2 for all the remaining unclaimed lowers:
 
-    `npm run regen-lowers -- <chain>`
+    `npm run regen-lowers <chain>`
     
-12. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
+13. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
 
-13. Deploy a new implementation with the `migrate` function removed.
+14. Deploy a new implementation with the `migrate` function removed.
 
-14. **Owner TX 5** - *upgrade* the bridge to the new implementation contract deployed in step 13.
+15. **Owner TX 5** - *upgrade* the bridge to the new implementation contract deployed in step 14.
 
 
 ### Lower migration testing helpers
 
 To spam schedule lower requests:
 
-`npm run create-lowers -- <chain> <T1 recipient address> [max lowers (defaults to infinity)]  [batch size (defaults to 1)]`
+`npm run create-lowers <chain> <T1 recipient address> [batch size (defaults to 1)] [max lowers (defaults to infinity)]`
 
 To claim multiple lowers:
 
-`npm run claim-lowers -- <chain> <start ID> <end ID>`
+`npm run claim-lowers <chain> <start ID> <end ID>`

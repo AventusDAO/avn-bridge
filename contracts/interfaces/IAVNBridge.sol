@@ -49,5 +49,5 @@ interface IAVNBridge {
     );
   function confirmTransaction(bytes32 leafHash, bytes32[] calldata merklePath) external view returns (bool);
   function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8);
-  function lowerUsed(uint32 lowerId) external view returns (bool);
+  function isLowerUsed(uint32 lowerId) external view returns (bool);
 }

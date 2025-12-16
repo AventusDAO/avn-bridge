@@ -33,10 +33,10 @@
     "coverage": "npx hardhat coverage",
     "size": "npx hardhat size-contracts",
     "test": "npx hardhat test",
-    "claim-lowers": "node scripts/claim-lowers.js",
-    "create-lowers": "node scripts/create-lowers.js",
-    "get-lowers": "node scripts/get-lowers.js",
-    "regen-lowers": "node scripts/regenerate-lower-proofs.js",
-    "verify-lowers": "node scripts/verify-used-lowers.js"
+    "claim-lowers": "node scripts/revert-lower-upgrade/claim-lowers.js",
+    "create-lowers": "node scripts/revert-lower-upgrade/create-lowers.js",
+    "get-lowers": "node scripts/revert-lower-upgrade/get-lowers.js",
+    "regen-lowers": "node scripts/revert-lower-upgrade/regenerate-lower-proofs.js",
+    "verify-lowers": "node scripts/revert-lower-upgrade/verify-used-lowers.js"
   }
 }

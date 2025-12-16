@@ -10,7 +10,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const { ETHERSCAN_API_KEY, MAINNET_DEPLOYER_LEDGER_ADDRESS, MAINNET_RPC_URL, SEPOLIA_DEPLOYER_PRIVATE_KEY, SEPOLIA_RPC_URL } = process.env;
+const { ETHERSCAN_API_KEY, MAINNET_LEDGER_ADDRESS, MAINNET_RPC_URL, SEPOLIA_T1_PRIVATE_KEY, SEPOLIA_RPC_URL } = process.env;
 
 const ADDRESSES_PATH = './addresses.json';
 const AUTHORS_PATH = './authors.json';
@@ -209,7 +209,7 @@ module.exports = {
       {
         version: '0.8.31',
         settings: {
-          evmVersion: "prague",
+          evmVersion: 'prague',
           optimizer: {
             enabled: true,
             runs: 100000,
@@ -223,7 +223,7 @@ module.exports = {
   networks: {
     sepolia: {
       url: SEPOLIA_RPC_URL,
-      accounts: [SEPOLIA_DEPLOYER_PRIVATE_KEY],
+      accounts: [SEPOLIA_T1_PRIVATE_KEY],
       maxFeePerGas: 1 * GWEI,
       maxPriorityFeePerGas: 1 * GWEI
     },
@@ -234,7 +234,7 @@ module.exports = {
     },
     mainnet: {
       url: MAINNET_RPC_URL,
-      ledgerAccounts: [MAINNET_DEPLOYER_LEDGER_ADDRESS],
+      ledgerAccounts: [MAINNET_LEDGER_ADDRESS],
       type: 2,
       maxFeePerGas: 20 * GWEI,
       maxPriorityFeePerGas: 2 * GWEI,
