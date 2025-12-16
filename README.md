@@ -99,7 +99,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 3. Run get-lowers (pass #1):
 
-    `npm run get-lowers -- <chain>`
+    `npm run get-lowers <chain>`
 
     This produces a `scripts/revert-lower-upgrade/data/[chain].json` file containing:
 
@@ -121,7 +121,7 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 8. Run get-lowers again (pass #2):
 
-    `npm run get-lowers -- <chain>`
+    `npm run get-lowers <chain>`
 
     This produces all the final migration data required for steps 10, 11, and 12.
 
@@ -131,11 +131,11 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 11. Verify step 10 on-chain:
 
-    `npm run verify-lowers -- <chain>`
+    `npm run verify-lowers <chain>`
 
 12. Request lower proof regeneration on T2 for all the remaining unclaimed lowers:
 
-    `npm run regen-lowers -- <chain>`
+    `npm run regen-lowers <chain>`
     
 13. **Owner TX 4** - *unpause lowering* on the bridge. Normal operation resumes.
 
@@ -148,8 +148,8 @@ Introducing `revertLower` on T1 requires all existing claimed lowers to be migra
 
 To spam schedule lower requests:
 
-`npm run create-lowers -- <chain> <T1 recipient address> [batch size (defaults to 1)] [max lowers (defaults to infinity)]`
+`npm run create-lowers <chain> <T1 recipient address> [batch size (defaults to 1)] [max lowers (defaults to infinity)]`
 
 To claim multiple lowers:
 
-`npm run claim-lowers -- <chain> <start ID> <end ID>`
+`npm run claim-lowers <chain> <start ID> <end ID>`
