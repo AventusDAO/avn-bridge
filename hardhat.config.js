@@ -20,6 +20,10 @@ const CONTRACT_NAME = 'AVNBridge';
 const GWEI = 1e9;
 const VERIFICATION_DELAY_SECONDS = 40;
 
+const AVT_MAINNET = '0x0d88eD6E74bbFD96B831231638b66C05571e824F';
+const AVT_TESTNET = '0x608156959e3a2192a870b4bac660200afb4c649f';
+const AVT_DEVELOP = '0x93ba86eCfDDD9CaAAc29bE83aCE5A3188aC47730';
+
 task('deploy', 'deploy a new avn-bridge proxy')
   .addPositionalParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
@@ -106,26 +110,65 @@ task('validate')
     console.log('\nResult: Safe for upgrade');
   });
 
-task('implementation', 'deploy new implementation contract').setAction(async (_, hre) => {
-  const { ethers, network, run } = hre;
-  const [signer] = await ethers.getSigners();
-  await run('compile');
+task('implementation', 'deploy new implementation contract')
+  .addOptionalPositionalParam('env', 'AvN environment name (required on sepolia)')
+  .setAction(async (args, hre) => {
+    const { ethers, network, run } = hre;
+    const [signer] = await ethers.getSigners();
+    const file = './' + CONTRACT_PATH;
+    const original = fs.readFileSync(file, 'utf8');
+    let modified = false;
 
-  const initialBalance = await ethers.provider.getBalance(signer.address);
-  console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
-  const contract = await ethers.getContractFactory(CONTRACT_NAME);
-  const implementation = await contract.deploy();
-  await implementation.waitForDeployment();
-  const impAddress = await implementation.getAddress();
+    try {
+      if (network.name === 'sepolia') {
+        const ENV_TO_AVT = { dev: AVT_DEVELOP, testnet: AVT_TESTNET, paseo: AVT_TESTNET };
+        const avtAddress = ENV_TO_AVT[args.env];
+        if (!avtAddress) throw new Error(`Invalid env: "${args.env}"`);
+        fs.writeFileSync(file, original.replace(new RegExp(AVT_MAINNET, 'g'), avtAddress));
+        modified = true;
+      }
 
-  console.log('Waiting to verify...');
-  await delay(VERIFICATION_DELAY_SECONDS);
-  await verify(run, impAddress);
+      await run('compile');
+      const initialBalance = await ethers.provider.getBalance(signer.address);
+      console.log(`\nDeploying AVNBridge implementation on ${network.name} using account ${signer.address}...`);
+      const contract = await ethers.getContractFactory(CONTRACT_NAME);
+      const implementation = await contract.deploy();
+      await implementation.waitForDeployment();
+      const impAddress = await implementation.getAddress();
+      console.log('Waiting to verify...');
+      await delay(VERIFICATION_DELAY_SECONDS);
+      await verify(run, impAddress);
+      const finalBalance = await ethers.provider.getBalance(signer.address);
+      const cost = ethers.formatEther(initialBalance - finalBalance);
+      console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
+    } finally {
+      if (modified) fs.writeFileSync(file, original);
+    }
+  });
 
-  const finalBalance = await ethers.provider.getBalance(signer.address);
-  const cost = ethers.formatEther(initialBalance - finalBalance);
-  console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
-});
+task('authority', 'deploy the AVT Authority contract')
+  .addPositionalParam('avt', 'AVT Token')
+  .setAction(async (args, hre) => {
+    const { ethers, network, run } = hre;
+    const [signer] = await ethers.getSigners();
+    await run('compile');
+
+    if (!ethers.isAddress(args.avt)) throw new Error(`Invalid AVT address: ${args.avt}`);
+    const initialBalance = await ethers.provider.getBalance(signer.address);
+    console.log(`\nDeploying AvtAuthority on ${network.name} using account ${signer.address}...`);
+    const contract = await ethers.getContractFactory('AvtAuthority');
+    const authority = await contract.deploy(args.avt);
+    await authority.waitForDeployment();
+    const authAddress = await authority.getAddress();
+
+    console.log('Waiting to verify...');
+    await delay(VERIFICATION_DELAY_SECONDS);
+    await verify(run, authAddress, [args.avt]);
+
+    const finalBalance = await ethers.provider.getBalance(signer.address);
+    const cost = ethers.formatEther(initialBalance - finalBalance);
+    console.log(`\nDeployed AvtAuthority at ${authAddress} for ${cost} ETH`);
+  });
 
 task('lift', 'lift a token to the chain')
   .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
