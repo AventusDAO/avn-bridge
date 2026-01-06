@@ -24,7 +24,9 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   using SafeERC20 for IERC20;
 
-  IAVT public constant avt = IAVT(0x0d88eD6E74bbFD96B831231638b66C05571e824F);
+  /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+  address public immutable AVT;
+
   IERC1820Registry private constant ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
 
   string private constant EIP712_PREFIX = '\x19\x01';
@@ -133,7 +135,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error WindowExpired(); // 0x7bbfb6fe
 
   /// @custom:oz-upgrades-unsafe-allow constructor
-  constructor() {
+  constructor(address avt) {
+    if (avt == address(0)) revert AddressIsZero();
+    AVT = avt;
     _disableInitializers();
   }
 
@@ -315,13 +319,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function burnFees(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
     if (amount == 0) revert AmountIsZero();
-    if (avt.balanceOf(address(this)) < amount) revert InsufficientAvt();
+    if (_avt().balanceOf(address(this)) < amount) revert InsufficientAvt();
     bytes32 proofHash = _toBurnFeesProofHash(amount, expiry, t2TxId);
     _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
-    uint256 oldSupply = avt.totalSupply();
-    avt.burn(amount);
-    uint256 newSupply = avt.totalSupply();
+    uint256 oldSupply = _avt().totalSupply();
+    _avt().burn(amount);
+    uint256 newSupply = _avt().totalSupply();
     assert(newSupply == oldSupply - amount);
     emit LogAvtSupplyUpdated(oldSupply, newSupply, t2TxId);
   }
@@ -501,6 +505,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     t1AddressToId[t1Address] = id;
     t2PubKeyToId[t2PubKey] = id;
     isAuthor[id] = true;
+  }
+
+  function _avt() private view returns (IAVT) {
+    return IAVT(AVT);
   }
 
   function _domainSeparator() private view returns (bytes32) {

@@ -1,5 +1,10 @@
 const {
+  AVT_SYMBOL_BYTES_32,
+  deployAuthority,
+  deployAVT,
   deployBridge,
+  deployERC20,
+  deployERC777,
   expect,
   generateInitArgs,
   getAccounts,
@@ -12,23 +17,23 @@ const {
   randomT2TxId
 } = require('./helpers/testHelper');
 
-let accounts, authors, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
+let accounts, authors, avt, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 
 describe('Owner Functions', () => {
   before(async () => {
     await init();
 
-    const Token777 = await ethers.getContractFactory('Token777');
-    token777 = await Token777.deploy(10_000_000n);
-    token777.address = await token777.getAddress();
+    avt = await deployAVT(10_000_000n);
+    authority = await deployAuthority(avt);
+    await avt.setAuthority(authority);
 
-    const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10_000_000n);
-    token20.address = await token20.getAddress();
-
-    const numAuthors = 10;
-    bridge = await deployBridge(numAuthors);
+    const numAuthors = 6;
+    bridge = await deployBridge(avt, numAuthors);
     bridge.address = await bridge.getAddress();
+    await authority.allowBurning(bridge.address);
+
+    token20 = await deployERC20(10_000_000n);
+    token777 = await deployERC777(10_000_000n);
 
     accounts = getAccounts();
     owner = accounts[0];
@@ -96,16 +101,21 @@ describe('Owner Functions', () => {
   });
 
   context('Initialization', () => {
+    let constructorAvtAddress;
     let initVals = {};
     const numAuthors = MIN_AUTHORS + 1;
 
     async function deployAndCatchInitError(expectedError) {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
       const AVNBridge = await ethers.getContractFactory('AVNBridge');
-      await expect(upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' })).to.be.revertedWithCustomError(AVNBridge, expectedError);
+      await expect(upgrades.deployProxy(AVNBridge, initArgs, { constructorArgs: [constructorAvtAddress], kind: 'uups' })).to.be.revertedWithCustomError(
+        AVNBridge,
+        expectedError
+      );
     }
 
     beforeEach(async () => {
+      constructorAvtAddress = avt.address;
       initVals = { t1Addresses: [], t1PubKeysLHS: [], t1PubKeysRHS: [], t2PubKeys: [] };
 
       for (let i = 0; i < numAuthors; i++) {
@@ -119,7 +129,7 @@ describe('Owner Functions', () => {
     it('succeeds', async () => {
       const initArgs = [initVals.t1Addresses, initVals.t1PubKeysLHS, initVals.t1PubKeysRHS, initVals.t2PubKeys];
       const AVNBridge = await ethers.getContractFactory('AVNBridge');
-      const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+      const newBridge = await upgrades.deployProxy(AVNBridge, initArgs, { constructorArgs: [avt.address], kind: 'uups' });
 
       for (let i = 0; i < numAuthors; i++) {
         const authorId = i + 1;
@@ -133,6 +143,11 @@ describe('Owner Functions', () => {
 
       expect(await newBridge.numActiveAuthors()).to.equal(numAuthors);
       expect(await newBridge.nextAuthorId()).to.equal(numAuthors + 1);
+    });
+
+    it('fails when the AVT address is missing', async () => {
+      constructorAvtAddress = ZERO_ADDRESS.address;
+      await deployAndCatchInitError('AddressIsZero');
     });
 
     it('fails when a T1 address does not correspond to its public key', async () => {
@@ -241,23 +256,25 @@ describe('Owner Functions', () => {
   });
 
   context('Upgrade', function () {
-    let upgradeContract;
+    let AVNBridgeV2;
 
     before(async () => {
-      upgradeContract = await ethers.getContractFactory('AVNBridgeUpgrade');
+      AVNBridgeV2 = await ethers.getContractFactory('AVNBridgeUpgrade');
     });
 
     context('succeeds', function () {
-      it('via OpenZeppelin upgrades', async () => {
-        const upgradedBridge = await upgrades.upgradeProxy(bridge.address, upgradeContract);
+      it('in upgrading the bridge to a new implementation', async () => {
+        const newImplementation = await AVNBridgeV2.deploy(avt.address);
+        await bridge.upgradeTo(await newImplementation.getAddress());
+        const upgradedBridge = AVNBridgeV2.attach(bridge.address);
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
       });
     });
 
     context('fails', function () {
       it('when the caller is not the owner', async () => {
-        const newBridge = await upgradeContract.deploy();
-        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newBridge.getAddress(), '0x')).to.be.revertedWith(
+        const newImplementation = await AVNBridgeV2.deploy(avt.address);
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newImplementation.getAddress(), '0x')).to.be.revertedWith(
           'Ownable: caller is not the owner'
         );
       });
@@ -269,7 +286,7 @@ describe('Owner Functions', () => {
     let rotBridge;
 
     before(async () => {
-      rotBridge = await deployBridge(NUM_AUTHORS);
+      rotBridge = await deployBridge(avt, NUM_AUTHORS);
       rotBridge.address = await rotBridge.getAddress();
     });
 

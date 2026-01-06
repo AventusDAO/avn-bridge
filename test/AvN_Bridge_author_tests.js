@@ -1,5 +1,8 @@
 const {
+  deployAuthority,
+  deployAVT,
   deployBridge,
+  deployERC20,
   EMPTY_BYTES_32,
   expect,
   EXPIRY_WINDOW,
@@ -17,19 +20,22 @@ const {
   strip_0x
 } = require('./helpers/testHelper');
 
-let bridge, token20, authors, activeAuthor, numActiveAuthors, nextAuthorId;
+let authority, avt, bridge, token20, authors, activeAuthor, numActiveAuthors, nextAuthorId;
 
 describe('Author Functions', () => {
   before(async () => {
     await init();
 
-    const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10_000_000n);
-    token20.address = await token20.getAddress();
+    avt = await deployAVT(10_000_000n);
+    authority = await deployAuthority(avt);
+    await avt.setAuthority(authority);
 
     const numAuthors = 6;
-    bridge = await deployBridge(numAuthors);
+    bridge = await deployBridge(avt, numAuthors);
     bridge.address = await bridge.getAddress();
+    await authority.allowBurning(bridge.address);
+
+    token20 = await deployERC20(10_000_000n);
 
     authors = getAuthors();
     activeAuthor = authors[0].account;
@@ -164,6 +170,113 @@ describe('Author Functions', () => {
         const confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, t2TxId], -halfSet);
         const duplicateConfirmations = confirmations + strip_0x(confirmations);
         await expect(bridge.connect(activeAuthor).publishRoot(rootHash, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'BadConfirmations'
+        );
+      });
+    });
+  });
+
+  context('Burning Fees', () => {
+    const amount = 1000n;
+    let expiry, t2TxId;
+
+    before(async () => {
+      await avt.transfer(bridge.address, 1_000_000n);
+    });
+
+    context('succeeds', () => {
+      it('via authors', async () => {
+        expiry = await getValidExpiry();
+        t2TxId = randomT2TxId();
+        const oldSupply = await avt.totalSupply();
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
+
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations))
+          .to.emit(bridge, 'LogAvtSupplyUpdated')
+          .withArgs(oldSupply, oldSupply - amount, t2TxId);
+
+        expect(await avt.totalSupply()).to.equal(oldSupply - amount);
+      });
+    });
+
+    context('fails when', () => {
+      beforeEach(async () => {
+        expiry = await getValidExpiry();
+        t2TxId = randomT2TxId();
+      });
+
+      it('the amount is 0', async () => {
+        const confirmations = await getConfirmations(bridge, 'burnFees', [0, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).burnFees(0, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
+      });
+
+      it('the amount is greater than the bridge AVT balance', async () => {
+        const bridgeAVTBalance = await avt.balanceOf(bridge.address);
+        const invalidAmount = bridgeAVTBalance + 1n;
+        let confirmations = await getConfirmations(bridge, 'burnFees', [invalidAmount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).burnFees(invalidAmount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'InsufficientAvt'
+        );
+      });
+
+      it('author functions are disabled', async () => {
+        await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
+        await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+      });
+
+      it('the expiry time has passed', async () => {
+        const invalidExpiry = (await getCurrentBlockTimestamp()) - 1;
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, invalidExpiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).burnFees(amount, invalidExpiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'WindowExpired'
+        );
+      });
+
+      it('the T2 transaction ID is not unique', async () => {
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
+        await bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations);
+
+        const confirmations2 = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations2)).to.be.revertedWithCustomError(bridge, 'TxIdIsUsed');
+      });
+
+      it('the confirmations are invalid', async () => {
+        let confirmations = '0xbadd' + strip_0x(await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]));
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are no confirmations', async () => {
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, '0x')).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are not enough confirmations', async () => {
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId], -1);
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are corrupted', async () => {
+        let confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
+        confirmations = confirmations.replace(/1/g, '2');
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not signed by active authors', async () => {
+        const startFromNonAuthor = nextAuthorId;
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId], 0, startFromNonAuthor);
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not unique', async () => {
+        const halfSet = Math.round(numActiveAuthors / 2);
+        const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId], -halfSet);
+        const duplicateConfirmations = confirmations + strip_0x(confirmations);
+
+        await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
           bridge,
           'BadConfirmations'
         );

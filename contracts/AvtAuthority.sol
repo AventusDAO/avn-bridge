@@ -5,7 +5,7 @@ interface AvtToken {
   function owner() external view returns (address);
 }
 
-contract AvtAuthority {
+contract AVTAuthority {
   bytes4 internal constant BURN_SIG = bytes4(keccak256('burn(uint128)'));
   bytes4 internal constant MINT_SIG = bytes4(keccak256('mint(uint128)'));
 
