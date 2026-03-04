@@ -13,7 +13,6 @@ const {
   getValidExpiry,
   increaseBlockTimestamp,
   init,
-  MAXIMUM_MINT_AMOUNT,
   MIN_AUTHORS,
   randomBytes32,
   randomHex,

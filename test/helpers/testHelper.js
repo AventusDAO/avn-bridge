@@ -9,8 +9,6 @@ const EMPTY_BYTES_32 = '0x000000000000000000000000000000000000000000000000000000
 const EXPIRY_WINDOW = 60;
 const LOWER_ID = '0x5702';
 const MIN_AUTHORS = 4;
-const ONE_AVT_IN_ATTO = 1_000_000_000_000_000_000n;
-const MAXIMUM_MINT_AMOUNT = 14_625n * ONE_AVT_IN_ATTO;
 const ZERO_ADDRESS = { address: ethers.getAddress('0x0000000000000000000000000000000000000000') };
 
 const PROOF_TYPES = {
@@ -376,9 +374,7 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
-  MAXIMUM_MINT_AMOUNT,
   MIN_AUTHORS,
-  ONE_AVT_IN_ATTO,
   randomBytes32,
   randomHex,
   randomT2TxId,
