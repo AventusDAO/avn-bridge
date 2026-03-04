@@ -14,7 +14,7 @@ const {
   init,
   MIN_AUTHORS,
   ZERO_ADDRESS,
-  randomT2TxId
+  nextT2TxId
 } = require('./helpers/testHelper');
 
 let accounts, authors, avt, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
@@ -294,7 +294,7 @@ describe('Owner Functions', () => {
     context('succeeds', () => {
       async function removeAuthor(id) {
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(rotBridge, 'removeAuthor', [authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId]);
         await rotBridge.connect(authors[0].account).removeAuthor(authors[id - 1].t2PubKey, authors[id - 1].t1PubKey, expiry, t2TxId, confirmations);
       }

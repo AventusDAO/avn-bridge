@@ -72,8 +72,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   /// @custom:oz-renamed-from numBytesToLowerData
   mapping(bytes2 => uint256) private _unused3_;
   mapping(bytes32 => bool) public isPublishedRootHash;
-  /// @custom:oz-renamed-from isUsedT2TransactionId
-  mapping(uint256 => bool) public isUsedT2TxId;
+  /// @custom:oz-renamed-from isUsedT2TxId
+  mapping(uint256 => bool) private _unused9_;
   /// @custom:oz-renamed-from hasLowered
   mapping(bytes32 => bool) private _unused8_;
   /// @custom:oz-renamed-from growthTriggered
@@ -103,6 +103,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 private _lock;
 
   mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowedId 514 = bucket[2], bit index 2)
+  mapping(uint256 => uint256) private usedT2TxIds; // bitmap of 256-bit buckets where t2TxId >> 8 = bucket and t2TxId & 255 = bit
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
@@ -466,7 +467,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * @dev Returns the current status of an author transaction. Helper function, intended for use by T2 authors.
    */
   function corroborate(uint32 t2TxId, uint256 expiry) external view returns (int8) {
-    if (isUsedT2TxId[t2TxId]) return TX_SUCCEEDED;
+    (uint256 bucket, uint256 mask) = _idToBitmap(t2TxId);
+    if ((usedT2TxIds[bucket] & mask) != 0) return TX_SUCCEEDED;
     else if (block.timestamp > expiry) return TX_FAILED;
     else return TX_PENDING;
   }
@@ -475,7 +477,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    * @dev Returns the claim status of the lower.
    */
   function isLowerUsed(uint32 lowerId) public view returns (bool) {
-    (uint256 bucket, uint256 mask) = _lowerIdToBitmap(lowerId);
+    (uint256 bucket, uint256 mask) = _idToBitmap(lowerId);
     return (usedLowers[bucket] & mask) != 0;
   }
 
@@ -545,6 +547,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  function _idToBitmap(uint32 id) private pure returns (uint256 bucket, uint256 mask) {
+    bucket = uint256(id) >> 8;
+    mask = 1 << (uint256(id) & 255);
+  }
+
   function _initialiseAuthors(
     address[] calldata t1Addresses,
     bytes32[] calldata t1PubKeysLHS,
@@ -598,7 +605,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint64 t2Timestamp,
     bytes calldata lowerProof
   ) private {
-    (uint256 bucket, uint256 mask) = _lowerIdToBitmap(lowerId);
+    (uint256 bucket, uint256 mask) = _idToBitmap(lowerId);
     if ((usedLowers[bucket] & mask) != 0) revert LowerIsUsed();
     usedLowers[bucket] |= mask;
 
@@ -644,9 +651,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
-  function _storeT2TxId(uint256 t2TxId) private {
-    if (isUsedT2TxId[t2TxId]) revert TxIdIsUsed();
-    isUsedT2TxId[t2TxId] = true;
+  function _storeT2TxId(uint32 t2TxId) private {
+    (uint256 bucket, uint256 mask) = _idToBitmap(t2TxId);
+    if ((usedT2TxIds[bucket] & mask) != 0) revert TxIdIsUsed();
+    usedT2TxIds[bucket] |= mask;
   }
 
   function _toAddress(bytes memory t1PubKey) private pure returns (address) {
