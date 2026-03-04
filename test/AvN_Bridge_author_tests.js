@@ -13,7 +13,9 @@ const {
   getValidExpiry,
   increaseBlockTimestamp,
   init,
+  MAXIMUM_MINT_AMOUNT,
   MIN_AUTHORS,
+  ONE_AVT_IN_ATTO,
   randomBytes32,
   randomHex,
   randomT2TxId,
@@ -34,6 +36,7 @@ describe('Author Functions', () => {
     bridge = await deployBridge(avt, numAuthors);
     bridge.address = await bridge.getAddress();
     await authority.allowBurning(bridge.address);
+    await authority.allowMinting(bridge.address);
 
     token20 = await deployERC20(10_000_000n);
 
@@ -277,6 +280,128 @@ describe('Author Functions', () => {
         const duplicateConfirmations = confirmations + strip_0x(confirmations);
 
         await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'BadConfirmations'
+        );
+      });
+    });
+  });
+
+  context('Minting Rewards', () => {
+    const amount = 1000n;
+    let expiry, t2TxId;
+
+    context('succeeds', () => {
+      it('via authors', async () => {
+        expiry = await getValidExpiry();
+        t2TxId = randomT2TxId();
+
+        const oldSupply = await avt.totalSupply();
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
+
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations))
+          .to.emit(bridge, 'LogAvtSupplyUpdated')
+          .withArgs(oldSupply, oldSupply + amount, t2TxId);
+
+        expect(await avt.totalSupply()).to.equal(oldSupply + amount);
+      });
+
+      it('mints at the maximum amount', async () => {
+        expiry = await getValidExpiry();
+        t2TxId = randomT2TxId();
+
+        const oldSupply = await avt.totalSupply();
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [MAXIMUM_MINT_AMOUNT, expiry, t2TxId]);
+
+        await expect(bridge.connect(activeAuthor).mintRewards(MAXIMUM_MINT_AMOUNT, expiry, t2TxId, confirmations))
+          .to.emit(bridge, 'LogAvtSupplyUpdated')
+          .withArgs(oldSupply, oldSupply + BigInt(MAXIMUM_MINT_AMOUNT), t2TxId);
+
+        expect(await avt.totalSupply()).to.equal(oldSupply + BigInt(MAXIMUM_MINT_AMOUNT));
+      });
+    });
+
+    context('fails when', () => {
+      beforeEach(async () => {
+        expiry = await getValidExpiry();
+        t2TxId = randomT2TxId();
+      });
+
+      it('the amount is 0', async () => {
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [0, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).mintRewards(0, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
+      });
+
+      it('the amount exceeds the maximum mint', async () => {
+        const invalidAmount = BigInt(MAXIMUM_MINT_AMOUNT) + ONE_AVT_IN_ATTO; // + 1 AVT
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [invalidAmount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).mintRewards(invalidAmount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'ExceedsMaxMint'
+        );
+      });
+
+      it('author functions are disabled', async () => {
+        await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
+
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
+
+        await expect(bridge.enableAuthors(true)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(true);
+      });
+
+      it('the expiry time has passed', async () => {
+        const invalidExpiry = (await getCurrentBlockTimestamp()) - 1;
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, invalidExpiry, t2TxId]);
+
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, invalidExpiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
+          bridge,
+          'WindowExpired'
+        );
+      });
+
+      it('the T2 transaction ID is not unique', async () => {
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
+        await bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations);
+
+        const confirmations2 = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations2)).to.be.revertedWithCustomError(bridge, 'TxIdIsUsed');
+      });
+
+      it('the confirmations are invalid', async () => {
+        const confirmations = '0xbadd' + strip_0x(await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]));
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are no confirmations', async () => {
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, '0x')).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are not enough confirmations', async () => {
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId], -1);
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are corrupted', async () => {
+        let confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
+        confirmations = confirmations.replace(/1/g, '2');
+
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not signed by active authors', async () => {
+        const startFromNonAuthor = nextAuthorId;
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId], 0, startFromNonAuthor);
+
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not unique', async () => {
+        const halfSet = Math.round(numActiveAuthors / 2);
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId], -halfSet);
+        const duplicateConfirmations = confirmations + strip_0x(confirmations);
+
+        await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, duplicateConfirmations)).to.be.revertedWithCustomError(
           bridge,
           'BadConfirmations'
         );

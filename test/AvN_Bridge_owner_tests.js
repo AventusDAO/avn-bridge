@@ -31,6 +31,7 @@ describe('Owner Functions', () => {
     bridge = await deployBridge(avt, numAuthors);
     bridge.address = await bridge.getAddress();
     await authority.allowBurning(bridge.address);
+    await authority.allowMinting(bridge.address);
 
     token20 = await deployERC20(10_000_000n);
     token777 = await deployERC777(10_000_000n);
