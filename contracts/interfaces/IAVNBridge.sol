@@ -25,6 +25,7 @@ interface IAVNBridge {
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function burnFees(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
+  function mintRewards(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function removeAuthor(bytes32 t2PubKey, bytes calldata t1PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
 
