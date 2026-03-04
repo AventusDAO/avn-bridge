@@ -132,7 +132,7 @@ async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   const merkleTree = createMerkleTree(leaves);
 
   const expiry = await getValidExpiry();
-  const t2TxId = randomT2TxId();
+  const t2TxId = nextT2TxId();
   const confirmations = await getConfirmations(bridge, 'publishRoot', [merkleTree.rootHash, expiry, t2TxId]);
 
   await bridge.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
@@ -269,6 +269,11 @@ async function init(largeTree) {
   }
 }
 
+let t2TxId = 1;
+function nextT2TxId() {
+  return t2TxId++;
+}
+
 function printErrorCodes() {
   [
     'AddressIsZero()',
@@ -311,11 +316,6 @@ function randomBytes32() {
 function randomHex(length) {
   return ethers.hexlify(ethers.randomBytes(length));
 }
-
-function randomT2TxId() {
-  return ethers.toBigInt(randomHex(4));
-}
-
 const strip_0x = bytes => (bytes.startsWith('0x') ? bytes.slice(2) : bytes);
 
 function toAuthorAccount(account) {
@@ -375,9 +375,9 @@ module.exports = {
   init,
   keccak256,
   MIN_AUTHORS,
+  nextT2TxId,
   randomBytes32,
   randomHex,
-  randomT2TxId,
   strip_0x,
   ZERO_ADDRESS
 };

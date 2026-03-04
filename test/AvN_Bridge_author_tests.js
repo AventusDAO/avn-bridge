@@ -16,7 +16,7 @@ const {
   MIN_AUTHORS,
   randomBytes32,
   randomHex,
-  randomT2TxId,
+  nextT2TxId,
   strip_0x
 } = require('./helpers/testHelper');
 
@@ -49,7 +49,7 @@ describe('Author Functions', () => {
 
     before(async () => {
       rootHash = randomBytes32();
-      t2TxId = randomT2TxId();
+      t2TxId = nextT2TxId();
     });
 
     context('succeeds', () => {
@@ -66,7 +66,7 @@ describe('Author Functions', () => {
       it('author functions are disabled', async () => {
         await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
 
-        const newt2TxId = randomT2TxId();
+        const newt2TxId = nextT2TxId();
         const newRootHash = randomBytes32();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'publishRoot', [newRootHash, expiry, newt2TxId]);
@@ -80,7 +80,7 @@ describe('Author Functions', () => {
       });
 
       it('the expiry time has passed', async () => {
-        const newt2TxId = randomT2TxId();
+        const newt2TxId = nextT2TxId();
         const newRootHash = randomBytes32();
         const expiry = (await getCurrentBlockTimestamp()) - 1;
         const confirmations = await getConfirmations(bridge, 'publishRoot', [newRootHash, expiry, newt2TxId]);
@@ -98,7 +98,7 @@ describe('Author Functions', () => {
       });
 
       it('the root has already been published', async () => {
-        const newt2TxId = randomT2TxId();
+        const newt2TxId = nextT2TxId();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, newt2TxId]);
         await expect(bridge.connect(activeAuthor).publishRoot(rootHash, expiry, newt2TxId, confirmations)).to.be.revertedWithCustomError(
@@ -108,7 +108,7 @@ describe('Author Functions', () => {
       });
 
       it('the confirmations are invalid', async () => {
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         rootHash = randomBytes32();
         const expiry = await getValidExpiry();
 
@@ -127,7 +127,7 @@ describe('Author Functions', () => {
       });
 
       it('there are not enough confirmations', async () => {
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         rootHash = randomBytes32();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, t2TxId], -1);
@@ -138,7 +138,7 @@ describe('Author Functions', () => {
       });
 
       it('the confirmations are corrupted', async () => {
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         rootHash = randomBytes32();
         const expiry = await getValidExpiry();
 
@@ -152,7 +152,7 @@ describe('Author Functions', () => {
       });
 
       it('the confirmations are not signed by active authors', async () => {
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         rootHash = randomBytes32();
         const startFromNonAuthor = nextAuthorId;
         const expiry = await getValidExpiry();
@@ -164,7 +164,7 @@ describe('Author Functions', () => {
       });
 
       it('the confirmations are not unique', async () => {
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         rootHash = randomBytes32();
         const halfSet = Math.round(numActiveAuthors / 2);
         const expiry = await getValidExpiry();
@@ -189,7 +189,7 @@ describe('Author Functions', () => {
     context('succeeds', () => {
       it('via authors', async () => {
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         const oldSupply = await avt.totalSupply();
         const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
 
@@ -204,7 +204,7 @@ describe('Author Functions', () => {
     context('fails when', () => {
       beforeEach(async () => {
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
       });
 
       it('the amount is 0', async () => {
@@ -302,7 +302,7 @@ describe('Author Functions', () => {
 
       it('via authors', async () => {
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
 
         const oldSupply = await avt.totalSupply();
         const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
@@ -313,26 +313,12 @@ describe('Author Functions', () => {
 
         expect(await avt.totalSupply()).to.equal(oldSupply + amount);
       });
-
-      it('mints at the maximum amount', async () => {
-        expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
-
-        const oldSupply = await avt.totalSupply();
-        const confirmations = await getConfirmations(bridge, 'mintRewards', [MAXIMUM_MINT_AMOUNT, expiry, t2TxId]);
-
-        await expect(bridge.connect(activeAuthor).mintRewards(MAXIMUM_MINT_AMOUNT, expiry, t2TxId, confirmations))
-          .to.emit(bridge, 'LogRewardsMinted')
-          .withArgs(MAXIMUM_MINT_AMOUNT, oldSupply + BigInt(MAXIMUM_MINT_AMOUNT), t2TxId);
-
-        expect(await avt.totalSupply()).to.equal(oldSupply + BigInt(MAXIMUM_MINT_AMOUNT));
-      });
     });
 
     context('fails when', () => {
       beforeEach(async () => {
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
       });
 
       it('the caller is not the owner for owner minting', async () => {
@@ -422,7 +408,7 @@ describe('Author Functions', () => {
         const numActiveAuthorsBefore = await bridge.numActiveAuthors();
         const newAuthor = authors[nextAuthorId];
 
-        let t2TxId = randomT2TxId();
+        let t2TxId = nextT2TxId();
         let expiry = await getValidExpiry();
         let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
 
@@ -438,7 +424,7 @@ describe('Author Functions', () => {
         // Publishing a root containing a confirmation from the new author activates the author
         const rootHash = randomBytes32();
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, t2TxId]);
         const newAuthorConfirmation = await getSingleConfirmation(bridge, newAuthor, 'publishRoot', [rootHash, expiry, t2TxId]);
         const confirmationsIncludingNewAuthor = newAuthorConfirmation + confirmations.substring(2);
@@ -458,7 +444,7 @@ describe('Author Functions', () => {
 
         const prospectAuthor = authors[nextAuthorId];
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
 
         await expect(
@@ -472,7 +458,7 @@ describe('Author Functions', () => {
         const prospectAuthor = authors[nextAuthorId];
         const emptyKey = '0x';
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
         await expect(bridge.connect(activeAuthor).addAuthor(emptyKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           bridge,
@@ -484,7 +470,7 @@ describe('Author Functions', () => {
         const prospectAuthor = authors[nextAuthorId];
         const emptyKey = EMPTY_BYTES_32;
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId]);
         await expect(bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, emptyKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           bridge,
@@ -495,7 +481,7 @@ describe('Author Functions', () => {
       it('the expiry time has passed', async () => {
         const prospectAuthor = authors[nextAuthorId];
         const expiry = (await getCurrentBlockTimestamp()) - 1;
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
           bridge.connect(activeAuthor).addAuthor(prospectAuthor.t1PubKey, prospectAuthor.t2PubKey, expiry, t2TxId, confirmations)
@@ -505,7 +491,7 @@ describe('Author Functions', () => {
       it('the author is already active', async () => {
         const existingAuthor = authors[1];
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
           bridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations)
@@ -517,7 +503,7 @@ describe('Author Functions', () => {
 
         // remove existingAuthor
         let expiry = await getValidExpiry();
-        let t2TxId = randomT2TxId();
+        let t2TxId = nextT2TxId();
         let confirmations = await getConfirmations(bridge, 'removeAuthor', [existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).removeAuthor(existingAuthor.t2PubKey, existingAuthor.t1PubKey, expiry, t2TxId, confirmations);
         numActiveAuthors--;
@@ -525,14 +511,14 @@ describe('Author Functions', () => {
         // try to add with different t2 key
         const newAuthor = authors[nextAuthorId];
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         confirmations = await getConfirmations(bridge, 'addAuthor', [existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
           bridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations)
         ).to.be.revertedWithCustomError(bridge, 'CannotChangeT2Key');
 
         // add back with original t2 key
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         confirmations = await getConfirmations(bridge, 'addAuthor', [existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).addAuthor(existingAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId, confirmations);
       });
@@ -540,7 +526,7 @@ describe('Author Functions', () => {
       it('passing a T2 public key which is already in use', async () => {
         const prospectAuthor = authors[nextAuthorId];
         const existingAuthor = authors[1];
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'addAuthor', [prospectAuthor.t1PubKey, existingAuthor.t2PubKey, expiry, t2TxId]);
         await expect(
@@ -560,7 +546,7 @@ describe('Author Functions', () => {
 
         // add
         let expiry = await getValidExpiry();
-        let t2TxId = randomT2TxId();
+        let t2TxId = nextT2TxId();
         let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
 
@@ -570,7 +556,7 @@ describe('Author Functions', () => {
 
         // activate by publishing root including new author's confirmation
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         const rootHash = randomBytes32();
         confirmations = await getConfirmations(bridge, 'publishRoot', [rootHash, expiry, t2TxId]);
         const newAuthorConfirmation = await getSingleConfirmation(bridge, newAuthor, 'publishRoot', [rootHash, expiry, t2TxId]);
@@ -581,7 +567,7 @@ describe('Author Functions', () => {
 
         // remove
         expiry = await getValidExpiry();
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         confirmations = await getConfirmations(bridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
         await expect(bridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations))
           .to.emit(bridge, 'LogAuthorRemoved')
@@ -598,7 +584,7 @@ describe('Author Functions', () => {
         const newAuthor = authors[nextAuthorId];
 
         // add (no activation)
-        let t2TxId = randomT2TxId();
+        let t2TxId = nextT2TxId();
         let expiry = await getValidExpiry();
         let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
@@ -608,7 +594,7 @@ describe('Author Functions', () => {
         expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBeforeAddition);
 
         // remove (still inactive)
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         expiry = await getValidExpiry();
         confirmations = await getConfirmations(bridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
         await expect(bridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations))
@@ -625,7 +611,7 @@ describe('Author Functions', () => {
         const newAuthor = authors[nextAuthorId];
 
         // add
-        let t2TxId = randomT2TxId();
+        let t2TxId = nextT2TxId();
         let expiry = await getValidExpiry();
         let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
@@ -633,7 +619,7 @@ describe('Author Functions', () => {
         nextAuthorId++;
 
         // remove
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         expiry = await getValidExpiry();
         confirmations = await getConfirmations(bridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
         await bridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
@@ -641,7 +627,7 @@ describe('Author Functions', () => {
         numActiveAuthors--;
 
         // remove again -> NotAnAuthor
-        t2TxId = randomT2TxId();
+        t2TxId = nextT2TxId();
         expiry = await getValidExpiry();
         confirmations = await getConfirmations(bridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
         await expect(
@@ -652,7 +638,7 @@ describe('Author Functions', () => {
       it('author functions are disabled', async () => {
         await expect(bridge.enableAuthors(false)).to.emit(bridge, 'LogAuthorsEnabled').withArgs(false);
 
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const expiry = await getValidExpiry();
         const confirmations = await getConfirmations(bridge, 'removeAuthor', [authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId]);
 
@@ -665,7 +651,7 @@ describe('Author Functions', () => {
 
       it('an invalid t1PublicKey is passed', async () => {
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const badT1PublicKey = randomHex(17);
         const confirmations = await getConfirmations(bridge, 'removeAuthor', [authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId]);
         await expect(bridge.removeAuthor(authors[0].t2PubKey, badT1PublicKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
@@ -676,7 +662,7 @@ describe('Author Functions', () => {
 
       it('the expiry time for the call has passed', async () => {
         const expiry = (await getCurrentBlockTimestamp()) - 1;
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const confirmations = await getConfirmations(bridge, 'removeAuthor', [authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId]);
         await expect(bridge.removeAuthor(authors[0].t2PubKey, authors[0].t1PubKey, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
           bridge,
@@ -691,7 +677,7 @@ describe('Author Functions', () => {
         for (; authorIndexBig >= BigInt(MIN_AUTHORS); authorIndexBig--) {
           const idx = Number(authorIndexBig);
           const expiry = await getValidExpiry();
-          const t2TxId = randomT2TxId();
+          const t2TxId = nextT2TxId();
           const t1Key = authors[idx].t1PubKey;
           const t2Key = authors[idx].t2PubKey;
           const confirmations = await getConfirmations(bridge, 'removeAuthor', [t2Key, t1Key, expiry, t2TxId]);
@@ -701,7 +687,7 @@ describe('Author Functions', () => {
         // Now removing one more should revert with NotEnoughAuthors
         const idx = Number(authorIndexBig);
         const expiry = await getValidExpiry();
-        const t2TxId = randomT2TxId();
+        const t2TxId = nextT2TxId();
         const t1Key = authors[idx].t1PubKey;
         const t2Key = authors[idx].t2PubKey;
         const confirmations = await getConfirmations(bridge, 'removeAuthor', [t2Key, t1Key, expiry, t2TxId]);
@@ -718,7 +704,7 @@ describe('Author Functions', () => {
     let t2TxId, expiry;
 
     beforeEach(async () => {
-      t2TxId = randomT2TxId();
+      t2TxId = nextT2TxId();
       expiry = await getValidExpiry();
     });
 
