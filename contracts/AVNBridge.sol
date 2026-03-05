@@ -187,6 +187,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
+   * @dev Temporary owner function to migrate existing T2 TxIDs
+   */
+  function migrate(uint256[] calldata buckets, uint256[] calldata words) external onlyOwner {
+    if (buckets.length != words.length) revert();
+
+    for (uint256 i; i < buckets.length; ) {
+      usedT2TxIds[buckets[i]] = words[i];
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  /**
    * @dev EIP712 Domain name.
    */
   function name() public pure returns (string memory) {
