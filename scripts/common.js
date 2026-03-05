@@ -7,6 +7,8 @@ require('dotenv').config();
 
 const { DEV_T1_PRIVATE_KEY, DEV_T2_PRIVATE_KEY, MAINNET_RPC_URL, MAINNET_T2_PRIVATE_KEY, SEPOLIA_RPC_URL } = process.env;
 
+const CHUNK = 50_000;
+
 const CHAIN_CONFIG = {
   dev: {
     t1Network: 'sepolia',
@@ -60,6 +62,49 @@ async function init(chain) {
   };
 }
 
+function accumulateBitmap(ids) {
+  const map = new Map();
+
+  for (const id of ids) {
+    const bucket = id >>> 8;
+    const bit = id & 0xff;
+    map.set(bucket, (map.get(bucket) ?? 0n) | (1n << BigInt(bit)));
+  }
+
+  const buckets = [...map.keys()].sort((a, b) => a - b);
+  const words = buckets.map(b => map.get(b));
+  return { buckets, words };
+}
+
+async function* blockRanges(t1Provider, from, to) {
+  let latest = to ?? (await t1Provider.getBlockNumber());
+  let start = from;
+
+  while (start <= latest) {
+    const end = Math.min(start + CHUNK - 1, latest);
+    yield [start, end];
+    start = end + 1;
+  }
+}
+
+async function findDeploymentBlock(t1Provider, address) {
+  let lo = 0;
+  let hi = await t1Provider.getBlockNumber();
+  let found = null;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const code = await t1Provider.getCode(address, mid);
+    if (code && code !== '0x') {
+      found = mid;
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return found;
+}
+
 function getT2Signer(t2PrivateKey) {
   const kr = new Keyring({ type: 'sr25519' });
   if (t2PrivateKey.split(/\s+/).length >= 12) return kr.addFromMnemonic(t2PrivateKey);
@@ -67,15 +112,19 @@ function getT2Signer(t2PrivateKey) {
   return kr.addFromUri(t2PrivateKey);
 }
 
-function loadState(chain) {
-  const filePath = path.join(__dirname, 'data', `${chain}.json`);
+function parseIdFromTopic(topicHex) {
+  return Number.parseInt(topicHex.slice(-8), 16);
+}
+
+function loadState(filename) {
+  const filePath = path.join(__dirname, 'data', `${filename}.json`);
   if (!fs.existsSync(filePath)) throw new Error(`State file not found: ${filePath}`);
   const state = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   return { filePath, state };
 }
 
-function saveState(chain, state) {
-  const filePath = path.join(__dirname, 'data', `${chain}.json`);
+function saveState(filename, state) {
+  const filePath = path.join(__dirname, 'data', `${filename}.json`);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
   console.log(`\n✅ State saved to ${filePath}`);
@@ -84,8 +133,12 @@ function saveState(chain, state) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 module.exports = {
+  accumulateBitmap,
+  blockRanges,
+  findDeploymentBlock,
   init,
   loadState,
+  parseIdFromTopic,
   saveState,
   sleep
 };

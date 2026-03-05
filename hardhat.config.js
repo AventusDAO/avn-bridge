@@ -70,8 +70,10 @@ task('deploy', 'deploy a new avn-bridge proxy')
 
 task('prepare', 'prepares the openzeppelin manifest')
   .addPositionalParam('bridge', 'proxy address')
+  .addOptionalPositionalParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
     const { ethers, network, run, upgrades } = hre;
+
     testContracts(false);
     const originalInterface = fs.readFileSync('./' + INTERFACE_PATH, 'utf8');
     const originalContract = fs.readFileSync('./' + CONTRACT_PATH, 'utf8');
@@ -85,9 +87,18 @@ task('prepare', 'prepares the openzeppelin manifest')
     try {
       fs.writeFileSync('./' + INTERFACE_PATH, sources[INTERFACE_PATH].content);
       fs.writeFileSync('./' + CONTRACT_PATH, sources[CONTRACT_PATH].content);
+
       await run('compile');
+
+      const opts = {};
+      if (args.env) {
+        const avtAddress = getAVTAddress(args.env);
+        opts.constructorArgs = [avtAddress];
+      }
+
       const contract = await ethers.getContractFactory(CONTRACT_NAME);
-      await upgrades.forceImport(args.bridge, contract);
+
+      await upgrades.forceImport(args.bridge, contract, opts);
     } catch (e) {
       console.log(e);
     } finally {
@@ -101,16 +112,24 @@ task('prepare', 'prepares the openzeppelin manifest')
 
 task('validate')
   .addPositionalParam('bridge', 'proxy address')
+  .addPositionalParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
     const { ethers, run, upgrades } = hre;
     await run('compile');
 
     console.log(`\nValidating new implementation...`);
+    const avtAddress = getAVTAddress(args.env);
     const contract = await ethers.getContractFactory(CONTRACT_NAME);
-    await upgrades.validateImplementation(contract);
+    await upgrades.validateImplementation(contract, {
+      constructorArgs: [avtAddress]
+    });
 
     console.log(`\nValidating upgrade safety for proxy at ${args.bridge}...`);
-    await upgrades.validateUpgrade(args.bridge, contract);
+
+    await upgrades.validateUpgrade(args.bridge, contract, {
+      constructorArgs: [avtAddress]
+    });
+
     console.log('\nResult: Safe for upgrade');
   });
 
@@ -131,7 +150,7 @@ task('implementation', 'deploy new implementation contract')
 
     console.log('Waiting to verify...');
     await delay(VERIFICATION_DELAY_SECONDS);
-    await verify(run, impAddress);
+    await verify(run, impAddress, [avtAddress]);
     const finalBalance = await ethers.provider.getBalance(signer.address);
     const cost = ethers.formatEther(initialBalance - finalBalance);
     console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
