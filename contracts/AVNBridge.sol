@@ -73,11 +73,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   mapping(bytes2 => uint256) private _unused3_;
   mapping(bytes32 => bool) public isPublishedRootHash;
   /// @custom:oz-renamed-from isUsedT2TxId
-<<<<<<< HEAD
   mapping(uint256 => bool) private _unused9_;
-=======
-  mapping(uint256 => bool) public _unused9_;
->>>>>>> e0f792746ca155fe6eceb56e945f6020c9444afa
   /// @custom:oz-renamed-from hasLowered
   mapping(bytes32 => bool) private _unused8_;
   /// @custom:oz-renamed-from growthTriggered
@@ -602,7 +598,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
-<<<<<<< HEAD
   function _lowerIdToBitmap(uint32 lowerId) private pure returns (uint256 bucket, uint256 mask) {
     bucket = uint256(lowerId) >> 8;
     mask = 1 << (uint256(lowerId) & 255);
@@ -615,8 +610,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     emit LogRewardsMinted(amount, _avt().totalSupply(), t2TxId);
   }
 
-=======
->>>>>>> e0f792746ca155fe6eceb56e945f6020c9444afa
   function _processLower(
     address token,
     uint256 amount,
