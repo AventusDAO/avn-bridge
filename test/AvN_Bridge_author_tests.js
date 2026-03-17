@@ -15,7 +15,6 @@ const {
   init,
   MAXIMUM_MINT_AMOUNT,
   MIN_AUTHORS,
-  ONE_AVT_IN_ATTO,
   randomBytes32,
   randomHex,
   randomT2TxId,
@@ -292,6 +291,16 @@ describe('Author Functions', () => {
     let expiry, t2TxId;
 
     context('succeeds', () => {
+      it('via owner', async () => {
+        const oldSupply = await avt.totalSupply();
+
+        await expect(bridge.mintRewards(amount))
+          .to.emit(bridge, 'LogRewardsMinted')
+          .withArgs(amount, oldSupply + amount, 0);
+
+        expect(await avt.totalSupply()).to.equal(oldSupply + amount);
+      });
+
       it('via authors', async () => {
         expiry = await getValidExpiry();
         t2TxId = randomT2TxId();
@@ -300,8 +309,8 @@ describe('Author Functions', () => {
         const confirmations = await getConfirmations(bridge, 'mintRewards', [amount, expiry, t2TxId]);
 
         await expect(bridge.connect(activeAuthor).mintRewards(amount, expiry, t2TxId, confirmations))
-          .to.emit(bridge, 'LogAvtSupplyUpdated')
-          .withArgs(oldSupply, oldSupply + amount, t2TxId);
+          .to.emit(bridge, 'LogRewardsMinted')
+          .withArgs(amount, oldSupply + amount, t2TxId);
 
         expect(await avt.totalSupply()).to.equal(oldSupply + amount);
       });
@@ -314,8 +323,8 @@ describe('Author Functions', () => {
         const confirmations = await getConfirmations(bridge, 'mintRewards', [MAXIMUM_MINT_AMOUNT, expiry, t2TxId]);
 
         await expect(bridge.connect(activeAuthor).mintRewards(MAXIMUM_MINT_AMOUNT, expiry, t2TxId, confirmations))
-          .to.emit(bridge, 'LogAvtSupplyUpdated')
-          .withArgs(oldSupply, oldSupply + BigInt(MAXIMUM_MINT_AMOUNT), t2TxId);
+          .to.emit(bridge, 'LogRewardsMinted')
+          .withArgs(MAXIMUM_MINT_AMOUNT, oldSupply + BigInt(MAXIMUM_MINT_AMOUNT), t2TxId);
 
         expect(await avt.totalSupply()).to.equal(oldSupply + BigInt(MAXIMUM_MINT_AMOUNT));
       });
@@ -327,18 +336,17 @@ describe('Author Functions', () => {
         t2TxId = randomT2TxId();
       });
 
-      it('the amount is 0', async () => {
-        const confirmations = await getConfirmations(bridge, 'mintRewards', [0, expiry, t2TxId]);
-        await expect(bridge.connect(activeAuthor).mintRewards(0, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
+      it('the caller is not the owner for owner minting', async () => {
+        await expect(bridge.connect(authors[1].account).mintRewards(amount)).to.be.reverted;
       });
 
-      it('the amount exceeds the maximum mint', async () => {
-        const invalidAmount = BigInt(MAXIMUM_MINT_AMOUNT) + ONE_AVT_IN_ATTO; // + 1 AVT
-        const confirmations = await getConfirmations(bridge, 'mintRewards', [invalidAmount, expiry, t2TxId]);
-        await expect(bridge.connect(activeAuthor).mintRewards(invalidAmount, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(
-          bridge,
-          'ExceedsMaxMint'
-        );
+      it('the amount is 0 via owner', async () => {
+        await expect(bridge.mintRewards(0)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
+      });
+
+      it('the amount is 0 via authors', async () => {
+        const confirmations = await getConfirmations(bridge, 'mintRewards', [0, expiry, t2TxId]);
+        await expect(bridge.connect(activeAuthor).mintRewards(0, expiry, t2TxId, confirmations)).to.be.revertedWithCustomError(bridge, 'AmountIsZero');
       });
 
       it('author functions are disabled', async () => {

@@ -280,7 +280,6 @@ function printErrorCodes() {
     'AuthorsDisabled()',
     'BadConfirmations()',
     'CannotChangeT2Key(bytes32)',
-    'ExceedsMaxMint()',
     'InsufficientAvt()',
     'InvalidERC777()',
     'InvalidProof()',

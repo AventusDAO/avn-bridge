@@ -49,7 +49,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 private constant SIGNATURE_LENGTH = 65;
   uint256 private constant T2_TOKEN_LIMIT = type(uint128).max;
   uint256 private constant MINIMUM_LOWER_PROOF_LENGTH = LOWER_DATA_LENGTH + SIGNATURE_LENGTH * 2;
-  uint256 private constant MAXIMUM_MINT_AMOUNT = 14625 * 1e18; // year 1 max daily value
 
   uint256 private constant UNLOCKED = 0;
   uint256 private constant LOCKED = 1;
@@ -112,7 +111,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error AuthorsDisabled(); // 0x7b465238
   error BadConfirmations(); // 0x409c8aac
   error CannotChangeT2Key(bytes32); // 0x140c6815
-  error ExceedsMaxMint(); // 0x52f7657b
   error InsufficientAvt(); // 0xd0fc62ce
   error InvalidERC777(); // 0x0e9dcbf6
   error InvalidProof(); // 0x09bde339
@@ -344,19 +342,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Lets T2 mint an amount of AVT to this contract to underwrite the equivalent reward amount on T2.
+   *  @dev Lets the owner pre-mint AVT for immediate allocation to the T2 reward pot for later dispersal to stakers.
+   */
+  function mintRewards(uint128 amount) external onlyOwner {
+    _mintRewards(amount, 0);
+  }
+
+  /**
+   * @dev Allows T2 to pre-mint AVT for immediate allocation to the T2 reward pot for later dispersal to stakers.
    */
   function mintRewards(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
-    if (amount == 0) revert AmountIsZero();
-    if (amount > MAXIMUM_MINT_AMOUNT) revert ExceedsMaxMint();
     bytes32 proofHash = _toMintRewardsProofHash(amount, expiry, t2TxId);
     _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
-    uint256 oldSupply = _avt().totalSupply();
-    _avt().mint(amount);
-    uint256 newSupply = _avt().totalSupply();
-    assert(newSupply == oldSupply + amount);
-    emit LogAvtSupplyUpdated(oldSupply, newSupply, t2TxId);
+    _mintRewards(amount, t2TxId);
   }
 
   /**
@@ -581,6 +580,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _lowerIdToBitmap(uint32 lowerId) private pure returns (uint256 bucket, uint256 mask) {
     bucket = uint256(lowerId) >> 8;
     mask = 1 << (uint256(lowerId) & 255);
+  }
+
+  function _mintRewards(uint128 amount, uint32 t2TxId) private {
+    if (amount == 0) revert AmountIsZero();
+    _avt().mint(amount);
+    if (_avt().balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
+    emit LogRewardsMinted(amount, _avt().totalSupply(), t2TxId);
   }
 
   function _processLower(
