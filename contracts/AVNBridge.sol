@@ -323,11 +323,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bytes32 proofHash = _toBurnFeesProofHash(amount, expiry, t2TxId);
     _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
-    uint256 oldSupply = _avt().totalSupply();
     _avt().burn(amount);
-    uint256 newSupply = _avt().totalSupply();
-    assert(newSupply == oldSupply - amount);
-    emit LogAvtSupplyUpdated(oldSupply, newSupply, t2TxId);
+    emit LogFeesBurned(amount, _avt().totalSupply(), t2TxId);
   }
 
   /**

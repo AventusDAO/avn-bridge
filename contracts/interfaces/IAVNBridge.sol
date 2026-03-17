@@ -9,7 +9,7 @@ interface IAVNBridge {
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
-  event LogAvtSupplyUpdated(uint256 indexed oldSupply, uint256 indexed newSupply, uint32 indexed t2TxId);
+  event LogFeesBurned(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
   event LogRootPublished(bytes32 indexed rootHash, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);

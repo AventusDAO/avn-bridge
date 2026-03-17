@@ -193,8 +193,8 @@ describe('Author Functions', () => {
         const confirmations = await getConfirmations(bridge, 'burnFees', [amount, expiry, t2TxId]);
 
         await expect(bridge.connect(activeAuthor).burnFees(amount, expiry, t2TxId, confirmations))
-          .to.emit(bridge, 'LogAvtSupplyUpdated')
-          .withArgs(oldSupply, oldSupply - amount, t2TxId);
+          .to.emit(bridge, 'LogFeesBurned')
+          .withArgs(amount, oldSupply - amount, t2TxId);
 
         expect(await avt.totalSupply()).to.equal(oldSupply - amount);
       });
