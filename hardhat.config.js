@@ -265,7 +265,7 @@ module.exports = {
       }
     ],
     overrides: {
-      'contracts/test/AVT.sol': {
+      'contracts/test/MockAVT.sol': {
         version: '0.4.26',
         settings: {
           optimizer: { enabled: true, runs: 200 }
