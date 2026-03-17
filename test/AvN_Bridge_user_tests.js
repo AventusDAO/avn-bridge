@@ -16,7 +16,7 @@ const {
   ZERO_ADDRESS
 } = require('./helpers/testHelper');
 
-let accounts, avt, bridge, token777, token20, owner, someOtherAccount, someT2PubKey;
+let accounts, avt, bridge, token777, token20, owner, someOtherAccount, someT2PubKey, authority;
 
 describe('Lifting and lowering', () => {
   before(async () => {
