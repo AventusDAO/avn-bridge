@@ -115,7 +115,7 @@ task('validate')
   });
 
 task('implementation', 'deploy new implementation contract')
-  .addOptionalPositionalParam('env', 'AvN environment name (required on sepolia)')
+  .addPositionalParam('env', 'AvN environment name')
   .setAction(async (args, hre) => {
     const { ethers, network, run } = hre;
     const [signer] = await ethers.getSigners();
