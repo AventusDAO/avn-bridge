@@ -10,6 +10,7 @@ interface IAVNBridge {
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogFeesBurned(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
+  event LogRewardsMinted(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
   event LogRootPublished(bytes32 indexed rootHash, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
@@ -20,6 +21,7 @@ interface IAVNBridge {
   function enableAuthors(bool enable) external;
   function enableLifting(bool enable) external;
   function enableLowering(bool enable) external;
+  function mintRewards(uint128 amount) external;
   function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external;
 
   // Authors only
