@@ -17,7 +17,7 @@ const {
   randomT2TxId
 } = require('./helpers/testHelper');
 
-let accounts, authors, avt, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
+let accounts, authors, avt, authority, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 
 describe('Owner Functions', () => {
   before(async () => {
