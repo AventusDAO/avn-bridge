@@ -158,7 +158,7 @@ task('implementation', 'deploy new implementation contract')
 
 task('authority', 'deploy the AVT Authority contract')
   .addPositionalParam('env', 'AvN environment name')
-  .setAction(async (_, hre) => {
+  .setAction(async (args, hre) => {
     const { ethers, network, run } = hre;
     const [signer] = await ethers.getSigners();
     await run('compile');
