@@ -544,10 +544,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isAuthor[id] = true;
   }
 
-  function _avt() private view returns (IAVT) {
-    return IAVT(AVT);
-  }
-
   function _domainSeparator() private view returns (bytes32) {
     return keccak256(abi.encode(DOMAIN_TYPEHASH, NAME_HASH, VERSION_HASH, block.chainid, address(this)));
   }
