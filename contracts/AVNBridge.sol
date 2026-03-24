@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.31;
+pragma solidity 0.8.34;
 
 /**
  * @dev Aventus Network bridging contract between Ethereum tier 1 (T1) and AVN tier 2 (T2) blockchains.
@@ -34,6 +34,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bytes32 private constant ERC777_TOKEN_HASH = keccak256('ERC777Token');
   bytes32 private constant ERC777_TOKENS_RECIPIENT_HASH = keccak256('ERC777TokensRecipient');
   bytes32 private constant VERSION_HASH = keccak256('1');
+  bytes32 private constant NAME_HASH = keccak256('AVNBridge');
 
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
@@ -242,7 +243,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     address newAddress;
     address oldAddress;
 
-    for (uint256 i; i < rotations; i++) {
+    for (uint256 i; i < rotations; ) {
       id = ids[i];
       newAddress = newAddresses[i];
       if (newAddress == address(0)) revert AddressIsZero();
@@ -252,6 +253,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1AddressToId[oldAddress] = 0;
       idToT1Address[id] = newAddress;
       t1AddressToId[newAddress] = id;
+
+      unchecked {
+        ++i;
+      }
     }
   }
 
@@ -335,12 +340,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function burnFees(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
     if (amount == 0) revert AmountIsZero();
-    if (_avt().balanceOf(address(this)) < amount) revert InsufficientAvt();
+    IAVT avt = IAVT(AVT);
+    if (avt.balanceOf(address(this)) < amount) revert InsufficientAvt();
     bytes32 proofHash = _toBurnFeesProofHash(amount, expiry, t2TxId);
     _verifyConfirmations(false, proofHash, confirmations);
     _storeT2TxId(t2TxId);
-    _avt().burn(amount);
-    emit LogFeesBurned(amount, _avt().totalSupply(), t2TxId);
+    avt.burn(amount);
+    emit LogFeesBurned(amount, avt.totalSupply(), t2TxId);
   }
 
   /**
@@ -543,7 +549,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _domainSeparator() private view returns (bytes32) {
-    return keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name())), VERSION_HASH, block.chainid, address(this)));
+    return keccak256(abi.encode(DOMAIN_TYPEHASH, NAME_HASH, VERSION_HASH, block.chainid, address(this)));
   }
 
   function _extractLowerData(
@@ -598,16 +604,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
-  function _lowerIdToBitmap(uint32 lowerId) private pure returns (uint256 bucket, uint256 mask) {
-    bucket = uint256(lowerId) >> 8;
-    mask = 1 << (uint256(lowerId) & 255);
-  }
-
   function _mintRewards(uint128 amount, uint32 t2TxId) private {
     if (amount == 0) revert AmountIsZero();
-    _avt().mint(amount);
-    if (_avt().balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
-    emit LogRewardsMinted(amount, _avt().totalSupply(), t2TxId);
+    IAVT avt = IAVT(AVT);
+    avt.mint(amount);
+    if (avt.balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
+    emit LogRewardsMinted(amount, avt.totalSupply(), t2TxId);
   }
 
   function _processLower(
@@ -659,9 +661,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _requiredConfirmations() private view returns (uint256 required) {
-    required = numActiveAuthors;
     unchecked {
-      required -= (required * 2) / 3;
+      required = (numActiveAuthors + 2) / 3;
     }
   }
 
@@ -732,7 +733,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       authorId = _recoverAuthorId(msgHash, confirmationsOffset, confirmationsIndex);
       confirmationsIndex = 1;
     } else {
-      // For non-lowers the we optimistically assume the sender is an author
+      // For non-lowers we optimistically assume the sender is an author
       authorId = t1AddressToId[msg.sender];
       unchecked {
         ++numConfirmationsProvided; // their confirmation is thus implicit
