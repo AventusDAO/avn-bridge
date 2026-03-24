@@ -58,7 +58,7 @@ async function init(chain) {
   console.log(`T1 Signer  : ${t1Wallet ? t1Wallet.address : '(read-only provider)'}`);
   console.log(`T1 Bridge  : ${bridgeAddress}`);
   console.log(`T2 WS      : ${t2Websocket}`);
-  console.log(`T2 Signer  : ${t2Signer ? t2Signer.address : '(read-only - no signer'}`);
+  console.log(`T2 Signer  : ${t2Signer ? t2Signer.address : '(no signer required)'}`);
   console.log(`============================\n`);
 
   return {
