@@ -40,6 +40,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bytes32 private constant BURN_FEES_TYPEHASH = keccak256('BurnFees(uint128 amount,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant LOWER_DATA_TYPEHASH =
     keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint64 t2Timestamp)');
+  bytes32 private constant MINT_REWARDS_TYPEHASH = keccak256('MintRewards(uint128 amount,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant REMOVE_AUTHOR_TYPEHASH = keccak256('RemoveAuthor(bytes32 t2PubKey,bytes t1PubKey,uint256 expiry,uint32 t2TxId)');
 
@@ -341,6 +342,23 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
+   *  @dev Lets the owner pre-mint AVT for immediate allocation to the T2 reward pot for later dispersal to stakers.
+   */
+  function mintRewards(uint128 amount) external onlyOwner {
+    _mintRewards(amount, 0);
+  }
+
+  /**
+   * @dev Allows T2 to pre-mint AVT for immediate allocation to the T2 reward pot for later dispersal to stakers.
+   */
+  function mintRewards(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
+    bytes32 proofHash = _toMintRewardsProofHash(amount, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
+    _storeT2TxId(t2TxId);
+    _mintRewards(amount, t2TxId);
+  }
+
+  /**
    * @dev ERC777 hook, triggered when anyone sends ERC777 tokens to this contract with a data payload containing
    * the 32 byte public key of the T2 recipient. Fails if the recipient is not supplied.
    */
@@ -564,6 +582,13 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     mask = 1 << (uint256(lowerId) & 255);
   }
 
+  function _mintRewards(uint128 amount, uint32 t2TxId) private {
+    if (amount == 0) revert AmountIsZero();
+    _avt().mint(amount);
+    if (_avt().balanceOf(address(this)) > T2_TOKEN_LIMIT) revert LiftLimitHit();
+    emit LogRewardsMinted(amount, _avt().totalSupply(), t2TxId);
+  }
+
   function _processLower(
     address token,
     uint256 amount,
@@ -648,6 +673,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint64 t2Timestamp
   ) private view returns (bytes32) {
     bytes32 structHash = keccak256(abi.encode(LOWER_DATA_TYPEHASH, token, amount, recipient, lowerId, t2Sender, t2Timestamp));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toMintRewardsProofHash(uint128 amount, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 structHash = keccak256(abi.encode(MINT_REWARDS_TYPEHASH, amount, expiry, t2TxId));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
 
