@@ -9,8 +9,6 @@ const EMPTY_BYTES_32 = '0x000000000000000000000000000000000000000000000000000000
 const EXPIRY_WINDOW = 60;
 const LOWER_ID = '0x5702';
 const MIN_AUTHORS = 4;
-const ONE_AVT_IN_ATTO = 1_000_000_000_000_000_000n;
-const MAXIMUM_MINT_AMOUNT = 14_625n * ONE_AVT_IN_ATTO;
 const ZERO_ADDRESS = { address: ethers.getAddress('0x0000000000000000000000000000000000000000') };
 
 const PROOF_TYPES = {
@@ -134,7 +132,7 @@ async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   const merkleTree = createMerkleTree(leaves);
 
   const expiry = await getValidExpiry();
-  const t2TxId = randomT2TxId();
+  const t2TxId = nextT2TxId();
   const confirmations = await getConfirmations(bridge, 'publishRoot', [merkleTree.rootHash, expiry, t2TxId]);
 
   await bridge.connect(authors[0].account).publishRoot(merkleTree.rootHash, expiry, t2TxId, confirmations);
@@ -271,6 +269,11 @@ async function init(largeTree) {
   }
 }
 
+let t2TxId = 1;
+function nextT2TxId() {
+  return t2TxId++;
+}
+
 function printErrorCodes() {
   [
     'AddressIsZero()',
@@ -313,11 +316,6 @@ function randomBytes32() {
 function randomHex(length) {
   return ethers.hexlify(ethers.randomBytes(length));
 }
-
-function randomT2TxId() {
-  return ethers.toBigInt(randomHex(4));
-}
-
 const strip_0x = bytes => (bytes.startsWith('0x') ? bytes.slice(2) : bytes);
 
 function toAuthorAccount(account) {
@@ -376,12 +374,10 @@ module.exports = {
   increaseBlockTimestamp,
   init,
   keccak256,
-  MAXIMUM_MINT_AMOUNT,
   MIN_AUTHORS,
-  ONE_AVT_IN_ATTO,
+  nextT2TxId,
   randomBytes32,
   randomHex,
-  randomT2TxId,
   strip_0x,
   ZERO_ADDRESS
 };
