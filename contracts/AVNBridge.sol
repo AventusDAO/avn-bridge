@@ -11,6 +11,7 @@ pragma solidity 0.8.31;
  */
 
 import './interfaces/IAVNBridge.sol';
+import './interfaces/IAVT.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/interfaces/IERC20.sol';
 import '@openzeppelin/contracts/interfaces/IERC777.sol';
@@ -23,6 +24,9 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   using SafeERC20 for IERC20;
 
+  /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+  address public immutable AVT;
+
   IERC1820Registry private constant ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
 
   string private constant EIP712_PREFIX = '\x19\x01';
@@ -33,6 +37,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant BURN_FEES_TYPEHASH = keccak256('BurnFees(uint128 amount,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant LOWER_DATA_TYPEHASH =
     keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint64 t2Timestamp)');
   bytes32 private constant PUBLISH_ROOT_TYPEHASH = keccak256('PublishRoot(bytes32 rootHash,uint256 expiry,uint32 t2TxId)');
@@ -105,6 +110,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error AuthorsDisabled(); // 0x7b465238
   error BadConfirmations(); // 0x409c8aac
   error CannotChangeT2Key(bytes32); // 0x140c6815
+  error InsufficientAvt(); // 0xd0fc62ce
   error InvalidERC777(); // 0x0e9dcbf6
   error InvalidProof(); // 0x09bde339
   error InvalidRecipient(); // 0x9c8d2cd2
@@ -129,7 +135,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error WindowExpired(); // 0x7bbfb6fe
 
   /// @custom:oz-upgrades-unsafe-allow constructor
-  constructor() {
+  constructor(address avt) {
+    if (avt == address(0)) revert AddressIsZero();
+    AVT = avt;
     _disableInitializers();
   }
 
@@ -304,6 +312,19 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TxId(t2TxId);
     isPublishedRootHash[rootHash] = true;
     emit LogRootPublished(rootHash, t2TxId);
+  }
+
+  /**
+   * @dev Allows T2 to burn an amount of AVT fees held by this contract, when signed off by authors.
+   */
+  function burnFees(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
+    if (amount == 0) revert AmountIsZero();
+    if (_avt().balanceOf(address(this)) < amount) revert InsufficientAvt();
+    bytes32 proofHash = _toBurnFeesProofHash(amount, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
+    _storeT2TxId(t2TxId);
+    _avt().burn(amount);
+    emit LogFeesBurned(amount, _avt().totalSupply(), t2TxId);
   }
 
   /**
@@ -483,6 +504,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     isAuthor[id] = true;
   }
 
+  function _avt() private view returns (IAVT) {
+    return IAVT(AVT);
+  }
+
   function _domainSeparator() private view returns (bytes32) {
     return keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name())), VERSION_HASH, block.chainid, address(this)));
   }
@@ -606,6 +631,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function _toAddAuthorProofHash(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
     bytes32 t1PubKeyHash = keccak256(t1PubKey);
     bytes32 structHash = keccak256(abi.encode(ADD_AUTHOR_TYPEHASH, t1PubKeyHash, t2PubKey, expiry, t2TxId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toBurnFeesProofHash(uint128 amount, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 structHash = keccak256(abi.encode(BURN_FEES_TYPEHASH, amount, expiry, t2TxId));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
 

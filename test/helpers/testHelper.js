@@ -4,6 +4,7 @@ const { ethers, upgrades } = require('hardhat');
 const keccak256 = require('keccak256');
 const { expect } = require('chai');
 
+const AVT_SYMBOL_BYTES_32 = '0x4156540000000000000000000000000000000000000000000000000000000000';
 const EMPTY_BYTES_32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const EXPIRY_WINDOW = 60;
 const LOWER_ID = '0x5702';
@@ -16,6 +17,13 @@ const PROOF_TYPES = {
     AddAuthor: [
       { name: 't1PubKey', type: 'bytes' },
       { name: 't2PubKey', type: 'bytes32' },
+      { name: 'expiry', type: 'uint256' },
+      { name: 't2TxId', type: 'uint32' }
+    ]
+  },
+  burnFees: {
+    BurnFees: [
+      { name: 'amount', type: 'uint128' },
       { name: 'expiry', type: 'uint256' },
       { name: 't2TxId', type: 'uint32' }
     ]
@@ -125,10 +133,39 @@ async function createTreeAndPublishRoot(bridge, tokenAddress, amount) {
   return merkleTree;
 }
 
-async function deployBridge(numAuthors) {
+async function deployAuthority(avt) {
+  const Authority = await ethers.getContractFactory('AVTAuthority');
+  const authority = await Authority.deploy(avt.address);
+  authority.address = await authority.getAddress();
+  return authority;
+}
+
+async function deployAVT(supply) {
+  const Token = await ethers.getContractFactory('MockAVT');
+  const token = await Token.deploy(AVT_SYMBOL_BYTES_32);
+  await token.mint(supply * 10n ** 18n);
+  token.address = await token.getAddress();
+  return token;
+}
+
+async function deployBridge(avt, numAuthors) {
   const initArgs = generateInitArgs(numAuthors);
   const AVNBridge = await ethers.getContractFactory('AVNBridge');
-  return upgrades.deployProxy(AVNBridge, initArgs, { kind: 'uups' });
+  return upgrades.deployProxy(AVNBridge, initArgs, { constructorArgs: [avt.address], kind: 'uups' });
+}
+
+async function deployERC20(supply) {
+  const Token = await ethers.getContractFactory('Token20');
+  const token = await Token.deploy(supply);
+  token.address = await token.getAddress();
+  return token;
+}
+
+async function deployERC777(supply) {
+  const Token = await ethers.getContractFactory('Token777');
+  const token = await Token.deploy(supply);
+  token.address = await token.getAddress();
+  return token;
 }
 
 function generateInitArgs(numAuthors) {
@@ -235,6 +272,7 @@ function printErrorCodes() {
     'AuthorsDisabled()',
     'BadConfirmations()',
     'CannotChangeT2Key(bytes32)',
+    'InsufficientAvt()',
     'InvalidERC777()',
     'InvalidProof()',
     'InvalidRecipient()',
@@ -289,6 +327,7 @@ function toAuthorAccount(account) {
 
 const toEIP712Message = {
   addAuthor: args => ({ t1PubKey: args[0], t2PubKey: args[1], expiry: args[2], t2TxId: args[3] }),
+  burnFees: args => ({ amount: args[0], expiry: args[1], t2TxId: args[2] }),
   claimLower: args => ({ token: args[0], amount: args[1], recipient: args[2], lowerId: args[3], t2Sender: args[4], t2Timestamp: args[5] }),
   publishRoot: args => ({ rootHash: args[0], expiry: args[1], t2TxId: args[2] }),
   removeAuthor: args => ({ t2PubKey: args[0], t1PubKey: args[1], expiry: args[2], t2TxId: args[3] })
@@ -306,9 +345,14 @@ function toLittleEndianBytesStr(amount) {
 
 /* Keep exports alphabetical. */
 module.exports = {
+  AVT_SYMBOL_BYTES_32,
   createLowerProof,
   createTreeAndPublishRoot,
+  deployAVT,
+  deployAuthority,
   deployBridge,
+  deployERC20,
+  deployERC777,
   EMPTY_BYTES_32,
   expect,
   EXPIRY_WINDOW,

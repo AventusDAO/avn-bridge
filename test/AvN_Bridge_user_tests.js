@@ -1,7 +1,11 @@
 const {
   createLowerProof,
   createTreeAndPublishRoot,
+  deployAuthority,
+  deployAVT,
   deployBridge,
+  deployERC20,
+  deployERC777,
   EMPTY_BYTES_32,
   expect,
   getAccounts,
@@ -12,23 +16,23 @@ const {
   ZERO_ADDRESS
 } = require('./helpers/testHelper');
 
-let accounts, bridge, token777, token20, owner, someOtherAccount, someT2PubKey;
+let accounts, avt, bridge, token777, token20, owner, someOtherAccount, someT2PubKey, authority;
 
 describe('Lifting and lowering', () => {
   before(async () => {
     await init();
 
-    const Token777 = await ethers.getContractFactory('Token777');
-    token777 = await Token777.deploy(10_000_000n);
-    token777.address = await token777.getAddress();
+    avt = await deployAVT(10_000_000n);
+    authority = await deployAuthority(avt);
+    await avt.setAuthority(authority);
 
-    const Token20 = await ethers.getContractFactory('Token20');
-    token20 = await Token20.deploy(10_000_000n);
-    token20.address = await token20.getAddress();
-
-    const numAuthors = 10;
-    bridge = await deployBridge(numAuthors);
+    const numAuthors = 6;
+    bridge = await deployBridge(avt, numAuthors);
     bridge.address = await bridge.getAddress();
+    await authority.allowBurning(bridge.address);
+
+    token20 = await deployERC20(10_000_000n);
+    token777 = await deployERC777(10_000_000n);
 
     accounts = getAccounts();
     owner = accounts[0];

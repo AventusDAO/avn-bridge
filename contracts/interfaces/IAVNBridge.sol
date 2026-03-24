@@ -9,6 +9,7 @@ interface IAVNBridge {
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
+  event LogFeesBurned(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
   event LogRootPublished(bytes32 indexed rootHash, uint32 indexed t2TxId);
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
@@ -23,6 +24,7 @@ interface IAVNBridge {
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
+  function burnFees(uint128 amount, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function removeAuthor(bytes32 t2PubKey, bytes calldata t1PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
   function publishRoot(bytes32 rootHash, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
 
