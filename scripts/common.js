@@ -14,15 +14,22 @@ const CHAIN_CONFIG = {
     t1Network: 'sepolia',
     t1Rpc: SEPOLIA_RPC_URL,
     t1PrivateKey: DEV_T1_PRIVATE_KEY,
-    t2Websocket: 'wss://avn-parachain-internal.dev.aventus.io',
+    t2Websocket: 'wss://avn-parachain.dev.aventus.io',
     t2PrivateKey: DEV_T2_PRIVATE_KEY
+  },
+  testnet: {
+    t1Network: 'sepolia',
+    t1Rpc: SEPOLIA_RPC_URL,
+    t1PrivateKey: DEV_T1_PRIVATE_KEY,
+    t2Websocket: 'wss://avn-parachain.testnet.aventus.io',
+    t2PrivateKey: null
   },
   mainnet: {
     t1Network: 'mainnet',
     t1Rpc: MAINNET_RPC_URL,
     t1PrivateKey: null,
-    t2Websocket: 'wss://avn-parachain-internal.mainnet.aventus.io',
-    t2PrivateKey: MAINNET_T2_PRIVATE_KEY
+    t2Websocket: 'wss://avn-parachain.mainnet.aventus.io',
+    t2PrivateKey: null
   }
 };
 
@@ -35,7 +42,7 @@ async function init(chain) {
   const t1Wallet = t1PrivateKey ? new ethers.Wallet(t1PrivateKey).connect(t1Provider) : null;
 
   const t2Api = await ApiPromise.create({ provider: new WsProvider(t2Websocket) });
-  const t2Signer = getT2Signer(t2PrivateKey);
+  const t2Signer = t2PrivateKey ? getT2Signer(t2PrivateKey) : null;
 
   const bridgeAddress = (await t2Api.query.ethBridge.instance()).toHuman().bridgeContract;
   const bridgeABI = ['function claimLower(bytes proof)', 'function isLowerUsed(uint32 lowerId) view returns (bool)'];
@@ -51,7 +58,7 @@ async function init(chain) {
   console.log(`T1 Signer  : ${t1Wallet ? t1Wallet.address : '(read-only provider)'}`);
   console.log(`T1 Bridge  : ${bridgeAddress}`);
   console.log(`T2 WS      : ${t2Websocket}`);
-  console.log(`T2 Signer  : ${t2Signer.address}`);
+  console.log(`T2 Signer  : ${t2Signer ? t2Signer.address : '(read-only - no signer'}`);
   console.log(`============================\n`);
 
   return {

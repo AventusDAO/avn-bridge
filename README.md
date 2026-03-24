@@ -59,7 +59,7 @@ The secure movement of ERC20 or ERC777 tokens between T1 Ethereum and T2 AVN via
 `npx hardhat --network <network> deploy <"dev" || "testnet" || "paseo" || "mainnet">`
 
 #### Deploy the AVT authority contract
-`npx hardhat --network <network> authority <avt address>`
+`npx hardhat --network <network> authority <"dev" || "testnet" || "paseo" || "mainnet">`
 
 #### Prepare (update) the OZ manifest
 `npx hardhat --network <network> prepare <bridge address> <"dev" || "testnet" || "paseo" || "mainnet">`

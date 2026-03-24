@@ -156,27 +156,29 @@ task('implementation', 'deploy new implementation contract')
     console.log(`\nDeployed AVNBridge implementation at ${impAddress} for ${cost} ETH`);
   });
 
-task('authority', 'deploy the AVT Authority contract').setAction(async (_, hre) => {
-  const { ethers, network, run } = hre;
-  const [signer] = await ethers.getSigners();
-  await run('compile');
+task('authority', 'deploy the AVT Authority contract')
+  .addPositionalParam('env', 'AvN environment name')
+  .setAction(async (_, hre) => {
+    const { ethers, network, run } = hre;
+    const [signer] = await ethers.getSigners();
+    await run('compile');
 
-  const avtAddress = getAVTAddress(args.env);
-  const initialBalance = await ethers.provider.getBalance(signer.address);
-  console.log(`\nDeploying AVTAuthority on ${network.name} using account ${signer.address}...`);
-  const contract = await ethers.getContractFactory('AVTAuthority');
-  const authority = await contract.deploy(avtAddress);
-  await authority.waitForDeployment();
-  const authAddress = await authority.getAddress();
+    const avtAddress = getAVTAddress(args.env);
+    const initialBalance = await ethers.provider.getBalance(signer.address);
+    console.log(`\nDeploying AVTAuthority on ${network.name} using account ${signer.address}...`);
+    const contract = await ethers.getContractFactory('AVTAuthority');
+    const authority = await contract.deploy(avtAddress);
+    await authority.waitForDeployment();
+    const authAddress = await authority.getAddress();
 
-  console.log('Waiting to verify...');
-  await delay(VERIFICATION_DELAY_SECONDS);
-  await verify(run, authAddress, [args.avt]);
+    console.log('Waiting to verify...');
+    await delay(VERIFICATION_DELAY_SECONDS);
+    await verify(run, authAddress, [avtAddress]);
 
-  const finalBalance = await ethers.provider.getBalance(signer.address);
-  const cost = ethers.formatEther(initialBalance - finalBalance);
-  console.log(`\nDeployed AVTAuthority at ${authAddress} for ${cost} ETH`);
-});
+    const finalBalance = await ethers.provider.getBalance(signer.address);
+    const cost = ethers.formatEther(initialBalance - finalBalance);
+    console.log(`\nDeployed AVTAuthority at ${authAddress} for ${cost} ETH`);
+  });
 
 task('lift', 'lift a token to the chain')
   .addParam('recipient', 'Recipient public key (32 bytes) in tier2')
