@@ -6,6 +6,8 @@ The contract utilises OpenZeppelin's implementation of the Universal Upgradeable
 
 The system is underwritten by [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd96b831231638b66c05571e824f).
 
+The burning and minting abilities of the bridge are governed by the [AVT Authority contract](https://etherscan.io/address/0xcbe8dd2824cb2c4c400b3661b901deb3425f1118#code)
+
 ### Contract Audit
 
 [https://www.quillaudits.com/leaderboard/avnbridge](https://www.quillaudits.com/leaderboard/avnbridge)
@@ -16,7 +18,7 @@ The system is underwritten by [AVT](https://etherscan.io/token/0x0d88ed6e74bbfd9
 
 #### Testnet - [0x83359eCb73E869174B09221F4460b68FD8B0a42F](https://sepolia.etherscan.io/address/0x83359eCb73E869174B09221F4460b68FD8B0a42F) 
 
-#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://sepolia.etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5) 
+#### Develop - [0x2024d885cfa839296c68dc2d6bba7c258f05cfb5](https://sepolia.etherscan.io/address/0x2024d885cfa839296c68dc2d6bba7c258f05cfb5)
 
 ### Key Functions
 
