@@ -1,4 +1,4 @@
-const { accumulateBitmap, blockRanges, findDeploymentBlock, init, parseIdFromTopic, sleep, saveState } = require('./common');
+const { accumulateBitmap, blockRanges, findDeploymentBlock, init, parseIdFromTopic, saveState } = require('./common');
 const { ethers } = require('ethers');
 const [CHAIN] = process.argv.slice(2);
 
@@ -46,8 +46,6 @@ async function main() {
 
         used.add(t2TxId);
       }
-
-      // await sleep(1500);
     }
 
     console.log(`Used T2 Tx IDs found       : ${used.size}`);
