@@ -108,6 +108,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
+  error AlreadyActive(); // 0xf9be60a2
   error AlreadyAdded(); // 0xf411c327
   error AmountIsZero(); // 0x43ad20fc
   error AuthorsDisabled(); // 0x7b465238
@@ -239,6 +240,28 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1AddressToId[oldAddress] = 0;
       idToT1Address[id] = newAddress;
       t1AddressToId[newAddress] = id;
+
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  /**
+   * @dev Lets the owner activate already-registered authors that are still pending activation.
+   * Cannot reactivate removed authors or already active authors.
+   */
+  function activateAuthors(address[] calldata t1Addresses) external onlyOwner {
+    uint256 numAddresses = t1Addresses.length;
+    uint256 id;
+    address t1Address;
+
+    for (uint256 i; i < numAddresses; ) {
+      t1Address = t1Addresses[i];
+      id = t1AddressToId[t1Address];
+      if (!isAuthor[id]) revert NotAnAuthor();
+      if (authorIsActive[id]) revert AlreadyActive();
+      _activateAuthor(id);
 
       unchecked {
         ++i;

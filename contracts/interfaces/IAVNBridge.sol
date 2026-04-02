@@ -18,6 +18,7 @@ interface IAVNBridge {
   event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
 
   // Owner only
+  function activateAuthors(address[] calldata t1Addresses) external;
   function enableAuthors(bool enable) external;
   function enableLifting(bool enable) external;
   function enableLowering(bool enable) external;

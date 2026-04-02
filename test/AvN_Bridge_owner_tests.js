@@ -17,7 +17,7 @@ const {
   nextT2TxId
 } = require('./helpers/testHelper');
 
-let accounts, authors, avt, authority, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
+let accounts, activeAuthor, authors, avt, authority, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
 
 describe('Owner Functions', () => {
   before(async () => {
@@ -43,7 +43,10 @@ describe('Owner Functions', () => {
     newTokenOwner = accounts[3];
 
     authors = getAuthors();
+    activeAuthor = authors[0].account;
     await token20.transferOwnership(bridge.address);
+    numActiveAuthors = numAuthors;
+    nextAuthorId = numAuthors + 1;
   });
 
   context('Transferring Ownership', () => {
@@ -390,6 +393,115 @@ describe('Owner Functions', () => {
         let newT1Addresses = Array.from({ length: NUM_AUTHORS }, () => ethers.Wallet.createRandom().address);
         newT1Addresses[1] = newT1Addresses[0];
         await expect(rotBridge.rotateT1(ids, newT1Addresses)).to.be.revertedWithCustomError(rotBridge, 'T1AddressInUse');
+      });
+    });
+  });
+
+  context('Owner Activating Pending Authors', () => {
+    context('succeeds', () => {
+      it('via the owner for a pending registered author', async () => {
+        const numActiveAuthorsBefore = await bridge.numActiveAuthors();
+        const newAuthor = authors[nextAuthorId];
+
+        // add author (registered but still inactive)
+        let expiry = await getValidExpiry();
+        let t2TxId = nextT2TxId();
+        let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
+
+        await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+
+        expect(await bridge.idToT1Address(nextAuthorId)).to.equal(newAuthor.t1Address);
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(false);
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
+
+        // owner activates pending author
+        await bridge.activateAuthors([newAuthor.t1Address]);
+
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(true);
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore + 1n);
+
+        nextAuthorId++;
+        numActiveAuthors++;
+      });
+
+      it('via the owner for multiple pending registered authors', async () => {
+        const numActiveAuthorsBefore = await bridge.numActiveAuthors();
+        const newAuthor1 = authors[nextAuthorId];
+        const newAuthor2 = authors[nextAuthorId + 1];
+
+        // add first pending author
+        let expiry = await getValidExpiry();
+        let t2TxId = nextT2TxId();
+        let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor1.t1PubKey, newAuthor1.t2PubKey, expiry, t2TxId]);
+        await bridge.connect(activeAuthor).addAuthor(newAuthor1.t1PubKey, newAuthor1.t2PubKey, expiry, t2TxId, confirmations);
+
+        // add second pending author
+        expiry = await getValidExpiry();
+        t2TxId = nextT2TxId();
+        confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor2.t1PubKey, newAuthor2.t2PubKey, expiry, t2TxId]);
+        await bridge.connect(activeAuthor).addAuthor(newAuthor2.t1PubKey, newAuthor2.t2PubKey, expiry, t2TxId, confirmations);
+
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(false);
+        expect(await bridge.authorIsActive(nextAuthorId + 1)).to.equal(false);
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
+
+        await bridge.activateAuthors([newAuthor1.t1Address, newAuthor2.t1Address]);
+
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(true);
+        expect(await bridge.authorIsActive(nextAuthorId + 1)).to.equal(true);
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore + 2n);
+
+        nextAuthorId += 2;
+        numActiveAuthors += 2;
+      });
+    });
+
+    context('fails when', () => {
+      it('the caller is not the owner', async () => {
+        const newAuthor = authors[nextAuthorId];
+        let expiry = await getValidExpiry();
+        let t2TxId = nextT2TxId();
+        let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
+
+        await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+        await expect(bridge.connect(activeAuthor).activateAuthors([newAuthor.t1Address])).to.be.reverted;
+        await bridge.activateAuthors([newAuthor.t1Address]);
+
+        nextAuthorId++;
+        numActiveAuthors++;
+      });
+
+      it('the address is not an author', async () => {
+        const unknownAuthor = authors[nextAuthorId];
+
+        await expect(bridge.activateAuthors([unknownAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'NotAnAuthor');
+      });
+
+      it('the author is already active', async () => {
+        const existingAuthor = authors[1];
+
+        await expect(bridge.activateAuthors([existingAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'AlreadyActive');
+      });
+
+      it('the author has been removed and is no longer pending', async () => {
+        const newAuthor = authors[nextAuthorId];
+
+        // add author as pending
+        let expiry = await getValidExpiry();
+        let t2TxId = nextT2TxId();
+        let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
+
+        await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+
+        // remove while still inactive
+        expiry = await getValidExpiry();
+        t2TxId = nextT2TxId();
+        confirmations = await getConfirmations(bridge, 'removeAuthor', [newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId]);
+
+        await bridge.connect(activeAuthor).removeAuthor(newAuthor.t2PubKey, newAuthor.t1PubKey, expiry, t2TxId, confirmations);
+        await expect(bridge.activateAuthors([newAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'NotAnAuthor');
+
+        nextAuthorId++;
       });
     });
   });
