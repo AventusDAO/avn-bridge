@@ -259,32 +259,6 @@ describe('Owner Functions', () => {
     });
   });
 
-  context('Upgrade', function () {
-    let AVNBridgeV2;
-
-    before(async () => {
-      AVNBridgeV2 = await ethers.getContractFactory('AVNBridgeUpgrade');
-    });
-
-    context('succeeds', function () {
-      it('in upgrading the bridge to a new implementation', async () => {
-        const newImplementation = await AVNBridgeV2.deploy(avt.address);
-        await bridge.upgradeTo(await newImplementation.getAddress());
-        const upgradedBridge = AVNBridgeV2.attach(bridge.address);
-        expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
-      });
-    });
-
-    context('fails', function () {
-      it('when the caller is not the owner', async () => {
-        const newImplementation = await AVNBridgeV2.deploy(avt.address);
-        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newImplementation.getAddress(), '0x')).to.be.revertedWith(
-          'Ownable: caller is not the owner'
-        );
-      });
-    });
-  });
-
   context('Rotation', () => {
     const NUM_AUTHORS = 10;
     let rotBridge;
@@ -415,7 +389,9 @@ describe('Owner Functions', () => {
         expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
 
         // owner activates pending author
-        await bridge.activateAuthors([newAuthor.t1Address]);
+        await expect(bridge.activateAuthors([newAuthor.t1Address]))
+          .to.emit(bridge, 'LogAuthorManuallyActivated')
+          .withArgs(newAuthor.t1Address);
 
         expect(await bridge.authorIsActive(nextAuthorId)).to.equal(true);
         expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore + 1n);
@@ -445,7 +421,9 @@ describe('Owner Functions', () => {
         expect(await bridge.authorIsActive(nextAuthorId + 1)).to.equal(false);
         expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
 
-        await bridge.activateAuthors([newAuthor1.t1Address, newAuthor2.t1Address]);
+        const tx = bridge.activateAuthors([newAuthor1.t1Address, newAuthor2.t1Address]);
+        await expect(tx).to.emit(bridge, 'LogAuthorManuallyActivated').withArgs(newAuthor1.t1Address);
+        await expect(tx).to.emit(bridge, 'LogAuthorManuallyActivated').withArgs(newAuthor2.t1Address);
 
         expect(await bridge.authorIsActive(nextAuthorId)).to.equal(true);
         expect(await bridge.authorIsActive(nextAuthorId + 1)).to.equal(true);
@@ -453,6 +431,35 @@ describe('Owner Functions', () => {
 
         nextAuthorId += 2;
         numActiveAuthors += 2;
+      });
+
+      it('does nothing when the author is already active', async () => {
+        const existingAuthor = authors[1];
+        const numActiveAuthorsBefore = await bridge.numActiveAuthors();
+        await expect(bridge.activateAuthors([existingAuthor.t1Address])).to.not.emit(bridge, 'LogAuthorManuallyActivated');
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore);
+      });
+
+      it('activates pending authors and skips already active ones', async () => {
+        const numActiveAuthorsBefore = await bridge.numActiveAuthors();
+        const existingAuthor = authors[1];
+        const newAuthor = authors[nextAuthorId];
+
+        let expiry = await getValidExpiry();
+        let t2TxId = nextT2TxId();
+        let confirmations = await getConfirmations(bridge, 'addAuthor', [newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId]);
+
+        await bridge.connect(activeAuthor).addAuthor(newAuthor.t1PubKey, newAuthor.t2PubKey, expiry, t2TxId, confirmations);
+
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(false);
+        await expect(bridge.activateAuthors([existingAuthor.t1Address, newAuthor.t1Address]))
+          .to.emit(bridge, 'LogAuthorManuallyActivated')
+          .withArgs(newAuthor.t1Address);
+        expect(await bridge.authorIsActive(nextAuthorId)).to.equal(true);
+        expect(await bridge.numActiveAuthors()).to.equal(numActiveAuthorsBefore + 1n);
+
+        nextAuthorId++;
+        numActiveAuthors++;
       });
     });
 
@@ -472,15 +479,8 @@ describe('Owner Functions', () => {
       });
 
       it('the address is not an author', async () => {
-        const unknownAuthor = authors[nextAuthorId];
-
-        await expect(bridge.activateAuthors([unknownAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'NotAnAuthor');
-      });
-
-      it('the author is already active', async () => {
-        const existingAuthor = authors[1];
-
-        await expect(bridge.activateAuthors([existingAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'AlreadyActive');
+        const unknownAddress = ethers.Wallet.createRandom().address;
+        await expect(bridge.activateAuthors([unknownAddress])).to.be.revertedWithCustomError(bridge, 'NotAnAuthor');
       });
 
       it('the author has been removed and is no longer pending', async () => {
@@ -502,6 +502,32 @@ describe('Owner Functions', () => {
         await expect(bridge.activateAuthors([newAuthor.t1Address])).to.be.revertedWithCustomError(bridge, 'NotAnAuthor');
 
         nextAuthorId++;
+      });
+    });
+  });
+
+  context('Upgrade', function () {
+    let AVNBridgeV2;
+
+    before(async () => {
+      AVNBridgeV2 = await ethers.getContractFactory('AVNBridgeUpgrade');
+    });
+
+    context('succeeds', function () {
+      it('in upgrading the bridge to a new implementation', async () => {
+        const newImplementation = await AVNBridgeV2.deploy(avt.address);
+        await bridge.upgradeTo(await newImplementation.getAddress());
+        const upgradedBridge = AVNBridgeV2.attach(bridge.address);
+        expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
+      });
+    });
+
+    context('fails', function () {
+      it('when the caller is not the owner', async () => {
+        const newImplementation = await AVNBridgeV2.deploy(avt.address);
+        await expect(bridge.connect(someOtherAccount).upgradeToAndCall(await newImplementation.getAddress(), '0x')).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
       });
     });
   });

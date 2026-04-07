@@ -108,7 +108,6 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
-  error AlreadyActive(); // 0xf9be60a2
   error AlreadyAdded(); // 0xf411c327
   error AmountIsZero(); // 0x43ad20fc
   error AuthorsDisabled(); // 0x7b465238
@@ -260,8 +259,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       t1Address = t1Addresses[i];
       id = t1AddressToId[t1Address];
       if (!isAuthor[id]) revert NotAnAuthor();
-      if (authorIsActive[id]) revert AlreadyActive();
-      _activateAuthor(id);
+
+      // Skip event when author is already active
+      if (!authorIsActive[id]) {
+        _activateAuthor(id);
+        emit LogAuthorManuallyActivated(t1Address);
+      }
 
       unchecked {
         ++i;

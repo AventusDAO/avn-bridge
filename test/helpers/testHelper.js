@@ -278,7 +278,6 @@ function printErrorCodes() {
   [
     'AddressIsZero()',
     'AddressMismatch()',
-    'AlreadyActive()',
     'AlreadyAdded()',
     'AmountIsZero()',
     'AuthorsDisabled()',
