@@ -8,6 +8,7 @@ interface IAVNBridge {
   event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
+  event LogAuthorManuallyActivated(address indexed t1Address);
   event LogAuthorRemoved(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
   event LogFeesBurned(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
   event LogRewardsMinted(uint256 indexed amount, uint256 indexed newSupply, uint32 indexed t2TxId);
@@ -18,6 +19,7 @@ interface IAVNBridge {
   event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
 
   // Owner only
+  function activateAuthors(address[] calldata t1Addresses) external;
   function enableAuthors(bool enable) external;
   function enableLifting(bool enable) external;
   function enableLowering(bool enable) external;

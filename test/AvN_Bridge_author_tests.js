@@ -20,7 +20,7 @@ const {
   strip_0x
 } = require('./helpers/testHelper');
 
-let authority, avt, bridge, token20, authors, activeAuthor, numActiveAuthors, nextAuthorId;
+let authority, avt, bridge, authors, activeAuthor, numActiveAuthors, nextAuthorId;
 
 describe('Author Functions', () => {
   before(async () => {

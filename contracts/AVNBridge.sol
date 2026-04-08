@@ -247,6 +247,32 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
+   * @dev Lets the owner activate already-registered authors that are still pending activation.
+   * Cannot reactivate removed authors or already active authors.
+   */
+  function activateAuthors(address[] calldata t1Addresses) external onlyOwner {
+    uint256 numAddresses = t1Addresses.length;
+    uint256 id;
+    address t1Address;
+
+    for (uint256 i; i < numAddresses; ) {
+      t1Address = t1Addresses[i];
+      id = t1AddressToId[t1Address];
+      if (!isAuthor[id]) revert NotAnAuthor();
+
+      // Skip event when author is already active
+      if (!authorIsActive[id]) {
+        _activateAuthor(id);
+        emit LogAuthorManuallyActivated(t1Address);
+      }
+
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  /**
    * @dev Enables T2 to add a new author, permanently linking their T1 and T2 keys.
    * Author activation will occur upon the first confirmation received from them.
    * Can also be used to reactivate an author.
