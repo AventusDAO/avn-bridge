@@ -103,7 +103,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
-  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowedId 514 = bucket[2], bit index 2)
+  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowerId 514 = bucket[2], bit index 2)
   mapping(uint256 => uint256) private usedT2TxIds; // bitmap of 256-bit buckets where t2TxId >> 8 = bucket and t2TxId & 255 = bit
 
   uint256 public replenishAllowance; // remaining AVT mintable to cover claims
@@ -680,6 +680,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   function _replenishShortfall(uint256 amount, uint32 lowerId) private {
+    if (amount > T2_TOKEN_LIMIT) return;
+
     uint256 balance = IAVT(AVT).balanceOf(address(this));
     if (balance >= amount) return;
 
@@ -689,7 +691,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     // If the shortfall cannot be covered the claim will revert on transfer as it would without any allowance
-    if (shortfall > replenishAllowance || shortfall > type(uint128).max) return;
+    if (shortfall > replenishAllowance) return;
 
     unchecked {
       replenishAllowance -= shortfall;
