@@ -252,6 +252,27 @@ describe('Owner Functions', () => {
     });
   });
 
+  context('Setting the replenish allowance', () => {
+    context('succeeds', () => {
+      it('when called by the owner', async () => {
+        const allowance = 1000n;
+        await expect(bridge.setReplenishAllowance(allowance)).to.emit(bridge, 'LogReplenishAllowanceSet').withArgs(allowance);
+        expect(await bridge.replenishAllowance()).to.equal(allowance);
+      });
+
+      it('when the owner resets it to zero', async () => {
+        await expect(bridge.setReplenishAllowance(0n)).to.emit(bridge, 'LogReplenishAllowanceSet').withArgs(0n);
+        expect(await bridge.replenishAllowance()).to.equal(0n);
+      });
+    });
+
+    context('fails', () => {
+      it('when the caller is not the owner', async () => {
+        await expect(bridge.connect(someOtherAccount).setReplenishAllowance(1000n)).to.be.revertedWith('Ownable: caller is not the owner');
+      });
+    });
+  });
+
   context('Initializer', () => {
     it('cannot reinitialize', async () => {
       const initArgs = generateInitArgs(MIN_AUTHORS);
@@ -515,10 +536,14 @@ describe('Owner Functions', () => {
 
     context('succeeds', function () {
       it('in upgrading the bridge to a new implementation', async () => {
+        const replenishAllowance = 123n;
+        await bridge.setReplenishAllowance(replenishAllowance);
+
         const newImplementation = await AVNBridgeV2.deploy(avt.address);
         await bridge.upgradeTo(await newImplementation.getAddress());
         const upgradedBridge = AVNBridgeV2.attach(bridge.address);
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
+        expect(await upgradedBridge.replenishAllowance()).to.equal(replenishAllowance);
       });
     });
 

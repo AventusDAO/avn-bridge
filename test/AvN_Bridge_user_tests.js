@@ -286,6 +286,106 @@ describe('Lifting and lowering', () => {
     });
   });
 
+  context('Replenishing AVT shortfalls', () => {
+    beforeEach(async () => {
+      await bridge.setReplenishAllowance(0n);
+    });
+
+    context('succeeds', () => {
+      it('in minting exactly the shortfall when an AVT claim exceeds the held funds', async () => {
+        const liftAmount = 70n;
+        const lowerAmount = 100n;
+        const allowance = 1000n;
+        const shortfall = lowerAmount - liftAmount;
+
+        await avt.approve(bridge.address, liftAmount);
+        await bridge.lift(avt.address, someT2PubKey, liftAmount);
+        await bridge.setReplenishAllowance(allowance);
+
+        const supplyBefore = await avt.totalSupply();
+        const recipientBalanceBefore = await avt.balanceOf(someOtherAccount.address);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, avt, lowerAmount, someOtherAccount, someT2PubKey);
+
+        const tx = bridge.claimLower(lowerProof);
+        await expect(tx)
+          .to.emit(bridge, 'LogReplenishmentMinted')
+          .withArgs(shortfall, allowance - shortfall, lowerId);
+        await expect(tx).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        expect(await bridge.replenishAllowance()).to.equal(allowance - shortfall);
+        expect(await avt.totalSupply()).to.equal(supplyBefore + shortfall);
+        expect(await avt.balanceOf(someOtherAccount.address)).to.equal(recipientBalanceBefore + lowerAmount);
+        expect(await avt.balanceOf(bridge.address)).to.equal(0n);
+      });
+
+      it('in leaving the allowance untouched when the held funds cover an AVT claim', async () => {
+        const liftAmount = 100n;
+        const lowerAmount = 50n;
+        const allowance = 1000n;
+
+        await avt.approve(bridge.address, liftAmount);
+        await bridge.lift(avt.address, someT2PubKey, liftAmount);
+        await bridge.setReplenishAllowance(allowance);
+
+        const supplyBefore = await avt.totalSupply();
+        const [lowerProof, lowerId] = await createLowerProof(bridge, avt, lowerAmount, someOtherAccount, someT2PubKey);
+
+        const tx = bridge.claimLower(lowerProof);
+        await expect(tx).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        await expect(tx).to.not.emit(bridge, 'LogReplenishmentMinted');
+        expect(await bridge.replenishAllowance()).to.equal(allowance);
+        expect(await avt.totalSupply()).to.equal(supplyBefore);
+
+        // return the remaining lifted funds to keep the bridge AVT balance empty for other tests
+        const [drainProof] = await createLowerProof(bridge, avt, liftAmount - lowerAmount, owner, someT2PubKey);
+        await bridge.claimLower(drainProof);
+      });
+
+      it('in consuming the allowance down to exactly zero across multiple claims', async () => {
+        const allowance = 100n;
+        await bridge.setReplenishAllowance(allowance);
+
+        const [firstProof, firstLowerId] = await createLowerProof(bridge, avt, 60n, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(firstProof)).to.emit(bridge, 'LogReplenishmentMinted').withArgs(60n, 40n, firstLowerId);
+
+        const [secondProof, secondLowerId] = await createLowerProof(bridge, avt, 40n, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(secondProof)).to.emit(bridge, 'LogReplenishmentMinted').withArgs(40n, 0n, secondLowerId);
+
+        expect(await bridge.replenishAllowance()).to.equal(0n);
+
+        const [thirdProof] = await createLowerProof(bridge, avt, 1n, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(thirdProof)).to.be.reverted;
+      });
+    });
+
+    context('does not mint when', () => {
+      it('the shortfall exceeds the allowance', async () => {
+        const allowance = 10n;
+        await bridge.setReplenishAllowance(allowance);
+
+        const [lowerProof] = await createLowerProof(bridge, avt, 50n, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(lowerProof)).to.be.reverted;
+        expect(await bridge.replenishAllowance()).to.equal(allowance);
+      });
+
+      it('the shortfall exceeds the maximum mintable amount', async () => {
+        const lowerAmount = 2n ** 128n;
+        await bridge.setReplenishAllowance(lowerAmount);
+
+        const [lowerProof] = await createLowerProof(bridge, avt, lowerAmount, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(lowerProof)).to.be.reverted;
+        expect(await bridge.replenishAllowance()).to.equal(lowerAmount);
+      });
+
+      it('the claimed token is not AVT', async () => {
+        await bridge.setReplenishAllowance(1000n);
+
+        const bridgeBalance = await token20.balanceOf(bridge.address);
+        const [lowerProof] = await createLowerProof(bridge, token20, bridgeBalance + 10n, someOtherAccount, someT2PubKey);
+        await expect(bridge.claimLower(lowerProof)).to.be.reverted;
+      });
+    });
+  });
+
   context('Check lower', () => {
     it('results are as expected for a valid, unused proof', async () => {
       const amount = 123n;

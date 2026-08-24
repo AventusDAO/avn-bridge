@@ -5,6 +5,7 @@ interface IAVNBridge {
   event LogAuthorsEnabled(bool enabled);
   event LogLiftingEnabled(bool enabled);
   event LogLoweringEnabled(bool enabled);
+  event LogReplenishAllowanceSet(uint256 amount);
   event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
   event LogAuthorAdded(address indexed t1Address, bytes32 indexed t2PubKey, uint32 indexed t2TxId);
@@ -16,6 +17,7 @@ interface IAVNBridge {
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLowerClaimed(uint32 indexed lowerId);
+  event LogReplenishmentMinted(uint256 indexed amount, uint256 indexed remainingAllowance, uint32 indexed lowerId);
   event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
 
   // Owner only
@@ -25,6 +27,7 @@ interface IAVNBridge {
   function enableLowering(bool enable) external;
   function mintRewards(uint128 amount) external;
   function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external;
+  function setReplenishAllowance(uint256 amount) external;
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
