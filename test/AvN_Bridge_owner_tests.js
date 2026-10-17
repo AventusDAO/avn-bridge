@@ -1,5 +1,6 @@
 const {
   AVT_SYMBOL_BYTES_32,
+  createLowerProof,
   deployAuthority,
   deployAVT,
   deployBridge,
@@ -14,7 +15,8 @@ const {
   init,
   MIN_AUTHORS,
   ZERO_ADDRESS,
-  nextT2TxId
+  nextT2TxId,
+  randomBytes32
 } = require('./helpers/testHelper');
 
 let accounts, activeAuthor, authors, avt, authority, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
@@ -579,6 +581,10 @@ describe('Owner Functions', () => {
         await bridge.setReplenishAllowance(await bridge.replenishAllowance(), replenishAllowance);
         const lowerLockPeriod = 456n;
         await bridge.setLowerLockPeriod(lowerLockPeriod);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, 1n, someOtherAccount, randomBytes32());
+        await bridge.claimLower(lowerProof);
+        await bridge.freezeLowers([lowerId]);
+        const pendingBefore = [...(await bridge.pendingLowers(lowerId))];
 
         const newImplementation = await AVNBridgeV2.deploy(avt.address);
         await bridge.upgradeTo(await newImplementation.getAddress());
@@ -586,6 +592,8 @@ describe('Owner Functions', () => {
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
         expect(await upgradedBridge.replenishAllowance()).to.equal(replenishAllowance);
         expect(await upgradedBridge.lowerLockPeriod()).to.equal(lowerLockPeriod);
+        expect([...(await upgradedBridge.pendingLowers(lowerId))]).to.deep.equal(pendingBefore);
+        expect(await upgradedBridge.lowerState(lowerId)).to.equal(2n); // LowerState.Frozen
         await upgradedBridge.setLowerLockPeriod(0n);
       });
     });
