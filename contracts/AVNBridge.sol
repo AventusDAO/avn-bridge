@@ -55,10 +55,20 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   uint256 private constant LOCKED = 1;
 
   uint32 private constant OWNER_REVERT_LOWER_DELAY = 3 days;
+  uint256 private constant MAX_LOWER_LOCK_PERIOD = 30 days;
 
   int8 private constant TX_SUCCEEDED = 1;
   int8 private constant TX_PENDING = 0;
   int8 private constant TX_FAILED = -1;
+
+  struct PendingLower {
+    address token;
+    uint64 unlockTime; // packed with token
+    bool frozen; // packed with token
+    address recipient;
+    bytes32 t2Sender;
+    uint256 amount;
+  }
 
   /// @custom:oz-renamed-from isRegisteredValidator
   mapping(uint256 => bool) public isAuthor;
@@ -108,6 +118,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   uint256 public replenishAllowance; // remaining AVT mintable to cover claims
 
+  uint256 public lowerLockPeriod; // seconds a claimed lower is held before it can be released
+  mapping(uint32 => PendingLower) public pendingLowers; // claimed lowers awaiting release or held by the owner, keyed by lowerId
+
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
   error AllowanceChanged(); // 0x239683f1
@@ -127,8 +140,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   error LiftFailed(); // 0xb19ed519
   error LiftLimitHit(); // 0xc36d2830
   error Locked(); // 0x0f2e5b6c
+  error LockPeriodTooLong(); // 0x0954a74b
   error LowerDisabled(); // 0x499e8c3a
+  error LowerIsFrozen(); // 0x63b67945
+  error LowerIsLocked(); // 0xf933245b
+  error LowerIsPending(); // 0xa12f96c0
   error LowerIsUsed(); // 0x24c1c1ce
+  error LowerNotFrozen(); // 0x2487375c
+  error LowerNotPending(); // 0xa53292f2
   error MissingKeys(); // 0x097ec09e
   error NotAnAuthor(); // 0x157b0512
   error NotEnoughAuthors(); // 0x3a6a875c
@@ -229,6 +248,63 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (replenishAllowance != expectedCurrent) revert AllowanceChanged();
     replenishAllowance = amount;
     emit LogReplenishAllowanceSet(amount);
+  }
+
+  /**
+   * @dev Lets the owner set how long claimed lowers are held before they can be released. Zero releases claims immediately.
+   * Only applies to lowers claimed after the change.
+   */
+  function setLowerLockPeriod(uint256 period) external onlyOwner {
+    if (period > MAX_LOWER_LOCK_PERIOD) revert LockPeriodTooLong();
+    lowerLockPeriod = period;
+    emit LogLowerLockPeriodSet(period);
+  }
+
+  /**
+   * @dev Lets the owner hold claimed lowers awaiting release, blocking their release and recipient reversion until the owner
+   * unfreezes, reverts, or cancels them. Already frozen lowers are skipped.
+   */
+  function freezeLowers(uint32[] calldata lowerIds) external onlyOwner {
+    uint256 numLowers = lowerIds.length;
+    uint32 lowerId;
+
+    for (uint256 i; i < numLowers; ) {
+      lowerId = lowerIds[i];
+      PendingLower storage pending = pendingLowers[lowerId];
+      if (pending.unlockTime == 0) revert LowerNotPending();
+
+      if (!pending.frozen) {
+        pending.frozen = true;
+        emit LogLowerFrozen(lowerId);
+      }
+
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  /**
+   * @dev Lets the owner return a frozen lower to its locked state, releasable once its original unlock time has passed.
+   */
+  function unfreezeLower(uint32 lowerId) external onlyOwner {
+    PendingLower storage pending = pendingLowers[lowerId];
+    if (pending.unlockTime == 0) revert LowerNotPending();
+    if (!pending.frozen) revert LowerNotFrozen();
+    pending.frozen = false;
+    emit LogLowerUnfrozen(lowerId);
+  }
+
+  /**
+   * @dev Lets the owner permanently void a frozen lower. The funds remain on T1 and are not returned to T2.
+   */
+  function cancelLower(uint32 lowerId) external onlyOwner {
+    PendingLower storage pending = pendingLowers[lowerId];
+    if (pending.unlockTime == 0) revert LowerNotPending();
+    if (!pending.frozen) revert LowerNotFrozen();
+    delete pendingLowers[lowerId];
+    _markLowerUsed(lowerId);
+    emit LogLowerCancelled(lowerId);
   }
 
   /**
@@ -420,7 +496,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   }
 
   /**
-   * @dev Checks a lower proof. Returns the details of the lower, proof validity, and used status.
+   * @dev Checks a lower proof. Returns the details of the lower, proof validity, used status, lifecycle state, whether it can
+   * currently be claimed or released, and when a pending lower unlocks. Claiming or releasing may still fail on payout if the
+   * bridge cannot cover the amount.
    */
   function checkLower(
     bytes calldata lowerProof
@@ -437,10 +515,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
       uint256 confirmationsRequired,
       uint256 confirmationsProvided,
       bool proofIsValid,
-      bool lowerIsUsed
+      bool lowerIsUsed,
+      LowerState state,
+      bool lowerIsClaimable,
+      bool lowerIsReleasable,
+      uint64 unlockTime
     )
   {
-    if (!_isCorrectLength(lowerProof)) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false);
+    if (!_isCorrectLength(lowerProof)) return (address(0), 0, address(0), 0, bytes32(0), 0, 0, 0, false, false, LowerState.None, false, false, 0);
 
     (token, amount, recipient, lowerId, t2Sender, t2Timestamp) = _extractLowerData(lowerProof);
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
@@ -448,7 +530,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     bool[] memory confirmed = new bool[](nextAuthorId);
     uint256 confirmationsOffset;
 
-    lowerIsUsed = isLowerUsed(lowerId);
+    state = lowerState(lowerId);
+    lowerIsUsed = state == LowerState.Used;
+    unlockTime = pendingLowers[lowerId].unlockTime;
     confirmationsProvided = numConfirmationsProvided;
     confirmationsRequired = _requiredConfirmations();
     assembly {
@@ -462,32 +546,71 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     proofIsValid = confirmationsProvided >= confirmationsRequired;
+    lowerIsClaimable = loweringEnabled && proofIsValid && recipient != address(0) && state == LowerState.None;
+    lowerIsReleasable = loweringEnabled && state == LowerState.Locked && block.timestamp >= unlockTime;
   }
 
   /**
    * @dev Enables anyone to claim the amount of funds specified in the lower proof, for the intended recipient.
+   * If a lower lock period is set the funds are held until it has passed, after which anyone may release them.
    */
   function claimLower(bytes calldata lowerProof) external whenLowerEnabled lock {
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
     if (recipient == address(0)) revert AddressIsZero();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
-    if (token == AVT) _replenishShortfall(amount, lowerId);
-    _releaseFunds(token, amount, recipient);
-    emit LogLowerClaimed(lowerId);
+
+    uint256 period = lowerLockPeriod;
+    if (period == 0) {
+      _markLowerUsed(lowerId);
+      _completeLower(token, amount, recipient, lowerId);
+    } else {
+      uint64 unlockTime = uint64(block.timestamp + period);
+      pendingLowers[lowerId] = PendingLower(token, unlockTime, false, recipient, t2Sender, amount);
+      emit LogLowerLocked(lowerId, unlockTime);
+    }
+  }
+
+  /**
+   * @dev Enables anyone to release the funds of a locked lower to the intended recipient once its lock period has passed.
+   */
+  function releaseLower(uint32 lowerId) external whenLowerEnabled lock {
+    PendingLower memory pending = pendingLowers[lowerId];
+    if (pending.unlockTime == 0) revert LowerNotPending();
+    if (pending.frozen) revert LowerIsFrozen();
+    if (block.timestamp < pending.unlockTime) revert LowerIsLocked();
+    delete pendingLowers[lowerId];
+    _markLowerUsed(lowerId);
+    _completeLower(pending.token, pending.amount, pending.recipient, lowerId);
   }
 
   /**
    * @dev Allows the intended recipient to revert a lower instead of claiming it, returning the funds to the originating T2 sender.
    * In the case of the recipient being unable to revert, the owner may do so on their behalf after 72 hours have passed.
+   * A lower awaiting release may be reverted by its recipient, or by the owner once frozen, after which the recipient cannot.
    */
   function revertLower(bytes calldata lowerProof) external whenLiftEnabled lock {
     (address token, uint256 amount, address recipient, uint32 lowerId, bytes32 t2Sender, uint64 t2Timestamp) = _extractLowerData(lowerProof);
-    bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
-    if (!canRevert) revert PermissionDenied();
-    if (t2Sender == bytes32(0)) revert LegacyLower();
+    PendingLower memory pending = pendingLowers[lowerId];
 
-    _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
+    if (pending.unlockTime == 0) {
+      bool canRevert = msg.sender == recipient || (msg.sender == owner() && block.timestamp > t2Timestamp + OWNER_REVERT_LOWER_DELAY);
+      if (!canRevert) revert PermissionDenied();
+      if (t2Sender == bytes32(0)) revert LegacyLower();
+      _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
+    } else {
+      // The proof was verified when claimed so the stored lower data is used in place of the unverified proof data
+      (token, amount, recipient, t2Sender) = (pending.token, pending.amount, pending.recipient, pending.t2Sender);
+      bool isOwner = msg.sender == owner();
+      if (msg.sender != recipient && !isOwner) revert PermissionDenied();
+      if (pending.frozen) {
+        if (!isOwner) revert LowerIsFrozen();
+      } else if (msg.sender != recipient) revert LowerNotFrozen();
+      if (t2Sender == bytes32(0)) revert LegacyLower();
+      delete pendingLowers[lowerId];
+    }
+
+    _markLowerUsed(lowerId);
     emit LogLowerReverted(token, t2Sender, recipient, amount, lowerId);
   }
 
@@ -525,6 +648,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function isLowerUsed(uint32 lowerId) public view returns (bool) {
     (uint256 bucket, uint256 mask) = _idToBitmap(lowerId);
     return (usedLowers[bucket] & mask) != 0;
+  }
+
+  /**
+   * @dev Returns the lifecycle state of the lower.
+   */
+  function lowerState(uint32 lowerId) public view returns (LowerState) {
+    if (isLowerUsed(lowerId)) return LowerState.Used;
+    PendingLower storage pending = pendingLowers[lowerId];
+    if (pending.unlockTime == 0) return LowerState.None;
+    return pending.frozen ? LowerState.Frozen : LowerState.Locked;
   }
 
   /** @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
@@ -568,6 +701,12 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     t1AddressToId[t1Address] = id;
     t2PubKeyToId[t2PubKey] = id;
     isAuthor[id] = true;
+  }
+
+  function _completeLower(address token, uint256 amount, address recipient, uint32 lowerId) private {
+    if (token == AVT) _replenishShortfall(amount, lowerId);
+    _releaseFunds(token, amount, recipient);
+    emit LogLowerClaimed(lowerId);
   }
 
   function _domainSeparator() private view returns (bytes32) {
@@ -626,6 +765,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     return (proof.length - LOWER_DATA_LENGTH) % SIGNATURE_LENGTH == 0;
   }
 
+  function _markLowerUsed(uint32 lowerId) private {
+    (uint256 bucket, uint256 mask) = _idToBitmap(lowerId);
+    usedLowers[bucket] |= mask;
+  }
+
   function _mintRewards(uint128 amount, uint32 t2TxId) private {
     if (amount == 0) revert AmountIsZero();
     IAVT avt = IAVT(AVT);
@@ -643,9 +787,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     uint64 t2Timestamp,
     bytes calldata lowerProof
   ) private {
-    (uint256 bucket, uint256 mask) = _idToBitmap(lowerId);
-    if ((usedLowers[bucket] & mask) != 0) revert LowerIsUsed();
-    usedLowers[bucket] |= mask;
+    if (isLowerUsed(lowerId)) revert LowerIsUsed();
+    if (pendingLowers[lowerId].unlockTime != 0) revert LowerIsPending();
 
     bytes32 proofHash = _toLowerDataProofHash(token, amount, recipient, lowerId, t2Sender, t2Timestamp);
     _verifyConfirmations(true, proofHash, lowerProof[LOWER_DATA_LENGTH:]);

@@ -9,12 +9,17 @@ const {
   EMPTY_BYTES_32,
   expect,
   getAccounts,
+  getCurrentBlockTimestamp,
   getNumRequiredConfirmations,
+  increaseBlockTimestamp,
   init,
   randomBytes32,
   randomHex,
+  strip_0x,
   ZERO_ADDRESS
 } = require('./helpers/testHelper');
+
+const LOWER_STATE = { None: 0n, Locked: 1n, Frozen: 2n, Used: 3n };
 
 let accounts, avt, bridge, token777, token20, owner, someOtherAccount, someT2PubKey, authority;
 
@@ -407,13 +412,392 @@ describe('Lifting and lowering', () => {
     });
   });
 
+  context('Locked lowers', () => {
+    const LOCK_PERIOD = 24 * 60 * 60;
+    const OWNER_DELAY = 72 * 60 * 60;
+    const liftAmount = 1_000n;
+    const lowerAmount = 123n;
+
+    async function claimLockedLower(token, recipient = someOtherAccount, t2Sender = someT2PubKey, t2Timestamp) {
+      const [lowerProof, lowerId] = await createLowerProof(bridge, token, lowerAmount, recipient, t2Sender, t2Timestamp);
+      await bridge.claimLower(lowerProof);
+      return [lowerProof, lowerId, BigInt(await getCurrentBlockTimestamp()) + BigInt(LOCK_PERIOD)];
+    }
+
+    async function claimFrozenLower(token, recipient, t2Sender) {
+      const [lowerProof, lowerId, unlockTime] = await claimLockedLower(token, recipient, t2Sender);
+      await bridge.freezeLowers([lowerId]);
+      return [lowerProof, lowerId, unlockTime];
+    }
+
+    function overwriteProof(proof, byteOffset, hex) {
+      const start = 2 + byteOffset * 2;
+      const data = strip_0x(hex);
+      return proof.slice(0, start) + data + proof.slice(start + data.length);
+    }
+
+    before(async () => {
+      await token20.approve(bridge.address, liftAmount * 10n);
+      await bridge.lift(token20.address, someT2PubKey, liftAmount * 10n);
+    });
+
+    beforeEach(async () => {
+      await bridge.setLowerLockPeriod(LOCK_PERIOD);
+    });
+
+    after(async () => {
+      await bridge.setLowerLockPeriod(0n);
+    });
+
+    context('Claiming and releasing', () => {
+      context('succeeds', () => {
+        it('in holding the funds of a claimed lower until its lock period has passed', async () => {
+          const bridgeBalBefore = await token20.balanceOf(bridge.address);
+          const recipientBalBefore = await token20.balanceOf(someOtherAccount.address);
+          const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, someOtherAccount, someT2PubKey);
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.None);
+
+          const tx = await bridge.claimLower(lowerProof);
+          const unlockTime = BigInt(await getCurrentBlockTimestamp()) + BigInt(LOCK_PERIOD);
+          await expect(tx).to.emit(bridge, 'LogLowerLocked').withArgs(lowerId, unlockTime);
+          await expect(tx).to.not.emit(bridge, 'LogLowerClaimed');
+
+          const pending = await bridge.pendingLowers(lowerId);
+          expect(pending.token).to.equal(token20.address);
+          expect(pending.unlockTime).to.equal(unlockTime);
+          expect(pending.frozen).to.equal(false);
+          expect(pending.recipient).to.equal(someOtherAccount.address);
+          expect(pending.t2Sender).to.equal(someT2PubKey);
+          expect(pending.amount).to.equal(lowerAmount);
+
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Locked);
+          expect(await bridge.isLowerUsed(lowerId)).to.equal(false);
+          expect(await token20.balanceOf(bridge.address)).to.equal(bridgeBalBefore);
+          expect(await token20.balanceOf(someOtherAccount.address)).to.equal(recipientBalBefore);
+        });
+
+        it('in letting anyone release the funds to the recipient once the lock period has passed', async () => {
+          const bridgeBalBefore = await token20.balanceOf(bridge.address);
+          const recipientBalBefore = await token20.balanceOf(someOtherAccount.address);
+          const [lowerProof, lowerId] = await claimLockedLower(token20);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.connect(accounts[2]).releaseLower(lowerId)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+
+          expect((await bridge.pendingLowers(lowerId)).unlockTime).to.equal(0n);
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Used);
+          expect(await bridge.isLowerUsed(lowerId)).to.equal(true);
+          expect(await token20.balanceOf(bridge.address)).to.equal(bridgeBalBefore - lowerAmount);
+          expect(await token20.balanceOf(someOtherAccount.address)).to.equal(recipientBalBefore + lowerAmount);
+          await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+        });
+
+        it('in releasing ERC777 tokens', async () => {
+          await token777.send(bridge.address, lowerAmount, someT2PubKey);
+          const recipientBalBefore = await token777.balanceOf(someOtherAccount.address);
+          const [, lowerId] = await claimLockedLower(token777);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+          expect(await token777.balanceOf(someOtherAccount.address)).to.equal(recipientBalBefore + lowerAmount);
+        });
+
+        it('in replenishing an AVT shortfall at release rather than at claim', async () => {
+          const allowance = 1000n;
+          await bridge.setReplenishAllowance(await bridge.replenishAllowance(), allowance);
+          expect(await avt.balanceOf(bridge.address)).to.equal(0n);
+
+          const [lowerProof, lowerId] = await createLowerProof(bridge, avt, lowerAmount, someOtherAccount, someT2PubKey);
+          await expect(bridge.claimLower(lowerProof)).to.not.emit(bridge, 'LogReplenishmentMinted');
+          expect(await bridge.replenishAllowance()).to.equal(allowance);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          const tx = bridge.releaseLower(lowerId);
+          await expect(tx)
+            .to.emit(bridge, 'LogReplenishmentMinted')
+            .withArgs(lowerAmount, allowance - lowerAmount, lowerId);
+          await expect(tx).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+          expect(await avt.balanceOf(bridge.address)).to.equal(0n);
+
+          await bridge.setReplenishAllowance(await bridge.replenishAllowance(), 0n);
+        });
+
+        it('in keeping the unlock time of an existing locked lower when the lock period changes', async () => {
+          const [, lowerId, unlockTime] = await claimLockedLower(token20);
+
+          await bridge.setLowerLockPeriod(0n);
+          expect((await bridge.pendingLowers(lowerId)).unlockTime).to.equal(unlockTime);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsLocked');
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        });
+      });
+
+      context('fails when', () => {
+        it('releasing before the lock period has passed', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsLocked');
+        });
+
+        it('releasing a lower that is not pending', async () => {
+          await expect(bridge.releaseLower(4_000_000_000)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+        });
+
+        it('releasing a lower that has already been released', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await bridge.releaseLower(lowerId);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+        });
+
+        it('releasing while lowering is disabled', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await bridge.enableLowering(false);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerDisabled');
+          await bridge.enableLowering(true);
+          await bridge.releaseLower(lowerId);
+        });
+
+        it('claiming a lower that is already pending', async () => {
+          const [lowerProof] = await claimLockedLower(token20);
+          await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsPending');
+        });
+      });
+    });
+
+    context('Reverting by the recipient', () => {
+      context('succeeds', () => {
+        it('in reverting a locked lower, returning the stored funds to the T2 sender', async () => {
+          const bridgeBalBefore = await token20.balanceOf(bridge.address);
+          const recipientBalBefore = await token20.balanceOf(someOtherAccount.address);
+          const [lowerProof, lowerId] = await claimLockedLower(token20);
+
+          await expect(bridge.connect(someOtherAccount).revertLower(lowerProof))
+            .to.emit(bridge, 'LogLowerReverted')
+            .withArgs(token20.address, someT2PubKey, someOtherAccount.address, lowerAmount, lowerId);
+
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Used);
+          expect((await bridge.pendingLowers(lowerId)).unlockTime).to.equal(0n);
+          expect(await token20.balanceOf(bridge.address)).to.equal(bridgeBalBefore);
+          expect(await token20.balanceOf(someOtherAccount.address)).to.equal(recipientBalBefore);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+        });
+
+        it('in using the stored lower data rather than altered proof data', async () => {
+          const [lowerProof, lowerId] = await claimLockedLower(token20);
+          const alteredProof = overwriteProof(overwriteProof(lowerProof, 20, ethers.toBeHex(lowerAmount * 1000n, 32)), 76, randomBytes32());
+
+          await expect(bridge.connect(someOtherAccount).revertLower(alteredProof))
+            .to.emit(bridge, 'LogLowerReverted')
+            .withArgs(token20.address, someT2PubKey, someOtherAccount.address, lowerAmount, lowerId);
+        });
+      });
+
+      context('fails when', () => {
+        it('the lower is frozen', async () => {
+          const [lowerProof] = await claimFrozenLower(token20);
+          await expect(bridge.connect(someOtherAccount).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+        });
+
+        it('the caller is neither the recipient nor the owner', async () => {
+          const [lowerProof] = await claimLockedLower(token20);
+          await expect(bridge.connect(accounts[2]).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'PermissionDenied');
+        });
+
+        it('the proof is altered to name the caller as recipient', async () => {
+          const [lowerProof] = await claimLockedLower(token20);
+          const alteredProof = overwriteProof(lowerProof, 52, accounts[2].address);
+          await expect(bridge.connect(accounts[2]).revertLower(alteredProof)).to.be.revertedWithCustomError(bridge, 'PermissionDenied');
+        });
+
+        it('the lower is a legacy lower', async () => {
+          const [lowerProof] = await claimLockedLower(token20, someOtherAccount, EMPTY_BYTES_32);
+          await expect(bridge.connect(someOtherAccount).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LegacyLower');
+        });
+
+        it('lifting is disabled', async () => {
+          const [lowerProof] = await claimLockedLower(token20);
+          await bridge.enableLifting(false);
+          await expect(bridge.connect(someOtherAccount).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LiftDisabled');
+          await bridge.enableLifting(true);
+          await bridge.connect(someOtherAccount).revertLower(lowerProof);
+        });
+      });
+    });
+
+    context('Owner interventions', () => {
+      context('succeeds', () => {
+        it('in freezing multiple lowers, blocking their release, and skipping those already frozen', async () => {
+          const [, firstId] = await claimLockedLower(token20);
+          const [, secondId] = await claimLockedLower(token20);
+          await bridge.freezeLowers([firstId]);
+
+          const receipt = await (await bridge.freezeLowers([firstId, secondId])).wait();
+          const frozenLogs = receipt.logs.filter(log => log.fragment?.name === 'LogLowerFrozen');
+          expect(frozenLogs.map(log => log.args.lowerId)).to.deep.equal([secondId]);
+
+          expect(await bridge.lowerState(firstId)).to.equal(LOWER_STATE.Frozen);
+          expect(await bridge.lowerState(secondId)).to.equal(LOWER_STATE.Frozen);
+          expect((await bridge.pendingLowers(secondId)).frozen).to.equal(true);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(firstId)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+          await expect(bridge.releaseLower(secondId)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+        });
+
+        it('in freezing a lower after its lock period has passed but before it is released', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.freezeLowers([lowerId]))
+            .to.emit(bridge, 'LogLowerFrozen')
+            .withArgs(lowerId);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+        });
+
+        it('in freezing and cancelling while lifting and lowering are disabled', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await bridge.enableLifting(false);
+          await bridge.enableLowering(false);
+
+          await expect(bridge.freezeLowers([lowerId]))
+            .to.emit(bridge, 'LogLowerFrozen')
+            .withArgs(lowerId);
+          await expect(bridge.cancelLower(lowerId)).to.emit(bridge, 'LogLowerCancelled').withArgs(lowerId);
+
+          await bridge.enableLifting(true);
+          await bridge.enableLowering(true);
+        });
+
+        it('in unfreezing a lower, keeping its original unlock time', async () => {
+          const [, lowerId, unlockTime] = await claimFrozenLower(token20);
+
+          await expect(bridge.unfreezeLower(lowerId)).to.emit(bridge, 'LogLowerUnfrozen').withArgs(lowerId);
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Locked);
+          expect((await bridge.pendingLowers(lowerId)).unlockTime).to.equal(unlockTime);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsLocked');
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        });
+
+        it('in reverting a frozen lower, returning the funds to the T2 sender', async () => {
+          const bridgeBalBefore = await token20.balanceOf(bridge.address);
+          const [lowerProof, lowerId] = await claimFrozenLower(token20);
+
+          await expect(bridge.revertLower(lowerProof))
+            .to.emit(bridge, 'LogLowerReverted')
+            .withArgs(token20.address, someT2PubKey, someOtherAccount.address, lowerAmount, lowerId);
+
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Used);
+          expect(await token20.balanceOf(bridge.address)).to.equal(bridgeBalBefore);
+        });
+
+        it('in reverting a frozen lower of which the owner is also the recipient', async () => {
+          const [lowerProof, lowerId] = await claimFrozenLower(token20, owner);
+          await expect(bridge.revertLower(lowerProof))
+            .to.emit(bridge, 'LogLowerReverted')
+            .withArgs(token20.address, someT2PubKey, owner.address, lowerAmount, lowerId);
+        });
+
+        it('in cancelling a frozen lower, leaving the funds on T1', async () => {
+          const bridgeBalBefore = await token20.balanceOf(bridge.address);
+          const recipientBalBefore = await token20.balanceOf(someOtherAccount.address);
+          const [lowerProof, lowerId] = await claimFrozenLower(token20);
+
+          const tx = bridge.cancelLower(lowerId);
+          await expect(tx).to.emit(bridge, 'LogLowerCancelled').withArgs(lowerId);
+          await expect(tx).to.not.emit(bridge, 'LogLowerReverted');
+
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Used);
+          expect((await bridge.pendingLowers(lowerId)).unlockTime).to.equal(0n);
+          expect(await token20.balanceOf(bridge.address)).to.equal(bridgeBalBefore);
+          expect(await token20.balanceOf(someOtherAccount.address)).to.equal(recipientBalBefore);
+
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+          await expect(bridge.claimLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+          await expect(bridge.connect(someOtherAccount).revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerIsUsed');
+        });
+
+        it('in cancelling a frozen legacy lower', async () => {
+          const [, lowerId] = await claimFrozenLower(token20, someOtherAccount, EMPTY_BYTES_32);
+          await expect(bridge.cancelLower(lowerId)).to.emit(bridge, 'LogLowerCancelled').withArgs(lowerId);
+        });
+
+        it('in unfreezing and releasing a frozen legacy lower', async () => {
+          const [, lowerId] = await claimFrozenLower(token20, someOtherAccount, EMPTY_BYTES_32);
+          await bridge.unfreezeLower(lowerId);
+          await increaseBlockTimestamp(LOCK_PERIOD);
+          await expect(bridge.releaseLower(lowerId)).to.emit(bridge, 'LogLowerClaimed').withArgs(lowerId);
+        });
+      });
+
+      context('fails when', () => {
+        it('a non-owner attempts to freeze, unfreeze or cancel', async () => {
+          const [, lowerId] = await claimFrozenLower(token20);
+          const nonOwner = bridge.connect(someOtherAccount);
+          await expect(nonOwner.freezeLowers([lowerId])).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(nonOwner.unfreezeLower(lowerId)).to.be.revertedWith('Ownable: caller is not the owner');
+          await expect(nonOwner.cancelLower(lowerId)).to.be.revertedWith('Ownable: caller is not the owner');
+        });
+
+        it('freezing a lower that is not pending', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await expect(bridge.freezeLowers([lowerId, 4_000_000_000])).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+          expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Locked);
+        });
+
+        it('unfreezing a lower that is not pending or not frozen', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await expect(bridge.unfreezeLower(4_000_000_000)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+          await expect(bridge.unfreezeLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotFrozen');
+        });
+
+        it('cancelling a lower that is not pending or not frozen', async () => {
+          const [, lowerId] = await claimLockedLower(token20);
+          await expect(bridge.cancelLower(4_000_000_000)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+          await expect(bridge.cancelLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotFrozen');
+        });
+
+        it('reverting a locked lower that is not frozen, even after 72 hours have passed from the proof timestamp', async () => {
+          const oldT2Timestamp = (await getCurrentBlockTimestamp()) - OWNER_DELAY - 5;
+          const [lowerProof] = await claimLockedLower(token20, someOtherAccount, someT2PubKey, oldT2Timestamp);
+          await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LowerNotFrozen');
+        });
+
+        it('reverting a frozen legacy lower', async () => {
+          const [lowerProof] = await claimFrozenLower(token20, someOtherAccount, EMPTY_BYTES_32);
+          await expect(bridge.revertLower(lowerProof)).to.be.revertedWithCustomError(bridge, 'LegacyLower');
+        });
+      });
+    });
+  });
+
   context('Check lower', () => {
     it('results are as expected for a valid, unused proof', async () => {
       const amount = 123n;
       const timestamp = Math.floor(Date.now() / 1000);
       const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token20, amount, owner, someT2PubKey, timestamp);
-      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await bridge.checkLower(lowerProof);
+      const [
+        token,
+        checkedAmount,
+        recipient,
+        lowerId,
+        t2Sender,
+        t2Timestamp,
+        confirmationsRequired,
+        confirmationsProvided,
+        proofIsValid,
+        lowerIsClaimed,
+        state,
+        lowerIsClaimable,
+        lowerIsReleasable,
+        unlockTime
+      ] = await bridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
       expect(token).to.equal(token20.address);
@@ -426,6 +810,10 @@ describe('Lifting and lowering', () => {
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
       expect(lowerIsClaimed).to.equal(false);
+      expect(state).to.equal(LOWER_STATE.None);
+      expect(lowerIsClaimable).to.equal(true);
+      expect(lowerIsReleasable).to.equal(false);
+      expect(unlockTime).to.equal(0);
     });
 
     it('results are as expected for a valid, used proof', async () => {
@@ -435,8 +823,22 @@ describe('Lifting and lowering', () => {
       const [lowerProof, expectedLowerId] = await createLowerProof(bridge, token777, amount, owner, someT2PubKey, timestamp);
       await bridge.claimLower(lowerProof);
 
-      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await bridge.checkLower(lowerProof);
+      const [
+        token,
+        checkedAmount,
+        recipient,
+        lowerId,
+        t2Sender,
+        t2Timestamp,
+        confirmationsRequired,
+        confirmationsProvided,
+        proofIsValid,
+        lowerIsClaimed,
+        state,
+        lowerIsClaimable,
+        lowerIsReleasable,
+        unlockTime
+      ] = await bridge.checkLower(lowerProof);
 
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
       expect(token).to.equal(token777.address);
@@ -449,6 +851,10 @@ describe('Lifting and lowering', () => {
       expect(confirmationsProvided).to.equal(numConfirmationsRequired);
       expect(proofIsValid).to.equal(true);
       expect(lowerIsClaimed).to.equal(true);
+      expect(state).to.equal(LOWER_STATE.Used);
+      expect(lowerIsClaimable).to.equal(false);
+      expect(lowerIsReleasable).to.equal(false);
+      expect(unlockTime).to.equal(0);
     });
 
     it('the expected result is returned for a valid proof with invalid confirmations', async () => {
@@ -460,8 +866,22 @@ describe('Lifting and lowering', () => {
       const [proofB] = await createLowerProof(bridge, token20, amount, owner, someT2PubKey, timestamp);
       const confirmationsStart = 154;
       const invalidProof = ethers.concat([proofA.slice(0, confirmationsStart), '0x' + proofB.slice(confirmationsStart)]);
-      const [token, checkedAmount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await bridge.checkLower(invalidProof);
+      const [
+        token,
+        checkedAmount,
+        recipient,
+        lowerId,
+        t2Sender,
+        t2Timestamp,
+        confirmationsRequired,
+        confirmationsProvided,
+        proofIsValid,
+        lowerIsClaimed,
+        state,
+        lowerIsClaimable,
+        lowerIsReleasable,
+        unlockTime
+      ] = await bridge.checkLower(invalidProof);
       const numConfirmationsRequired = await getNumRequiredConfirmations(bridge);
 
       expect(token).to.equal(token20.address);
@@ -474,13 +894,30 @@ describe('Lifting and lowering', () => {
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
       expect(lowerIsClaimed).to.equal(false);
+      expect(state).to.equal(LOWER_STATE.None);
+      expect(lowerIsClaimable).to.equal(false);
+      expect(lowerIsReleasable).to.equal(false);
     });
 
     it('results are as expected for a completely invalid proof', async () => {
       const emptyAddress = ZERO_ADDRESS.address;
       const shortProof = randomBytes32();
-      const [token, amount, recipient, lowerId, t2Sender, t2Timestamp, confirmationsRequired, confirmationsProvided, proofIsValid, lowerIsClaimed] =
-        await bridge.checkLower(shortProof);
+      const [
+        token,
+        amount,
+        recipient,
+        lowerId,
+        t2Sender,
+        t2Timestamp,
+        confirmationsRequired,
+        confirmationsProvided,
+        proofIsValid,
+        lowerIsClaimed,
+        state,
+        lowerIsClaimable,
+        lowerIsReleasable,
+        unlockTime
+      ] = await bridge.checkLower(shortProof);
 
       expect(token).to.equal(emptyAddress);
       expect(amount).to.equal(0);
@@ -492,6 +929,86 @@ describe('Lifting and lowering', () => {
       expect(confirmationsProvided).to.equal(0);
       expect(proofIsValid).to.equal(false);
       expect(lowerIsClaimed).to.equal(false);
+      expect(state).to.equal(LOWER_STATE.None);
+      expect(lowerIsClaimable).to.equal(false);
+      expect(lowerIsReleasable).to.equal(false);
+      expect(unlockTime).to.equal(0);
+    });
+    context('when a lower lock period is set', () => {
+      const LOCK_PERIOD = 60 * 60;
+
+      before(async () => {
+        await token20.approve(bridge.address, 1_000n);
+        await bridge.lift(token20.address, someT2PubKey, 1_000n);
+      });
+
+      beforeEach(async () => {
+        await bridge.setLowerLockPeriod(LOCK_PERIOD);
+      });
+
+      after(async () => {
+        await bridge.setLowerLockPeriod(0n);
+      });
+
+      it('reports the state, claimability, releasability and unlock time through the lifecycle', async () => {
+        const [lowerProof] = await createLowerProof(bridge, token20, 100n, someOtherAccount, someT2PubKey);
+        await bridge.claimLower(lowerProof);
+        const expectedUnlockTime = BigInt(await getCurrentBlockTimestamp()) + BigInt(LOCK_PERIOD);
+
+        let result = await bridge.checkLower(lowerProof);
+        expect(result.state).to.equal(LOWER_STATE.Locked);
+        expect(result.lowerIsUsed).to.equal(false);
+        expect(result.lowerIsClaimable).to.equal(false);
+        expect(result.lowerIsReleasable).to.equal(false);
+        expect(result.unlockTime).to.equal(expectedUnlockTime);
+
+        await increaseBlockTimestamp(LOCK_PERIOD);
+        result = await bridge.checkLower(lowerProof);
+        expect(result.state).to.equal(LOWER_STATE.Locked);
+        expect(result.lowerIsReleasable).to.equal(true);
+
+        await bridge.freezeLowers([result.lowerId]);
+        result = await bridge.checkLower(lowerProof);
+        expect(result.state).to.equal(LOWER_STATE.Frozen);
+        expect(result.lowerIsClaimable).to.equal(false);
+        expect(result.lowerIsReleasable).to.equal(false);
+        expect(result.unlockTime).to.equal(expectedUnlockTime);
+
+        await bridge.unfreezeLower(result.lowerId);
+        result = await bridge.checkLower(lowerProof);
+        expect(result.state).to.equal(LOWER_STATE.Locked);
+        expect(result.lowerIsReleasable).to.equal(true);
+
+        await bridge.releaseLower(result.lowerId);
+        result = await bridge.checkLower(lowerProof);
+        expect(result.state).to.equal(LOWER_STATE.Used);
+        expect(result.lowerIsUsed).to.equal(true);
+        expect(result.lowerIsClaimable).to.equal(false);
+        expect(result.lowerIsReleasable).to.equal(false);
+        expect(result.unlockTime).to.equal(0);
+      });
+
+      it('reports neither claimable nor releasable while lowering is disabled', async () => {
+        const [lockedProof] = await createLowerProof(bridge, token20, 100n, someOtherAccount, someT2PubKey);
+        await bridge.claimLower(lockedProof);
+        await increaseBlockTimestamp(LOCK_PERIOD);
+        const [unclaimedProof] = await createLowerProof(bridge, token20, 100n, someOtherAccount, someT2PubKey);
+
+        await bridge.enableLowering(false);
+        expect((await bridge.checkLower(lockedProof)).lowerIsReleasable).to.equal(false);
+        expect((await bridge.checkLower(unclaimedProof)).lowerIsClaimable).to.equal(false);
+        await bridge.enableLowering(true);
+
+        expect((await bridge.checkLower(lockedProof)).lowerIsReleasable).to.equal(true);
+        expect((await bridge.checkLower(unclaimedProof)).lowerIsClaimable).to.equal(true);
+      });
+
+      it('reports a lower with no recipient as not claimable', async () => {
+        const [lowerProof] = await createLowerProof(bridge, token20, 100n, ZERO_ADDRESS, someT2PubKey);
+        const result = await bridge.checkLower(lowerProof);
+        expect(result.proofIsValid).to.equal(true);
+        expect(result.lowerIsClaimable).to.equal(false);
+      });
     });
   });
 
@@ -526,8 +1043,7 @@ describe('Lifting and lowering', () => {
       it('allows the owner to revert on behalf of the recipient after 72 hours have passed from the proof timestamp', async () => {
         await token777.send(bridge.address, liftAmount, someT2PubKey);
 
-        const now = Math.floor(Date.now() / 1000);
-        const oldT2Timestamp = now - OWNER_DELAY - 5;
+        const oldT2Timestamp = (await getCurrentBlockTimestamp()) - OWNER_DELAY - 5;
 
         const avnBalBefore = await token777.balanceOf(bridge.address);
         const recipient = someOtherAccount;
@@ -614,7 +1130,8 @@ describe('Lifting and lowering', () => {
       ClaimLower: 0,
       RevertLower: 1,
       ERC20Lift: 2,
-      ERC777Lift: 3
+      ERC777Lift: 3,
+      ReleaseLower: 4
     };
 
     const amount = 100n;
@@ -644,6 +1161,11 @@ describe('Lifting and lowering', () => {
 
     it('the ERC777 lift re-entrancy check is triggered correctly', async () => {
       await reentrantToken.setReentryPoint(reentryPoint.ERC777Lift);
+      await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
+    });
+
+    it('the releaseLower re-entrancy check is triggered correctly', async () => {
+      await reentrantToken.setReentryPoint(reentryPoint.ReleaseLower);
       await expect(bridge.lift(reentrantToken.address, someT2PubKey, amount)).to.be.revertedWithCustomError(bridge, 'Locked');
     });
   });
