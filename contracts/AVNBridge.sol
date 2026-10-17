@@ -103,11 +103,14 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   address public pendingOwner;
   uint256 private _lock;
 
-  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowedId 514 = bucket[2], bit index 2)
+  mapping(uint256 => uint256) private usedLowers; // bitmap of 256-bit buckets where lowerId >> 8 = bucket and lowerId & 255 = bit (eg: lowerId 514 = bucket[2], bit index 2)
   mapping(uint256 => uint256) private usedT2TxIds; // bitmap of 256-bit buckets where t2TxId >> 8 = bucket and t2TxId & 255 = bit
+
+  uint256 public replenishAllowance; // remaining AVT mintable to cover claims
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
+  error AllowanceChanged(); // 0x239683f1
   error AlreadyAdded(); // 0xf411c327
   error AmountIsZero(); // 0x43ad20fc
   error AuthorsDisabled(); // 0x7b465238
@@ -216,6 +219,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   function enableLowering(bool enable) external onlyOwner {
     loweringEnabled = enable;
     emit LogLoweringEnabled(enable);
+  }
+
+  /**
+   * @dev Lets the owner set the amount of AVT the contract may mint to cover lower claims.
+   * Reverts if the allowance is no longer the expected value, so a claim consuming it first cannot be minted on top of.
+   */
+  function setReplenishAllowance(uint256 expectedCurrent, uint256 amount) external onlyOwner {
+    if (replenishAllowance != expectedCurrent) revert AllowanceChanged();
+    replenishAllowance = amount;
+    emit LogReplenishAllowanceSet(amount);
   }
 
   /**
@@ -459,6 +472,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     if (recipient == address(0)) revert AddressIsZero();
 
     _processLower(token, amount, recipient, lowerId, t2Sender, t2Timestamp, lowerProof);
+    if (token == AVT) _replenishShortfall(amount, lowerId);
     _releaseFunds(token, amount, recipient);
     emit LogLowerClaimed(lowerId);
   }
@@ -666,6 +680,29 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
         IERC20(token).safeTransfer(recipient, amount);
       }
     } else IERC20(token).safeTransfer(recipient, amount);
+  }
+
+  function _replenishShortfall(uint256 amount, uint32 lowerId) private {
+    if (amount > T2_TOKEN_LIMIT) return;
+
+    uint256 balance = IAVT(AVT).balanceOf(address(this));
+    if (balance >= amount) return;
+
+    uint256 shortfall;
+    unchecked {
+      shortfall = amount - balance;
+    }
+
+    // If the shortfall cannot be covered the claim will revert on transfer as it would without any allowance
+    uint256 allowance = replenishAllowance;
+    if (shortfall > allowance) return;
+
+    unchecked {
+      allowance -= shortfall;
+    }
+    replenishAllowance = allowance;
+    IAVT(AVT).mint(uint128(shortfall));
+    emit LogReplenishmentMinted(shortfall, allowance, lowerId);
   }
 
   function _requiredConfirmations() private view returns (uint256 required) {
