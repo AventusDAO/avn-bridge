@@ -110,6 +110,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   error AddressIsZero(); // 0x867915ab
   error AddressMismatch(); // 0x4cd87fb5
+  error AllowanceChanged(); // 0x239683f1
   error AlreadyAdded(); // 0xf411c327
   error AmountIsZero(); // 0x43ad20fc
   error AuthorsDisabled(); // 0x7b465238
@@ -222,8 +223,10 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /**
    * @dev Lets the owner set the amount of AVT the contract may mint to cover lower claims.
+   * Reverts if the allowance is no longer the expected value, so a claim consuming it first cannot be minted on top of.
    */
-  function setReplenishAllowance(uint256 amount) external onlyOwner {
+  function setReplenishAllowance(uint256 expectedCurrent, uint256 amount) external onlyOwner {
+    if (replenishAllowance != expectedCurrent) revert AllowanceChanged();
     replenishAllowance = amount;
     emit LogReplenishAllowanceSet(amount);
   }
@@ -691,13 +694,15 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
 
     // If the shortfall cannot be covered the claim will revert on transfer as it would without any allowance
-    if (shortfall > replenishAllowance) return;
+    uint256 allowance = replenishAllowance;
+    if (shortfall > allowance) return;
 
     unchecked {
-      replenishAllowance -= shortfall;
+      allowance -= shortfall;
     }
+    replenishAllowance = allowance;
     IAVT(AVT).mint(uint128(shortfall));
-    emit LogReplenishmentMinted(shortfall, replenishAllowance, lowerId);
+    emit LogReplenishmentMinted(shortfall, allowance, lowerId);
   }
 
   function _requiredConfirmations() private view returns (uint256 required) {

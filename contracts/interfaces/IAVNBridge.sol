@@ -27,7 +27,7 @@ interface IAVNBridge {
   function enableLowering(bool enable) external;
   function mintRewards(uint128 amount) external;
   function rotateT1(uint256[] calldata ids, address[] calldata newAddresses) external;
-  function setReplenishAllowance(uint256 amount) external;
+  function setReplenishAllowance(uint256 expectedCurrent, uint256 amount) external;
 
   // Authors only
   function addAuthor(bytes calldata t1PubKey, bytes32 t2PubKey, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external;
