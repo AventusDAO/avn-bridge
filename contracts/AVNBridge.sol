@@ -297,6 +297,8 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   /**
    * @dev Lets the owner permanently void a frozen lower. The funds remain on T1 and are not returned to T2.
+   * T2 removes its lower of the same ID on processing the cancellation. Use this for any malicious lower, including a forged
+   * proof claimed against a genuine lower ID, in which case the genuine T2 sender must be refunded on T2.
    */
   function cancelLower(uint32 lowerId) external onlyOwner {
     PendingLower storage pending = pendingLowers[lowerId];
@@ -567,7 +569,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     } else {
       uint64 unlockTime = uint64(block.timestamp + period);
       pendingLowers[lowerId] = PendingLower(token, unlockTime, false, recipient, t2Sender, amount);
-      emit LogLowerLocked(lowerId, unlockTime);
+      emit LogLowerLocked(lowerId, recipient, token, amount, t2Sender, unlockTime);
     }
   }
 

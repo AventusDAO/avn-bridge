@@ -460,7 +460,9 @@ describe('Lifting and lowering', () => {
 
           const tx = await bridge.claimLower(lowerProof);
           const unlockTime = BigInt(await getCurrentBlockTimestamp()) + BigInt(LOCK_PERIOD);
-          await expect(tx).to.emit(bridge, 'LogLowerLocked').withArgs(lowerId, unlockTime);
+          await expect(tx)
+            .to.emit(bridge, 'LogLowerLocked')
+            .withArgs(lowerId, someOtherAccount.address, token20.address, lowerAmount, someT2PubKey, unlockTime);
           await expect(tx).to.not.emit(bridge, 'LogLowerClaimed');
 
           const pending = await bridge.pendingLowers(lowerId);

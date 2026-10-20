@@ -25,9 +25,10 @@ interface IAVNBridge {
 
   event LogLifted(address indexed token, bytes32 indexed t2PubKey, uint256 amount);
   event LogLowerClaimed(uint32 indexed lowerId);
-  event LogLowerLocked(uint32 indexed lowerId, uint64 unlockTime);
+  event LogLowerLocked(uint32 indexed lowerId, address indexed recipient, address token, uint256 amount, bytes32 t2Sender, uint64 unlockTime);
   event LogLowerFrozen(uint32 indexed lowerId);
   event LogLowerUnfrozen(uint32 indexed lowerId);
+  // T2 parses this event as topics only and rejects it if any data is added
   event LogLowerCancelled(uint32 indexed lowerId);
   event LogReplenishmentMinted(uint256 indexed amount, uint256 indexed remainingAllowance, uint32 indexed lowerId);
   event LogLowerReverted(address indexed token, bytes32 indexed t2PubKey, address indexed originalRecipient, uint256 amount, uint32 lowerId);
