@@ -11,7 +11,8 @@ contract ReentrantToken is ERC20 {
     ClaimLower,
     RevertLower,
     ERC20Lift,
-    ERC777Lift
+    ERC777Lift,
+    ReleaseLower
   }
 
   ReentryPoint private _reentryPoint;
@@ -41,5 +42,6 @@ contract ReentrantToken is ERC20 {
     else if (_reentryPoint == ReentryPoint.RevertLower) IAVNBridge(_bridge).revertLower(_bytes);
     else if (_reentryPoint == ReentryPoint.ERC20Lift) IAVNBridge(_bridge).lift(_address, _bytes32, _uint256);
     else if (_reentryPoint == ReentryPoint.ERC777Lift) IERC777Recipient(_bridge).tokensReceived(_address, _address, _address, _uint256, _bytes, _bytes);
+    else if (_reentryPoint == ReentryPoint.ReleaseLower) IAVNBridge(_bridge).releaseLower(uint32(_uint256));
   }
 }

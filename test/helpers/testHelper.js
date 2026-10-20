@@ -93,7 +93,8 @@ function createMerkleTree(dataLeaves) {
   };
 }
 
-async function createLowerProof(bridge, token, amount, recipient, t2Sender, t2Timestamp = Math.floor(Date.now() / 1000)) {
+async function createLowerProof(bridge, token, amount, recipient, t2Sender, t2Timestamp) {
+  t2Timestamp ??= await getCurrentBlockTimestamp();
   const confirmationsRequired = await getNumRequiredConfirmations(bridge);
   const domain = await getDomain(bridge);
 

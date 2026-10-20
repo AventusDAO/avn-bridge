@@ -59,7 +59,7 @@ task('deploy', 'deploy a new avn-bridge proxy')
 
     console.log('Waiting to verify...');
     await delay(VERIFICATION_DELAY_SECONDS);
-    await verify(run, impAddress);
+    await verify(run, impAddress, [avtAddress]);
     await verify(run, proxyAddress);
 
     const finalBalance = await ethers.provider.getBalance(signer.address);

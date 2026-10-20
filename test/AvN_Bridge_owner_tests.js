@@ -1,5 +1,6 @@
 const {
   AVT_SYMBOL_BYTES_32,
+  createLowerProof,
   deployAuthority,
   deployAVT,
   deployBridge,
@@ -14,7 +15,8 @@ const {
   init,
   MIN_AUTHORS,
   ZERO_ADDRESS,
-  nextT2TxId
+  nextT2TxId,
+  randomBytes32
 } = require('./helpers/testHelper');
 
 let accounts, activeAuthor, authors, avt, authority, bridge, token777, token20, owner, someOtherAccount, unauthorizedAccount, newTokenOwner;
@@ -276,6 +278,38 @@ describe('Owner Functions', () => {
         await expect(bridge.setReplenishAllowance(0n, 50n)).to.be.revertedWithCustomError(bridge, 'AllowanceChanged');
         expect(await bridge.replenishAllowance()).to.equal(100n);
         await bridge.setReplenishAllowance(100n, 0n);
+      });
+    });
+  });
+
+  context('Setting the lower lock period', () => {
+    const MAX_LOWER_LOCK_PERIOD = 30n * 24n * 60n * 60n;
+
+    context('succeeds', () => {
+      it('when called by the owner', async () => {
+        const period = 3600n;
+        await expect(bridge.setLowerLockPeriod(period)).to.emit(bridge, 'LogLowerLockPeriodSet').withArgs(period);
+        expect(await bridge.lowerLockPeriod()).to.equal(period);
+      });
+
+      it('when set to the maximum period', async () => {
+        await expect(bridge.setLowerLockPeriod(MAX_LOWER_LOCK_PERIOD)).to.emit(bridge, 'LogLowerLockPeriodSet').withArgs(MAX_LOWER_LOCK_PERIOD);
+        expect(await bridge.lowerLockPeriod()).to.equal(MAX_LOWER_LOCK_PERIOD);
+      });
+
+      it('when the owner resets it to zero', async () => {
+        await expect(bridge.setLowerLockPeriod(0n)).to.emit(bridge, 'LogLowerLockPeriodSet').withArgs(0n);
+        expect(await bridge.lowerLockPeriod()).to.equal(0n);
+      });
+    });
+
+    context('fails', () => {
+      it('when the caller is not the owner', async () => {
+        await expect(bridge.connect(someOtherAccount).setLowerLockPeriod(3600n)).to.be.revertedWith('Ownable: caller is not the owner');
+      });
+
+      it('when the period exceeds the maximum', async () => {
+        await expect(bridge.setLowerLockPeriod(MAX_LOWER_LOCK_PERIOD + 1n)).to.be.revertedWithCustomError(bridge, 'LockPeriodTooLong');
       });
     });
   });
@@ -545,12 +579,22 @@ describe('Owner Functions', () => {
       it('in upgrading the bridge to a new implementation', async () => {
         const replenishAllowance = 123n;
         await bridge.setReplenishAllowance(await bridge.replenishAllowance(), replenishAllowance);
+        const lowerLockPeriod = 456n;
+        await bridge.setLowerLockPeriod(lowerLockPeriod);
+        const [lowerProof, lowerId] = await createLowerProof(bridge, token20, 1n, someOtherAccount, randomBytes32());
+        await bridge.claimLower(lowerProof);
+        await bridge.freezeLowers([lowerId]);
+        const pendingBefore = [...(await bridge.pendingLowers(lowerId))];
 
         const newImplementation = await AVNBridgeV2.deploy(avt.address);
         await bridge.upgradeTo(await newImplementation.getAddress());
         const upgradedBridge = AVNBridgeV2.attach(bridge.address);
         expect(await upgradedBridge.newFunction()).to.equal('AVNBridge upgraded');
         expect(await upgradedBridge.replenishAllowance()).to.equal(replenishAllowance);
+        expect(await upgradedBridge.lowerLockPeriod()).to.equal(lowerLockPeriod);
+        expect([...(await upgradedBridge.pendingLowers(lowerId))]).to.deep.equal(pendingBefore);
+        expect(await upgradedBridge.lowerState(lowerId)).to.equal(2n); // LowerState.Frozen
+        await upgradedBridge.setLowerLockPeriod(0n);
       });
     });
 

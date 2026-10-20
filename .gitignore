@@ -7,4 +7,3 @@ cache/
 artifacts
 coverage/
 .env
-scripts/revert-lower-upgrade/data/*
