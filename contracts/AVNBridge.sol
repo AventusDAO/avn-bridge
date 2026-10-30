@@ -39,6 +39,7 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
   bytes32 private constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 private constant ADD_AUTHOR_TYPEHASH = keccak256('AddAuthor(bytes t1PubKey,bytes32 t2PubKey,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant BURN_FEES_TYPEHASH = keccak256('BurnFees(uint128 amount,uint256 expiry,uint32 t2TxId)');
+  bytes32 private constant FREEZE_LOWER_TYPEHASH = keccak256('FreezeLower(uint32 lowerId,uint256 expiry,uint32 t2TxId)');
   bytes32 private constant LOWER_DATA_TYPEHASH =
     keccak256('LowerData(address token,uint256 amount,address recipient,uint32 lowerId,bytes32 t2Sender,uint64 t2Timestamp)');
   bytes32 private constant MINT_REWARDS_TYPEHASH = keccak256('MintRewards(uint128 amount,uint256 expiry,uint32 t2TxId)');
@@ -266,17 +267,9 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
    */
   function freezeLowers(uint32[] calldata lowerIds) external onlyOwner {
     uint256 numLowers = lowerIds.length;
-    uint32 lowerId;
 
     for (uint256 i; i < numLowers; ) {
-      lowerId = lowerIds[i];
-      PendingLower storage pending = pendingLowers[lowerId];
-      if (pending.unlockTime == 0) revert LowerNotPending();
-
-      if (!pending.frozen) {
-        pending.frozen = true;
-        emit LogLowerFrozen(lowerId);
-      }
+      _freezeLower(lowerIds[i]);
 
       unchecked {
         ++i;
@@ -450,6 +443,18 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     _storeT2TxId(t2TxId);
     avt.burn(amount);
     emit LogFeesBurned(amount, avt.totalSupply(), t2TxId);
+  }
+
+  /**
+   * @dev Allows T2 to hold a claimed lower awaiting release, when signed off by authors, e.g. on detecting that the claimed
+   * lower does not match the one issued on T2. The owner then unfreezes, reverts, or cancels it. Freezing an already frozen
+   * lower succeeds without effect.
+   */
+  function freezeLower(uint32 lowerId, uint256 expiry, uint32 t2TxId, bytes calldata confirmations) external whenAuthorsEnabled withinCallWindow(expiry) {
+    bytes32 proofHash = _toFreezeLowerProofHash(lowerId, expiry, t2TxId);
+    _verifyConfirmations(false, proofHash, confirmations);
+    _storeT2TxId(t2TxId);
+    _freezeLower(lowerId);
   }
 
   /**
@@ -730,6 +735,16 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
     }
   }
 
+  function _freezeLower(uint32 lowerId) private {
+    PendingLower storage pending = pendingLowers[lowerId];
+    if (pending.unlockTime == 0) revert LowerNotPending();
+
+    if (!pending.frozen) {
+      pending.frozen = true;
+      emit LogLowerFrozen(lowerId);
+    }
+  }
+
   function _idToBitmap(uint32 id) private pure returns (uint256 bucket, uint256 mask) {
     bucket = uint256(id) >> 8;
     mask = 1 << (uint256(id) & 255);
@@ -874,6 +889,11 @@ contract AVNBridge is IAVNBridge, IERC777Recipient, Initializable, UUPSUpgradeab
 
   function _toBurnFeesProofHash(uint128 amount, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
     bytes32 structHash = keccak256(abi.encode(BURN_FEES_TYPEHASH, amount, expiry, t2TxId));
+    return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
+  }
+
+  function _toFreezeLowerProofHash(uint32 lowerId, uint256 expiry, uint32 t2TxId) private view returns (bytes32) {
+    bytes32 structHash = keccak256(abi.encode(FREEZE_LOWER_TYPEHASH, lowerId, expiry, t2TxId));
     return keccak256(abi.encodePacked(EIP712_PREFIX, _domainSeparator(), structHash));
   }
 
