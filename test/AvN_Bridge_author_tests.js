@@ -1,4 +1,5 @@
 const {
+  createLowerProof,
   deployAuthority,
   deployAVT,
   deployBridge,
@@ -6,6 +7,7 @@ const {
   EMPTY_BYTES_32,
   expect,
   EXPIRY_WINDOW,
+  getAccounts,
   getAuthors,
   getConfirmations,
   getCurrentBlockTimestamp,
@@ -398,6 +400,152 @@ describe('Author Functions', () => {
           bridge,
           'BadConfirmations'
         );
+      });
+    });
+  });
+
+  context('Freezing Lowers', () => {
+    const LOCK_PERIOD = 24 * 60 * 60;
+    const LOWER_STATE = { None: 0n, Locked: 1n, Frozen: 2n, Used: 3n };
+    const lowerAmount = 123n;
+    let recipient, t2Sender, t2TxId, expiry;
+
+    async function claimLockedLower() {
+      const [lowerProof, lowerId] = await createLowerProof(bridge, token20, lowerAmount, recipient, t2Sender);
+      await bridge.claimLower(lowerProof);
+      return lowerId;
+    }
+
+    async function freezeLower(lowerId, confirmations) {
+      confirmations ??= await getConfirmations(bridge, 'freezeLower', [lowerId, expiry, t2TxId]);
+      return bridge.connect(activeAuthor).freezeLower(lowerId, expiry, t2TxId, confirmations);
+    }
+
+    before(async () => {
+      recipient = getAccounts()[1];
+      t2Sender = randomBytes32();
+      await token20.approve(bridge.address, lowerAmount * 10n);
+      await bridge.lift(token20.address, t2Sender, lowerAmount * 10n);
+      await bridge.setLowerLockPeriod(LOCK_PERIOD);
+    });
+
+    beforeEach(async () => {
+      t2TxId = nextT2TxId();
+      expiry = await getValidExpiry();
+    });
+
+    after(async () => {
+      await bridge.setLowerLockPeriod(0n);
+    });
+
+    context('succeeds', () => {
+      it('via authors, blocking the release of the lower', async () => {
+        const lowerId = await claimLockedLower();
+
+        await expect(freezeLower(lowerId)).to.emit(bridge, 'LogLowerFrozen').withArgs(lowerId);
+        expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Frozen);
+        expect(await bridge.corroborate(t2TxId, expiry)).to.equal(1);
+
+        await increaseBlockTimestamp(LOCK_PERIOD);
+        await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+      });
+
+      it('after the lock period has passed but before the lower is released', async () => {
+        const lowerId = await claimLockedLower();
+        await increaseBlockTimestamp(LOCK_PERIOD);
+        expiry = await getValidExpiry();
+
+        await expect(freezeLower(lowerId)).to.emit(bridge, 'LogLowerFrozen').withArgs(lowerId);
+        await expect(bridge.releaseLower(lowerId)).to.be.revertedWithCustomError(bridge, 'LowerIsFrozen');
+      });
+
+      it('without effect when the lower is already frozen', async () => {
+        const lowerId = await claimLockedLower();
+        await bridge.freezeLowers([lowerId]);
+
+        await expect(freezeLower(lowerId)).to.not.emit(bridge, 'LogLowerFrozen');
+        expect(await bridge.lowerState(lowerId)).to.equal(LOWER_STATE.Frozen);
+        expect(await bridge.corroborate(t2TxId, expiry)).to.equal(1);
+      });
+
+      it('while lifting and lowering are disabled', async () => {
+        const lowerId = await claimLockedLower();
+        await bridge.enableLifting(false);
+        await bridge.enableLowering(false);
+
+        await expect(freezeLower(lowerId)).to.emit(bridge, 'LogLowerFrozen').withArgs(lowerId);
+
+        await bridge.enableLifting(true);
+        await bridge.enableLowering(true);
+      });
+    });
+
+    context('fails when', () => {
+      let lowerId;
+
+      before(async () => {
+        lowerId = await claimLockedLower();
+      });
+
+      it('author functions are disabled', async () => {
+        await bridge.enableAuthors(false);
+        await expect(freezeLower(lowerId)).to.be.revertedWithCustomError(bridge, 'AuthorsDisabled');
+        await bridge.enableAuthors(true);
+      });
+
+      it('the expiry time has passed', async () => {
+        expiry = (await getCurrentBlockTimestamp()) - 1;
+        await expect(freezeLower(lowerId)).to.be.revertedWithCustomError(bridge, 'WindowExpired');
+      });
+
+      it('the T2 transaction ID is not unique', async () => {
+        const otherLowerId = await claimLockedLower();
+        await freezeLower(otherLowerId);
+        await expect(freezeLower(lowerId)).to.be.revertedWithCustomError(bridge, 'TxIdIsUsed');
+      });
+
+      it('the lower has not been claimed', async () => {
+        await expect(freezeLower(lowerId + 1000)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+      });
+
+      it('the lower has already been released', async () => {
+        const releasedLowerId = await claimLockedLower();
+        await increaseBlockTimestamp(LOCK_PERIOD);
+        await bridge.releaseLower(releasedLowerId);
+        expiry = await getValidExpiry();
+
+        await expect(freezeLower(releasedLowerId)).to.be.revertedWithCustomError(bridge, 'LowerNotPending');
+      });
+
+      it('the confirmations are invalid', async () => {
+        const confirmations = '0xbadd' + strip_0x(await getConfirmations(bridge, 'freezeLower', [lowerId, expiry, t2TxId]));
+        await expect(freezeLower(lowerId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are no confirmations', async () => {
+        await expect(freezeLower(lowerId, '0x')).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('there are not enough confirmations', async () => {
+        const confirmations = await getConfirmations(bridge, 'freezeLower', [lowerId, expiry, t2TxId], -1);
+        await expect(freezeLower(lowerId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are for a different lower', async () => {
+        const confirmations = await getConfirmations(bridge, 'freezeLower', [lowerId + 1, expiry, t2TxId]);
+        await expect(freezeLower(lowerId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not signed by active authors', async () => {
+        const confirmations = await getConfirmations(bridge, 'freezeLower', [lowerId, expiry, t2TxId], 0, nextAuthorId);
+        await expect(freezeLower(lowerId, confirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
+      });
+
+      it('the confirmations are not unique', async () => {
+        const halfSet = Math.round(numActiveAuthors / 2);
+        const confirmations = await getConfirmations(bridge, 'freezeLower', [lowerId, expiry, t2TxId], -halfSet);
+        const duplicateConfirmations = confirmations + strip_0x(confirmations);
+        await expect(freezeLower(lowerId, duplicateConfirmations)).to.be.revertedWithCustomError(bridge, 'BadConfirmations');
       });
     });
   });
